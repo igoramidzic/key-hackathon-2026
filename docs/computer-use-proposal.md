@@ -1,209 +1,260 @@
 # ServiceNow computer use assistant
 
-Hackathon product and technical proposal · October 26, 2026 · Draft for engineering and product
+Hackathon proposal · October 26, 2026 · Draft for product and engineering
 
-Build a chat assistant that can see an application, explain what is happening, and carry out a user's instructions by navigating, clicking, and typing. Start with ServiceNow: help service desk staff understand requests, prepare updates, and submit a selected catalog request without manually navigating every form.
+## The idea in one minute
 
-**Recommended first build:** a visible, dedicated Chromium browser on the user's computer, controlled by a small local runner; a Python backend on GCP; and **Gemini 3.8 Flash** for computer use. Add control of native desktop apps through a separate adapter after the ServiceNow workflow works. Evaluate **Gemini 4 Argon** for difficult tasks. This is a proposed architecture, not an implemented or benchmarked system.
+Build an assistant that you can chat with while it works in an app for you. It can look at the screen, explain what it sees, click buttons, and fill out forms.
 
-## Product idea and audience
+Our first use case is **helping people handle ServiceNow requests**. Instead of finding a request, reading its history, and updating several fields by hand, a user could say:
 
-The user gives an outcome in ordinary language: “Open this request, tell me what is missing, and prepare a work note.” The assistant shows its progress beside the application, asks for missing business information, and presents the proposed change before saving it. The user can pause, take over, or stop at any time.
+> “Open this request, tell me what is missing, and prepare an update.”
 
-The initial audience is service desk analysts and fulfillment staff who repeatedly search records, read activity histories, populate fields, and route work. A secondary audience is employees submitting requests through a service catalog. Product should choose one audience for the demo because their permissions, screens, and definitions of success differ.
+The assistant does the navigation and prepares the change. The user reviews it before it is saved and can take over at any time.
 
-The hypothesis is that a visible assistant can reduce navigation and repetitive data entry, especially across customized forms or multiple applications. Validate that hypothesis against manual completion and existing ServiceNow automation; a generic chatbot alone is not the differentiator. The differentiator we propose is completing a bounded workflow in the interface the user already uses, with a reviewable result.
+**For the hackathon, start with one ServiceNow task in a separate browser window.** Use Google's Gemini models to understand the screen and Google Cloud Platform (GCP) to run the service behind the app. Add control of other desktop apps later.
 
-### Capabilities and release scope
+This is a proposal. We have not built the app or tested its performance in ServiceNow yet.
 
-| Capability | Hackathon scope | Later extension |
+## Who it is for and why it might help
+
+Start with service desk staff: people who spend time finding requests, reading notes, entering information, and passing work to the right team.
+
+Employees who submit requests are a possible second audience. For example, an employee could describe the software they need and let the assistant fill out the request form.
+
+The benefit we want to test is simple: **less time navigating forms, with fewer missed details**. We should compare the assistant with the current manual process and any automation the team already uses.
+
+Choose one audience for the first demo. An employee requesting something and a service desk worker handling it use different screens and have different permissions.
+
+## What using it would look like
+
+Here is the proposed first demo:
+
+1. **Open a request.** The user gives the assistant a ServiceNow link and signs in if needed.
+2. **Understand it.** The assistant explains what has been requested and points out missing information.
+3. **Prepare an update.** The user asks it to add a work note or assign the task to an allowed team.
+4. **Review the change.** The assistant shows the exact record and proposed update. The user can approve, edit, or cancel.
+5. **Save and check.** After approval, the assistant saves the change, reopens the record, and checks that it worked.
+6. **Show the result.** The user gets a short summary and a link to the updated record.
+
+The user can pause or stop throughout. If the assistant is unsure, it asks for help rather than guessing.
+
+Updating a ticket does not mean the actual work is finished. For example, writing “access granted” is only correct if someone or something really granted that access.
+
+## What to build first
+
+### First demo
+
+- A chat panel beside a visible browser window.
+- Open and summarize one ServiceNow task.
+- Ask for missing details.
+- Prepare one supported update, such as a work note or assignment change.
+- Save after review and check the result.
+- Pause, stop, and let the user take over.
+
+### If there is time
+
+Add one request-creation example: the user describes what they need, the assistant fills out a chosen request form, and the user reviews it before submission.
+
+### Later
+
+Support more request types, attachments, incoming request alerts, and work across other apps. Full desktop control belongs here too: it needs more permissions and more testing than controlling one browser.
+
+Use a ServiceNow test environment with made-up records for the demo. If we cannot get access, a clearly labeled mock app can show the idea, but it will not prove that the assistant works in ServiceNow.
+
+## A quick ServiceNow guide
+
+A request can contain several items, and each item can involve several tasks. For example:
+
+| Term | Plain meaning | Example |
 | --- | --- | --- |
-| Chat about the current screen | Explain the selected ServiceNow browser page | Explain a user-selected desktop window |
-| Launch browsers and navigate | Start a dedicated browser/profile, open tabs, search records | Hosted browser sessions and existing-browser integration |
-| Read requests | Summarize one record and identify missing information | Queue summaries and cross-application context |
-| Edit records | Prepare and save one approved work note or field change | More record types and workflow-specific policies |
-| Create requests | Fill one selected catalog item and submit after review | More catalog items and attachments |
-| Complete fulfillment | Only a specifically agreed demo task with observable evidence | Actual fulfillment across approved enterprise apps |
-| React to incoming work | User pastes a record URL or selects a queued example | Authorized ServiceNow event integration |
-| Control native apps | Architecture and permissions defined; optional stretch demo | Packaged macOS and Windows desktop adapters |
+| Request — REQ | The overall order | “Set up equipment for a new employee” |
+| Requested item — RITM | One thing in the order | “Provide a laptop” |
+| Catalog task — SCTASK | Work needed to deliver an item | “Prepare the laptop” |
 
-Do not claim that updating a ticket means the underlying work is complete. For example, requesting software, granting access, and recording that access was granted are different operations.
+The exact steps and approvals depend on how the company has set up ServiceNow. An incident is another type of work, so we should not treat every ticket as the same kind of request. [ServiceNow request guide](https://www.servicenow.com/docs/r/it-service-management/procurement/t_TrackReqFromServiceCatalog.html), [Catalog task guide](https://www.servicenow.com/docs/r/it-service-management/procurement/t_ViewAndEditACatalogTask.html).
 
-## ServiceNow concepts and proposed demo
+For the first demo, we suggest updating an existing catalog task. Product and a ServiceNow owner should confirm that choice. They should also explain which notes are internal, which comments users can see, and which changes send notifications.
 
-In a catalog workflow, a **request (REQ)** tracks an order, a **requested item (RITM)** represents an ordered catalog item, and a **catalog task (SCTASK)** represents work needed to fulfill it. The exact task generation and approval flow depends on the instance and catalog configuration. ServiceNow's documentation illustrates this relationship and the fields available on catalog tasks. [Track a catalog request](https://www.servicenow.com/docs/r/it-service-management/procurement/t_TrackReqFromServiceCatalog.html), [View and edit a catalog task](https://www.servicenow.com/docs/r/it-service-management/procurement/t_ViewAndEditACatalogTask.html).
+## Questions for the product person
 
-An incident is a different workflow; do not assume that “request” means an incident or apply incident resolution rules to catalog fulfillment. Product must identify the actual record type, UI, and allowed transitions.
+Fill in these answers before we build the ServiceNow-specific parts.
 
-**Proposed primary demo:** a service desk analyst opens an existing catalog task, asks the assistant to summarize it, then asks it to prepare a work note and an allowed assignment change. The assistant identifies the exact record, fills the fields, presents the change, saves after approval, and reloads the record to verify persistence. Work notes and customer-visible comments must be treated separately; confirm their visibility and notification behavior in the demo instance.
-
-**Second demo, if time permits:** an employee describes one catalog request. The assistant asks for required missing details, fills the selected item, shows the submission summary, submits once, and returns the resulting record number and link. Use the catalog's normal submission flow rather than manually inserting related request records.
-
-Use an authorized development instance and synthetic records. If instance access is unavailable, a clearly labeled mock portal can demonstrate the interaction loop, but it does not validate ServiceNow compatibility.
-
-### Product worksheet
-
-| Decision | Product owner input |
+| Question | Answer |
 | --- | --- |
-| Primary user and painful task | **TBD:** role, frequency, current steps, approximate time |
-| Exact workflow | **TBD:** create request, update RITM, fulfill SCTASK, or another flow |
-| Demo instance and UI | **TBD:** instance URL; portal, workspace, or classic UI; access owner |
-| Example records | **TBD:** three synthetic examples, including one incomplete request |
-| Required inputs | **TBD:** fields, catalog variables, permitted values, source of each value |
-| Authorized edits | **TBD:** record types, fields, assignment groups, state transitions |
-| Review policy | **TBD:** which writes need individual review; who may approve |
-| Completion evidence | **TBD:** what proves fulfillment occurred beyond a status change |
-| Existing alternatives | **TBD:** current ServiceNow automation and why this workflow remains painful |
-| Success target | **TBD:** acceptable completion rate, time saved, and intervention count |
+| Who is the first user? | **To fill in:** role and team |
+| What task is most painful today? | **To fill in:** current steps, how often it happens, and time spent |
+| Which task should the demo complete? | **To fill in:** one specific example |
+| Which ServiceNow screen does the user use? | **To fill in:** test environment link and someone who can provide access |
+| What information does the assistant need? | **To fill in:** required fields and where the answers come from |
+| What may it change? | **To fill in:** notes, assignments, status, or other fields |
+| What needs a person's approval? | **To fill in:** changes and who may approve them |
+| What proves the task is done? | **To fill in:** the result we should be able to check |
+| What tools already help with this? | **To fill in:** existing automation and what it misses |
+| What examples can we test? | **To fill in:** three made-up requests, including one with missing information |
 
-## What the existing systems teach us
+## How we will know it is useful
 
-The reusable mechanism is an **observe → decide → execute → verify** loop. A model proposes actions; application code owns the computer session and carries them out. Buying access to a model does not itself grant access to a user's desktop.
+Measure whether the assistant completes the task correctly, how long it takes, and how often a person has to help. Compare those results with doing the same task manually.
 
-| Reference | Publicly documented behavior | Implication for our build |
-| --- | --- | --- |
-| OpenAI computer use API | The model returns ordered UI actions. An action handler executes them and sends back screenshots. The application must verify the result. | Keep the model, executor, and verification separate. A generated call is not proof an action ran. |
-| Anthropic computer use API | Client tools provide screenshots and mouse/keyboard actions in an environment the application controls. Anthropic also documents a separate browser tool. | Browser automation and full desktop control can share an agent loop while using different executors. |
-| Claude Code desktop | Can operate approved apps on the actual desktop. Its documented tool selection favors connectors and other specialized tools before broad screen control. | Use precise tools where available; make desktop permissions and session boundaries visible. |
-| Google computer use | Gemini interprets screenshots and returns actions for an execution environment supplied by the developer. | We need a browser/desktop runner in addition to Gemini and a chat interface. |
+A proposed demo goal is **at least 8 correct results out of 10 test cases, with no unapproved or duplicate changes**. This is a starting target, not a result we have achieved.
 
-Sources: [OpenAI computer use](https://developers.openai.com/api/docs/guides/tools-computer-use), [Anthropic computer use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool), [Claude Code desktop](https://code.claude.com/docs/en/desktop#let-claude-use-your-computer), [Gemini computer use](https://ai.google.dev/gemini-api/docs/computer-use).
+Include difficult cases: missing details, the wrong record, an expired login, a slow page, a rejected change, and a connection dropping just after a save. A clear request for help is better than a false “done.”
 
-This comparison uses public APIs and documented product behavior. It does not assume that ChatGPT's internal implementation is identical to OpenAI's API examples, or that a cloud browser and control of the user's physical desktop are interchangeable.
+## How it works at a high level
 
-## Google model recommendation
+The app has three main parts:
 
-| Model | Proposed role | Reason |
-| --- | --- | --- |
-| **Gemini 3.8 Flash** — `gemini-3.8-flash` | Default for the first prototype | Google explicitly recommends it for computer use. Start with one model for both conversation and action selection. |
-| **Gemini 4 Argon** — `gemini-4-argon` | Evaluate on complex or failing workflows | Google identifies it as its most capable model; determine whether better completion justifies its measured latency and cost. |
-| **Gemini 3.5 Flash-Lite** — `gemini-3.5-flash-lite` | Optional later efficiency experiment | Google lists it as a lower-latency, cost-effective computer-use option. Do not add routing complexity before measuring the primary model. |
+| Part | What it does |
+| --- | --- |
+| Chat panel | Lets the user describe the task, see progress, and review changes |
+| Small program on the user's computer | Opens the browser, takes screenshots, and carries out allowed clicks and typing |
+| Service running on Google Cloud | Sends the task and screenshots to Gemini and checks the actions it suggests |
 
-The recommendation is based on documented suitability, not a ServiceNow benchmark. Both the [3.8 Flash GCP model page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash) and the [4 Argon GCP model page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-argon) list computer use as a **preview** capability. Google's [Gemini API computer-use guide](https://ai.google.dev/gemini-api/docs/computer-use#model-versions) supplies the model recommendation and alternatives.
-
-For GCP, start with the **Google Gen AI Python SDK** and the GCP-documented `generate_content` computer-use path. The current [GCP computer-use guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/computer-use) documents Python and Playwright and carries a preview SDK limitation. The Gemini Developer API guide instead demonstrates the Interactions API with multiple SDK languages. Pin the SDK and validate one complete request/action/response cycle against our GCP project before building around a schema; do not mix examples from the two surfaces. The former Vertex AI documentation URLs currently redirect to Gemini Enterprise Agent Platform documentation.
-
-The first technical checkpoint must confirm project billing, enabled service, model access, supported location, quota, and the exact SDK/API combination. None of those account-specific conditions has been tested here. Keep the model ID and location configurable. Desktop-environment support is documented, but the native adapter and its end-to-end behavior still require a separate prototype.
-
-## Execution modes and recommendation
-
-| Mode | Where actions happen | Benefits | Tradeoffs |
-| --- | --- | --- | --- |
-| **Dedicated local browser — recommended MVP** | Chromium launched by our local runner | Visible interaction; user can log in directly; works from the user's network | Requires a local process; only controls its own browser session |
-| Hosted browser on GCP | Browser in an isolated worker/VM | Can run without the laptop; easier to isolate from personal apps | Needs remote viewing/takeover, remote login, and enterprise network access |
-| Actual local desktop | Native helper captures windows and injects input | Reaches native apps and existing application sessions | OS permissions, focus races, display scaling, and much broader access |
-
-The MVP will not attach to the user's personal browser profile. The user signs into the dedicated browser, and its cookies remain local. Playwright supports launching browsers and capturing page images, so browser screenshots can come from the browser itself without capturing the entire desktop. [Playwright browsers](https://playwright.dev/python/docs/browsers), [Playwright screenshots](https://playwright.dev/python/docs/screenshots).
-
-A website's screen-sharing permission provides a media stream; it does not provide general mouse/keyboard control of other applications. Actual desktop control needs a local installed helper or an equivalent privileged integration. [Screen capture API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getDisplayMedia).
-
-## Proposed architecture
+The AI does not get direct access to the computer on its own. Our program carries out its suggested actions.
 
 ```mermaid
-flowchart TB
-    subgraph Local[User computer]
-        UI[Chat UI and review controls]
-        Runner[Local runner and action validator]
-        Browser[Dedicated Chromium session]
-        Desktop[Optional native desktop adapter]
-        UI -->|Pair session and stop locally| Runner
-        Runner -->|Playwright actions| Browser
-        Runner -.->|Later| Desktop
-        Browser -->|Screenshot and URL| Runner
-    end
-    subgraph GCP[Google Cloud]
-        API[Cloud Run Python API]
-        Policy[Session orchestrator and policy checks]
-        Model[Gemini 3.8 Flash]
-        Store[Firestore session state and action log]
-        API <--> Policy
-        Policy -->|Goal and scoped screenshot| Model
-        Model -->|Proposed action| Policy
-        Policy <--> Store
-    end
-    UI <-->|Authenticated HTTPS| API
-    Runner <-->|Runner initiated TLS connection| API
-    Browser <-->|User authenticated session| SN[ServiceNow development instance]
+flowchart LR
+    User[User describes a task] --> Chat[Chat panel]
+    Chat --> Cloud[Google Cloud service]
+    Cloud <-->|Screenshot and suggested action| Gemini[Gemini model]
+    Cloud <-->|Checked actions and progress| Helper[Program on user computer]
+    Helper <-->|Screenshots, clicks and typing| Browser[ServiceNow browser window]
+    Cloud -->|Proposed change| Review[User reviews]
+    Review -->|Approve or cancel| Cloud
 ```
 
-**Data flow:** the local runner sends the selected browser screenshot and URL to the GCP backend. The backend asks Gemini for the next action, checks it, and returns a structured command. The runner checks the command against local session permissions, executes it, and captures the resulting state. GCP supplies reasoning and coordination; it cannot reach into the laptop without the runner.
+The process repeats: **look at the page → choose a step → check it → act → look again**. Before saving a change, the app asks for the user's review. After saving, it checks the result.
 
-### Suggested stack
+### Why start with a separate browser?
 
-| Component | Choice for the prototype | Responsibility |
+The user can watch the work and sign in directly. The assistant controls only the browser it opened, which keeps the first version focused. It does not need access to every window on the computer.
+
+Later, we can add either a browser running in the cloud, which could work while the laptop is off, or control of desktop apps on the laptop. Those are different features with different setup needs.
+
+### What users need to allow
+
+For the first demo, users need to run our local program, sign into ServiceNow, and allow the selected page to be sent to Google for AI processing. Their ServiceNow account still determines what they can view and change.
+
+For full desktop control later, the app will also need permission to see the screen and control other apps. On a Mac, those are separate system permissions.
+
+**Screenshots and visible request text leave the laptop.** Explain this before the assistant starts. Use made-up data for the hackathon, pause capture during login, and keep passwords out of the chat and logs.
+
+---
+
+## Engineering details
+
+The sections below explain the proposed tools, permissions, and checks needed to build the product described above.
+
+### Google model choice
+
+Start with **Gemini 3.8 Flash** for both chat and choosing browser actions. Google's computer-use guide recommends it for this purpose. Compare it with **Gemini 4 Argon** if it struggles with the chosen tasks. Consider **Gemini 3.5 Flash-Lite** later if reducing cost and response time becomes a priority. [Google's model recommendations](https://ai.google.dev/gemini-api/docs/computer-use#model-versions).
+
+| Model ID | Proposed use |
+| --- | --- |
+| `gemini-3.8-flash` | First model to build and test with |
+| `gemini-4-argon` | Compare on difficult tasks |
+| `gemini-3.5-flash-lite` | Possible later cost and speed experiment |
+
+The GCP pages for [3.8 Flash](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash) and [4 Argon](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-argon) list computer use as a **preview feature**. We have not measured either model on ServiceNow.
+
+Use the **Google Gen AI Python SDK**—Google's library for calling its models—and begin with GCP's documented `generate_content` path. The [GCP computer-use guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/computer-use) describes Python and Playwright and notes preview SDK limits. The [Gemini Developer API guide](https://ai.google.dev/gemini-api/docs/computer-use) shows a different API path called Interactions. Keep examples from those paths separate, pin the library version, and test a complete action cycle before building further.
+
+Before implementation, confirm billing, enabled services, model access, location, usage limits, and the library version in our GCP project. These account-specific checks are still outstanding. Keep model and location settings easy to change. Older Vertex AI documentation links now redirect to Gemini Enterprise Agent Platform documentation.
+
+### What we can learn from OpenAI and Claude
+
+| Reference | What its public documentation shows | What we should borrow |
 | --- | --- | --- |
-| Chat interface | React + TypeScript, served with the backend | Conversation, screenshot preview, change summary, approve/pause/stop |
-| Agent backend | Python + FastAPI on Cloud Run | Model calls, action policy, progress stream, session ownership |
-| Model client | Google Gen AI Python SDK | GCP authentication and model-specific request/response adapter |
-| Local runner | Python + Playwright + installed Chromium | Browser lifecycle, screenshot capture, bounded action execution |
-| Persistence | Firestore | Session status, approved changes, action IDs, outcomes; not browser cookies |
-| Identity | Google sign-in with server-validated identity; paired runner token | Bind user, runner, and task; reject commands from other sessions |
-| GCP authentication | Attached service account in cloud; ADC during development | Avoid embedding cloud credentials in the UI or runner |
-| Operations | Cloud Logging; Secret Manager only for required integration secrets | Redacted operational events and managed secret access |
-| Desktop extension | Thin native helper, packaged with a desktop shell if needed | Window capture, OS input, permissions, local emergency stop |
+| OpenAI computer use API | The model suggests actions; application code runs them and returns screenshots | Separate suggested actions from actual execution and checking the result |
+| Anthropic computer use API | The application provides screen capture and mouse/keyboard tools; browser tools are also available | Use the right tool for browser work versus desktop work |
+| Claude Code desktop | Can work in approved apps and favors more specific tools when available | Make app access clear and use direct integrations where they fit |
+| Google computer use | Gemini reads screenshots and suggests actions that our code must execute | Build a local helper as well as a chat interface |
 
-The cloud authentication proposal follows [Google's application default credentials guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/gcp-auth). Grant only the model invocation and application resource access needed by the backend; keep provisioning/deployment privileges separate. Verify exact IAM roles for the chosen GCP endpoint during setup rather than granting project Owner.
+Sources: [OpenAI computer use](https://developers.openai.com/api/docs/guides/tools-computer-use), [Anthropic computer use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool), [Claude Code desktop](https://code.claude.com/docs/en/desktop#let-claude-use-your-computer), [Google computer use](https://ai.google.dev/gemini-api/docs/computer-use).
 
-Use a runner-initiated connection so the laptop does not need a public inbound port. For a WebSocket implementation, reconnect deliberately and persist progress: Cloud Run WebSockets have request timeouts, and reconnects can reach another instance. A lost connection pauses execution; it must not replay a save. [Cloud Run WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets).
+These are public design references. They do not establish exactly how ChatGPT works internally, or mean that a browser in the cloud can control the user's physical desktop.
 
-A hosted-browser version could move the runner to a Compute Engine VM with a display and authenticated remote viewer. That is a separate deployment option, not a requirement for the local demo. A local GPU, Kubernetes cluster, vector database, and multi-agent framework are unnecessary for the proposed first workflow.
+### Proposed tools
 
-## Action loop and correctness
-
-1. **Establish scope.** Bind the task to one user, runner, browser session, ServiceNow instance, and permitted workflow. The user completes login/MFA while capture and model activity are paused.
-2. **Observe.** Capture the current viewport, URL, dimensions, and observation ID. Keep viewport size and scaling consistent. Convert model coordinates using the selected API's documented coordinate system; do not assume they are screen pixels.
-3. **Decide.** Send the goal, allowed operations, relevant history, and screenshot. Parse only recognized structured actions. Preserve the provider's required tool response identifiers and conversation state.
-4. **Validate.** Check allowed origin, target session, action arguments, current observation, and any provider safety response. The model cannot grant itself new permissions.
-5. **Review writes.** For the first workflow, gate every save, submit, external comment, assignment change, or state transition. Show the record ID and exact proposed fields/text. Bind approval to that proposal and invalidate it if the form or record changes.
-6. **Execute.** Give each action a unique ID and expiry. The runner rejects duplicates, stale observations, unknown commands, and commands arriving after stop. Execute sequentially and check intermediate state rather than blindly continuing a batch across a commit.
-7. **Verify.** Capture the result; after a write, reopen or reload the record and check the saved values. Return the record link and what changed. If persistence cannot be established, report an uncertain outcome and investigate before retrying.
-
-For the bounded ServiceNow demo, use known form controls and DOM checks to enforce the save boundary and verify fields, alongside screenshot-driven navigation. Pure pixel reasoning cannot reliably identify every consequential action. Treat auto-saving fields as writes too. If the chosen UI cannot provide a dependable review boundary, leave the final commit to the human for that workflow.
-
-**Proposed initial limits:** 40 action steps, a five-minute run budget, and at most two recovery attempts for the same failed interaction. These are tunable design defaults. On budget exhaustion, an unknown dialog, session expiry, or repeated unchanged screenshots, pause and explain what is blocking progress. Transport delivery cannot guarantee exactly-once ServiceNow writes; reconcile the application's state after a timeout instead of blindly re-submitting.
-
-## Permissions and data boundaries
-
-| Surface | Access needed | Proposed boundary |
+| Component | Tool | Job |
 | --- | --- | --- |
-| Dedicated local browser | Launch browser process, store its profile, reach ServiceNow and GCP | Only the runner-owned browser; no OS-wide screen recording or Accessibility permission needed for this mode |
-| macOS desktop viewing | Screen Recording / Screen & System Audio Recording permission for the capturing app | User-selected window where possible; visible capture indicator |
-| macOS desktop input | Accessibility permission for the controlling helper | Explicit app allowlist and control toggle; OS permission itself is broader than our app policy |
-| macOS scripting | Automation consent may be needed if using Apple Events | Optional implementation choice, not a baseline requirement |
-| Windows desktop | Installed helper with capture and input capabilities in the logged-in session | Separate Windows prototype; no elevated-app or UAC automation in the demo |
-| Files and clipboard | Only if the selected workflow needs an attachment or paste operation | User-selected files; no broad disk or clipboard harvesting |
-| Camera/microphone | None for the text-chat demo | Request microphone access only if voice is added |
-| ServiceNow | User account with access to the selected records and actions | Keep existing role/ACL restrictions; no admin account as the default |
-| GCP | Backend model invocation plus narrowly scoped storage/logging permissions | Runtime identity separate from deployment identity |
+| Chat interface | React + TypeScript | Chat, progress, change review, and stop controls |
+| Cloud service | Python + FastAPI on Cloud Run | Call Gemini, check actions, and track each task |
+| Model connection | Google Gen AI Python SDK | Send requests and read model responses |
+| Local helper | Python + Playwright + Chromium | Open a browser, capture the page, click, and type |
+| Saved task information | Firestore | Store task status, approvals, action IDs, and results |
+| User identity | Google sign-in and a token that pairs the helper with the user | Prevent one user's commands from reaching another user's computer |
+| Cloud access | Service account in GCP; application default credentials during development | Keep cloud credentials out of the browser and local helper |
+| Support tools | Cloud Logging; Secret Manager if needed | Record useful errors and protect integration secrets |
 
-Apple documents separate controls for [screen recording](https://support.apple.com/guide/mac-help/control-access-screen-system-audio-recording-mchld6aa7d23/mac) and [Accessibility access](https://support.apple.com/en-euro/guide/mac-help/mh43185/mac). Windows does not use the same permission model: for example, `SendInput` is constrained by process integrity levels. Validate capture consent and packaging against the selected Windows implementation. [Microsoft SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput).
+Playwright can launch a browser and capture its page directly. That lets the first version avoid whole-desktop capture. Use a separate browser profile, let the user sign in, and keep its cookies on their computer. [Browser setup](https://playwright.dev/python/docs/browsers), [Page screenshots](https://playwright.dev/python/docs/screenshots).
 
-Screenshots and visible record text leave the laptop for model processing. Tell users this before capture starts. Use synthetic data for the hackathon; keep screenshots in memory by default, omit raw images and credentials from logs, and make any retained diagnostic images explicitly opt-in with a deletion policy. Local cookies staying local does not mean all ServiceNow data stays local. Real customer data requires an agreed region, retention policy, and provider data-handling review before use.
+The local helper should open an encrypted connection to GCP; the laptop should not need a public incoming port. Pair each connection with a user and task. If using WebSockets, support reconnecting and save progress outside the Cloud Run process: connections time out and may reconnect to a different server. Pause after a disconnect and check what happened before resuming. [Cloud Run WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets).
 
-Ticket descriptions, comments, attachments, and webpages are untrusted input. They must never redefine the task, authorize a new destination, or request secrets. Enforce allowed domains and redirects in code, pause at login screens, and retain provider-required safety confirmations. Add a local stop control that works even if the backend is unavailable. For desktop mode, also pause when focus changes or the user takes over.
+Give the GCP service only the permissions it needs to call models and use the app's storage and logs. Keep deployment permissions separate. Check the exact roles during setup. [Google authentication guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/gcp-auth).
 
-## ServiceNow integration path
+No local GPU or large infrastructure setup is needed for this first design. A later cloud-browser version could run the helper on a Compute Engine virtual machine, but would also need secure remote viewing, login, and access to the company's network.
 
-Start with the UI so the demo directly demonstrates computer use. Keep room for a hybrid integration: authorized APIs can later handle precise reads, record verification, or standard updates, while computer use handles interfaces without a suitable integration. ServiceNow REST access still depends on authentication, ACLs, and table web-service settings. [ServiceNow REST APIs](https://www.servicenow.com/docs/r/api-reference/rest-api-explorer/c_RESTAPI.html).
+### How to execute actions safely and check them
 
-For incoming requests, a later ServiceNow flow or outbound integration could send a record reference to an authenticated intake endpoint. An event should enqueue work, not grant permission to act on the laptop. Require an active paired session and the user's configured workflow authorization. Dedupe events and fetch the latest record before acting; an unattended queue requires a hosted runner or an awake authorized desktop session.
+1. **Set the task limits.** Tie the task to one user, browser, ServiceNow environment, and allowed set of changes. Pause model activity and capture while the user logs in or completes a second login check such as MFA.
+2. **Capture the current page.** Include its URL, image size, and a unique observation ID. Keep display size stable and convert model coordinates using the selected API's rules.
+3. **Ask for the next step.** Send the goal, relevant history, screenshot, and permitted actions. Preserve the model API's required conversation and tool-response identifiers.
+4. **Check the proposed action.** Reject unknown commands, disallowed websites, old screenshots, and actions for another session. Honor any confirmation required by the model provider.
+5. **Get review before changes.** Show the exact record, fields, and text before a save or submission. Approval applies only to that change. If the form changes, ask for review again.
+6. **Execute one step at a time.** Give actions unique IDs and expiry times. Reject duplicates and commands received after stop. Check intermediate results before continuing.
+7. **Check the saved result.** Reload the record and compare its values with the approved change. If a save may have succeeded before a connection failure, inspect the record before trying again.
 
-Avoid creating raw REQ/RITM/task rows through generic CRUD without understanding catalog workflows. Product and a ServiceNow owner should select the appropriate catalog submission or workflow API if that path is added.
+For the chosen ServiceNow form, use checks against the page's underlying elements—the DOM—to identify save controls and verify field values. Screenshot interpretation alone cannot reliably spot every action that changes data. Fields that save automatically also need review before editing. If we cannot reliably enforce that boundary, the human should perform the final save.
 
-## Build sequence and acceptance criteria
+Suggested starting limits are 40 actions, five minutes per task, and two attempts to recover from the same problem. Pause on an unfamiliar dialog, expired login, repeated lack of progress, or a reached limit. Adjust these limits after testing.
 
-| Milestone | Deliverable | Exit condition |
+### Computer permissions
+
+| Feature | Access needed | Limit for our app |
 | --- | --- | --- |
-| 1. Feasibility | GCP model call plus local screenshot/action loop | One screenshot produces an action that runs and returns a new screenshot through the chosen GCP API |
-| 2. Read-only vertical slice | Chat, paired browser, request summary | Correct record found; summary matches its visible contents; stop works |
-| 3. Controlled update | One supported edit, review gate, verification | Exact approved change persists on the correct record; rejection produces no write |
-| 4. Demo hardening | Recovery, expired login, duplicate prevention, audit events | No blind replay after disconnect; unsupported cases pause cleanly |
-| 5. Stretch | Catalog creation or one native app | Add only after the primary workflow passes repeated runs |
+| Separate browser | Start Chromium, store its profile, connect to ServiceNow and GCP | Control only the browser we launched; no OS-wide capture or Accessibility permission for this mode |
+| View Mac desktop apps | Screen Recording / Screen & System Audio Recording permission | Capture a selected window where possible and show when capture is active |
+| Control Mac desktop apps | Accessibility permission | Allow only selected apps; the OS permission itself is broader |
+| Script Mac apps | Automation consent if using Apple Events | Only needed if we choose that implementation |
+| Windows desktop control | Installed helper with screen capture and input support | Test separately; exclude administrator prompts and elevated apps from the demo |
+| Files and clipboard | Access only when a supported task needs it | User-selected files; no broad collection of files or clipboard content |
+| Camera or microphone | None for text chat | Ask for microphone permission only if voice is added |
+| ServiceNow records | The user's existing record and field permissions | Do not use an administrator account by default |
 
-Run the chosen model on at least ten resettable synthetic cases: ordinary update, missing required field, ambiguous person, wrong record, delayed page, expired login, rejected approval, disconnect after save, malicious instructions in a ticket, and changed page layout. Confirm final state independently through a reload, an authorized read API, or a human inspection.
+Apple documents separate controls for [screen recording](https://support.apple.com/guide/mac-help/control-access-screen-system-audio-recording-mchld6aa7d23/mac) and [Accessibility](https://support.apple.com/en-euro/guide/mac-help/mh43185/mac). Windows uses different rules; for example, its `SendInput` function cannot freely control processes with higher privileges. [Microsoft input documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput).
 
-Measure task completion, field accuracy, elapsed time, model calls/tokens, interventions, duplicate writes, and cost per successful task. Compare 3.8 Flash and 4 Argon on the same cases before declaring a winner. A proposed demo threshold is at least 8/10 correct completions, with zero unauthorized or duplicate writes; exceptions must stop visibly. This is a target, not a measured result.
+Screen sharing in a website only provides images of the selected screen. It does not grant control of other apps. Full desktop control needs an installed helper or equivalent privileged integration. [Screen capture API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getDisplayMedia).
 
-Estimate operating cost as model input/output usage across all turns, plus backend runtime, storage, and any hosted browser runtime. Screenshot size, repeated history, retries, and thinking effort affect the result. Record actual usage from test runs and consult the selected model's linked pricing page before setting a budget; no dollar estimate is asserted here. Enforce application run/step limits in addition to cloud budget alerts.
+### Data handling and stop controls
 
-The immediate dependencies are a GCP project with model access, an authorized ServiceNow demo instance, one product-approved workflow, and a target demo OS. Once those are resolved, the first implementation should prove a single request can be read, changed with review, and verified end to end.
+Keep screenshots in memory by default. Do not put passwords or raw screenshots in routine logs. If someone chooses to save images for debugging, define who can see them and when they will be deleted. Before using real customer data, agree on the processing region, retention period, and provider data-handling rules.
+
+Text inside a ticket or webpage is task data, not permission to do new things. A malicious note could tell the assistant to reveal secrets or visit another site. Enforce allowed websites and actions in code rather than relying only on the model to ignore it.
+
+Provide a local stop button that works without the cloud connection. For desktop control, also pause when the user takes over or the active app changes unexpectedly.
+
+### Adding ServiceNow integrations later
+
+Start with browser interaction for the demo. Later, a direct ServiceNow API connection could make reading records, checking saved changes, or making standard updates more reliable. An API is a way for software to exchange data directly. It still requires the right account access, record permissions, and ServiceNow settings. [ServiceNow REST APIs](https://www.servicenow.com/docs/r/api-reference/rest-api-explorer/c_RESTAPI.html).
+
+An incoming-request alert could add a task to the app's queue. It should not automatically authorize control of someone's laptop. Check that a permitted session is active, ignore repeated alerts, and read the latest record before acting. Work while the laptop is off would require a cloud-based helper.
+
+For request creation, use the normal catalog submission flow or an appropriate ServiceNow API. Do not create related request, item, and task records directly without understanding the approval and delivery process.
+
+### Build order and testing
+
+| Step | Build | Check before moving on |
+| --- | --- | --- |
+| 1 | One screenshot-to-action cycle through GCP | Gemini suggests an action, the browser executes it, and a new screenshot returns |
+| 2 | Chat and request summary | Correct record found, accurate summary, working stop control |
+| 3 | One reviewed update | Only the approved change is saved on the correct record |
+| 4 | Error handling | Login expiry, rejected changes, slow pages, and disconnects pause or recover correctly |
+| 5 | Optional second demo | Request creation or one desktop app, after the first flow works repeatedly |
+
+Test both candidate models on the same examples before deciding whether to switch. Alongside the product measures above, record model calls, token usage, cost, and duplicate changes. Include a misleading instruction inside a ticket and a changed page layout. Check results independently through a reload, an authorized read API, or human inspection.
+
+Cost will come from model usage, the cloud service, storage, and any browser hosted in the cloud. Screenshots, repeated history, retries, and model reasoning effort affect usage. Measure real test runs and use the selected model's pricing page before estimating a budget. Set application limits as well as cloud budget alerts.
+
+**Needed to start:** a GCP project with model access, a ServiceNow test environment, one agreed task, and a chosen demo operating system.
