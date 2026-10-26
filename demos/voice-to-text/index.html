@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice to Text</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #18181b;
+      --muted: #71717a;
+      --border: #e4e4e7;
+      --accent: #6d5dfc;
+      --accent-soft: #efedff;
+      --red: #ef4444;
+      --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 8px 24px rgb(0 0 0 / .05);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f12;
+        --card: #18181c;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --border: #2a2a30;
+        --accent: #8b7dff;
+        --accent-soft: #23203d;
+        --shadow: 0 1px 2px rgb(0 0 0 / .3);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    main { max-width: 860px; margin: 0 auto; padding: 56px 20px 40px; }
+
+    h1 { font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0; text-align: center; }
+    .subtitle { color: var(--muted); text-align: center; margin: 6px 0 32px; }
+
+    .tabs {
+      display: flex; gap: 4px; width: fit-content; margin: 0 auto 20px;
+      padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    }
+    .tab {
+      border: 0; background: transparent; color: var(--muted);
+      padding: 6px 16px; border-radius: 999px; font-size: 14px; font-weight: 500;
+      transition: background .15s, color .15s;
+    }
+    .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; box-shadow: var(--shadow); padding: 20px 24px;
+    }
+    .label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .prompt { font-size: 18px; margin: 0; }
+
+    .recorder { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 36px 0; }
+    .mic {
+      position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0;
+      background: var(--accent); color: #fff; display: grid; place-items: center;
+      box-shadow: 0 6px 20px rgb(109 93 252 / .35); transition: transform .15s, background .2s;
+    }
+    .mic:hover { transform: scale(1.05); }
+    .mic svg { width: 30px; height: 30px; }
+    .mic:disabled { opacity: .6; cursor: default; transform: none; }
+    [data-state="recording"] .mic { background: var(--red); box-shadow: 0 6px 20px rgb(239 68 68 / .35); }
+    [data-state="recording"] .mic::after {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid var(--red); animation: ring 1.4s ease-out infinite;
+    }
+    @keyframes ring { to { inset: -16px; opacity: 0; } }
+    .hint { font-size: 14px; color: var(--muted); min-height: 22px; }
+
+    .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .results .card { min-height: 220px; }
+    .results .card.clean { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--card) 120px); }
+    .clean .label { color: var(--accent); }
+    .output { font-size: 15px; }
+    .output:empty::before { content: attr(data-empty); color: var(--muted); opacity: .7; }
+    .output p { margin: 0 0 10px; }
+    .output p:last-child { margin: 0; }
+    .output ul { margin: 0 0 10px; padding-left: 20px; }
+    .output.fade { animation: fade .4s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+
+    .note { text-align: center; font-size: 13px; color: var(--muted); margin-top: 32px; }
+
+    @media (max-width: 640px) {
+      main { padding-top: 36px; }
+      h1 { font-size: 26px; }
+      .results { grid-template-columns: 1fr; }
+      .results .card { min-height: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body data-state="idle">
+  <main>
+    <h1>Voice to Text</h1>
+    <p class="subtitle">Speak naturally. Get clean, ready-to-send text.</p>
+
+    <div class="tabs" role="tablist" aria-label="Example">
+      <button class="tab" role="tab" data-example="0" aria-selected="true">Team update</button>
+      <button class="tab" role="tab" data-example="1" aria-selected="false">Email</button>
+      <button class="tab" role="tab" data-example="2" aria-selected="false">To-do list</button>
+    </div>
+
+    <section class="card">
+      <div class="label">Try saying</div>
+      <p class="prompt" id="phrase"></p>
+    </section>
+
+    <section class="recorder">
+      <button class="mic" id="mic" aria-label="Start recording">
+        <svg id="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"></svg>
+      </button>
+      <div class="hint" id="hint" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="results">
+      <div class="card">
+        <div class="label">What you said</div>
+        <div class="output" id="plain" data-empty="Your words will appear here."></div>
+      </div>
+      <div class="card clean">
+        <div class="label">Cleaned up</div>
+        <div class="output" id="clean" data-empty="The polished version will appear here."></div>
+      </div>
+    </section>
+
+    <p class="note">This is a scripted demo. No microphone is used.</p>
+  </main>
+
+  <script>
+    const examples = [
+      {
+        phrase: 'Okay so quick update um the design is done and the API is ready but we still need to test the login flow so Alex can you take that and let’s aim for Thursday actually Friday for the demo.',
+        clean: '<p>Quick update:</p><ul><li>The design is done.</li><li>The API is ready.</li><li>We still need to test the login flow.</li></ul><p>Alex, can you take that? Let’s aim for Friday for the demo.</p>'
+      },
+      {
+        phrase: 'Hey Morgan um thanks for sending the proposal I think the timeline looks good but could you break out the cost for the design work and also send over a couple of examples thanks talk soon Jamie.',
+        clean: '<p>Hey Morgan,</p><p>Thanks for sending the proposal. I think the timeline looks good, but could you break out the cost for the design work and send over a couple of examples?</p><p>Thanks, talk soon!<br>Jamie</p>'
+      },
+      {
+        phrase: 'Things for tomorrow uh first send the updated deck to Sam then book a room for the workshop and then oh yeah check with Priya about the budget and finally send the team a reminder before three PM.',
+        clean: '<p>Things for tomorrow:</p><ul><li>Send the updated deck to Sam.</li><li>Book a room for the workshop.</li><li>Check with Priya about the budget.</li><li>Send the team a reminder before 3 PM.</li></ul>'
+      }
+    ];
+    const icons = {
+      mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+      stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/>'
+    };
+
+    const $ = id => document.getElementById(id);
+    const mic = $('mic'), micIcon = $('mic-icon'), hint = $('hint');
+    const phrase = $('phrase'), plain = $('plain'), clean = $('clean');
+    let selected = 0, state = 'idle', timer, startedAt;
+
+    function setState(next) { state = next; document.body.dataset.state = next; }
+
+    function reset() {
+      clearInterval(timer); clearTimeout(timer);
+      setState('idle');
+      phrase.textContent = '“' + examples[selected].phrase + '”';
+      plain.innerHTML = ''; clean.innerHTML = '';
+      plain.classList.remove('fade'); clean.classList.remove('fade');
+      micIcon.innerHTML = icons.mic;
+      mic.setAttribute('aria-label', 'Start recording');
+      mic.disabled = false;
+      hint.textContent = 'Tap to start';
+    }
+
+    function show(el, html) {
+      el.innerHTML = html;
+      el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
+    }
+
+    function toggle() {
+      if (state === 'processing') return;
+      if (state === 'recording') {
+        clearInterval(timer);
+        setState('processing');
+        mic.disabled = true;
+        micIcon.innerHTML = icons.mic;
+        show(plain, examples[selected].phrase);
+        hint.textContent = 'Cleaning up…';
+        const delay = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700;
+        timer = setTimeout(() => {
+          show(clean, examples[selected].clean);
+          setState('done');
+          mic.disabled = false;
+          mic.setAttribute('aria-label', 'Record again');
+          hint.textContent = 'Tap to try again';
+        }, delay);
+        return;
+      }
+      reset();
+      setState('recording');
+      micIcon.innerHTML = icons.stop;
+      mic.setAttribute('aria-label', 'Stop recording');
+      startedAt = Date.now();
+      const tick = () => {
+        const s = Math.floor((Date.now() - startedAt) / 1000);
+        hint.textContent = 'Listening… ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      };
+      tick(); timer = setInterval(tick, 250);
+    }
+
+    mic.addEventListener('click', toggle);
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+      selected = Number(tab.dataset.example);
+      document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+      reset();
+    }));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') return reset();
+      if (e.code !== 'Space' || e.repeat || e.target.closest('button')) return;
+      e.preventDefault(); toggle();
+    });
+
+    reset();
+  </script>
+</body>
+</html>
