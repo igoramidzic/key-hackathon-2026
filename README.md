@@ -2,6 +2,10 @@
 
 Project explorations using Google AI models and GCP.
 
+## Incident management simulator
+
+The latest demo is [Relay incident simulation lab](demos/incident-lab/README.md): a TypeScript app with 240 streaming applications, GCP/Kibana/Moogsoft log explorers, ServiceNow ownership and changes, Confluence runbooks, and a Teams-style incident chat. Run `npm ci` then `npm run dev` inside `demos/incident-lab`, and open http://127.0.0.1:4310.
+
 Read the [product and architecture proposal](docs/computer-use-proposal.md) for the recommended model and stack, architecture diagram, permission requirements, demo scope, and product worksheet.
 
 Read the [voice to text proposal](docs/voice-to-text-proposal.md) for faster dictation with Gemini cleanup, a GCP architecture, an optional screen-context follow-up, demo scope, and product worksheet.
