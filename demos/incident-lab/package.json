@@ -10,13 +10,18 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build:cloud": "vite build --mode cloud && tsc --noEmit -p tsconfig.worker.json",
+    "deploy": "npm run build:cloud && cf deploy --prebuilt --mode cloud",
+    "dev:cloud": "vite --mode cloud --port 8787"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^2.0.0-beta.v.12",
     "@types/node": "^22.0.0",
+    "cf": "^0.15.0",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

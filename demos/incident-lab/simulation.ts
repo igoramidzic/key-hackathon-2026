@@ -133,6 +133,17 @@ export function createApps(): AppRecord[] {
     }),
   );
 }
+export interface SimulationSnapshot {
+  version: 1;
+  state: AppState;
+  initialSeed: number;
+  seed: number;
+  sequence: number;
+  totalIncidents: number;
+  incidentElapsed: number;
+  stages: Phase[];
+}
+
 export class Simulation {
   now: () => number;
   initialSeed: number;
@@ -153,6 +164,37 @@ export class Simulation {
     this.now = now;
     this.initialSeed = seed;
     this.reset();
+  }
+  snapshot(): SimulationSnapshot {
+    return structuredClone({
+      version: 1,
+      state: this.state(),
+      initialSeed: this.initialSeed,
+      seed: this.seed,
+      sequence: this.sequence,
+      totalIncidents: this.totalIncidents,
+      incidentElapsed: this.incidentElapsed,
+      stages: [...this.stages],
+    });
+  }
+  restore(snapshot: SimulationSnapshot): void {
+    if (snapshot.version !== 1) throw new Error('Unsupported simulation snapshot version.');
+    const saved = structuredClone(snapshot);
+    const state = saved.state;
+    this.apps = state.apps;
+    this.logs = state.logs;
+    this.incidents = state.incidents;
+    this.messages = state.messages;
+    this.events = state.events;
+    this.simulation = state.simulation;
+    this.totalLogs = state.stats.totalLogs;
+    this.generation = state.generation;
+    this.initialSeed = saved.initialSeed;
+    this.seed = saved.seed;
+    this.sequence = saved.sequence;
+    this.totalIncidents = saved.totalIncidents;
+    this.incidentElapsed = saved.incidentElapsed;
+    this.stages = new Set(saved.stages);
   }
   random() {
     this.seed = (Math.imul(1664525, this.seed) + 1013904223) >>> 0;

@@ -97,3 +97,20 @@ npm run format:check
 ```
 
 Tests cover seeded applications, shared traces, stage timing, pause/speed/reset, all scenarios on arbitrary services, evidence retention, replay isolation, ownership consistency, strict input errors, the HTTP API, and SSE updates. Browser QA covers incident injection, chat, filtered log evidence, provider navigation, and recovery.
+
+## Cloudflare deployment
+
+Live demo: https://hackathon-incident-lab.kualia.workers.dev
+
+The hosted version uses a Worker for the app and API, static assets for the interface, and a SQLite-backed Durable Object for each demo room. The existing Node server remains available for local development.
+
+```sh
+npm run build:cloud
+npm run deploy
+```
+
+`cf` uses your locally authenticated Cloudflare account. Configuration is in `cloudflare.config.ts`. The Cloudflare Vite plugin generates runtime types during the cloud build; `tsconfig.worker.json` checks those separately from browser/Node types. `npm run dev:cloud` runs the Worker locally on port 8787.
+
+Each browser receives a seven-day room cookie. Tabs in that browser share a simulation; separate browsers get independent rooms. To share a presentation, choose a random UUID v4 and send everyone `https://hackathon-incident-lab.kualia.workers.dev/?room=YOUR-UUID`. That URL selects the shared room for subsequent service links. Anyone with that room link can control its synthetic incident and read its mock chat; it is a demo capability link, not authenticated access. The site is publicly accessible and contains only synthetic data.
+
+Controls and incident transitions persist immediately. Ordinary telemetry checkpoints every five seconds. The hosted simulation advances only while at least one live stream is connected, avoiding perpetual background work. Closing all viewers freezes simulated time; reopening resumes it. Rooms support up to 20 simultaneous stream viewers. Cloudflare resource usage is billed or limited according to the account plan.

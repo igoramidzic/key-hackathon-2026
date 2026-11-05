@@ -14,5 +14,6 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "public/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+  "include": ["*.ts", "public/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"],
+  "exclude": ["worker.ts", "cloudflare.config.ts"]
 }
