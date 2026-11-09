@@ -1,0 +1,17 @@
+{
+  "name": "@sim/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logs": "./src/logs/index.ts",
+    "./servicenow": "./src/servicenow/index.ts",
+    "./gitlab": "./src/gitlab/index.ts",
+    "./teams": "./src/teams/index.ts",
+    "./simulator": "./src/simulator/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

@@ -1,0 +1,269 @@
+/*
+ * Shared theme for every UI. Each app's index.css does:
+ *   @import "tailwindcss";
+ *   @import "<path to>/packages/ui/src/theme.css";
+ *   @source "<path to>/packages/ui/src";
+ */
+@import "tw-animate-css";
+@import "./shadcn-tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens (ported from Finnear).
+ *
+ * Hard edges: every radius token resolves to 0, so shadcn components and
+ * custom UI stay square. Neutrals are true grays with a near-black primary;
+ * color is reserved for data, money movement (positive / negative), and
+ * status.
+ *
+ * `.light` and `.dark` can also scope a subtree to one mode.
+ */
+:root,
+.light {
+  --radius: 0rem;
+  /* Avatars: square here; apps with round avatars (Teams, GitLab) set 9999px. */
+  --avatar-radius: 0rem;
+
+  --background: oklch(0.982 0 0);
+  --foreground: oklch(0.205 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.955 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.955 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.52 0.16 27);
+  --border: oklch(0.91 0 0);
+  --input: oklch(0.87 0 0);
+  --ring: oklch(0.55 0 0);
+
+  /* Money movement and state. Always pair with a sign, icon, or label. */
+  --positive: oklch(0.5 0.11 152);
+  --negative: oklch(0.52 0.16 27);
+  --warning: oklch(0.55 0.12 70);
+
+  /* Categorical data colors, validated for color-vision deficiency. */
+  --chart-1: oklch(0.52 0.12 255);
+  --chart-2: oklch(0.64 0.13 72);
+  --chart-3: oklch(0.58 0.1 190);
+  --chart-4: oklch(0.53 0.12 300);
+  --chart-5: oklch(0.6 0.13 35);
+  /* Further hues for categories past the first five; their closest pairs
+   * (magenta–orange, sky–teal, olive–amber) sit about as far apart as
+   * amber and orange do. Category names always accompany them. */
+  --chart-6: oklch(0.55 0.14 345);
+  --chart-7: oklch(0.66 0.11 228);
+  --chart-8: oklch(0.6 0.12 115);
+}
+
+.dark {
+  --background: oklch(0.17 0 0);
+  --foreground: oklch(0.94 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.94 0 0);
+  --popover: oklch(0.225 0 0);
+  --popover-foreground: oklch(0.94 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.94 0 0);
+  --muted: oklch(0.26 0 0);
+  --muted-foreground: oklch(0.7 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.94 0 0);
+  --destructive: oklch(0.7 0.14 25);
+  --border: oklch(0.29 0 0);
+  --input: oklch(0.33 0 0);
+  --ring: oklch(0.62 0 0);
+
+  --positive: oklch(0.75 0.12 152);
+  --negative: oklch(0.7 0.14 25);
+  --warning: oklch(0.78 0.12 75);
+
+  --chart-1: oklch(0.66 0.12 252);
+  --chart-2: oklch(0.66 0.12 78);
+  --chart-3: oklch(0.62 0.1 190);
+  --chart-4: oklch(0.6 0.12 300);
+  --chart-5: oklch(0.62 0.13 35);
+  /* Sky sits above the dark band; any lower and it reads as teal. */
+  --chart-6: oklch(0.64 0.13 345);
+  --chart-7: oklch(0.73 0.09 212);
+  --chart-8: oklch(0.68 0.12 122);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
+}
+
+@theme {
+  /*
+   * Type scale shifted up one step. The radix-lyra shadcn style sets body
+   * copy in text-xs and titles in text-sm, which reads small at Tailwind's
+   * defaults, so text-xs is 14px, text-sm 16px, and text-base 18px here.
+   */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: calc(1.25 / 0.875);
+  --text-sm: 1rem;
+  --text-sm--line-height: calc(1.5 / 1);
+  --text-base: 1.125rem;
+  --text-base--line-height: calc(1.75 / 1.125);
+
+  /* Indeterminate progress: a third-width bar sweeping across its track. */
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+
+  @keyframes indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+
+  /* A bar emptying over the time something stays; set animation-duration. */
+  --animate-countdown: countdown linear forwards;
+
+  @keyframes countdown {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /* Always reserve the scrollbar's space so content never shifts sideways
+   * when a page grows or shrinks past the viewport height. */
+  html {
+    scrollbar-gutter: stable;
+    color-scheme: light;
+    @apply font-sans;
+  }
+
+  /* Radix scroll locking pads the body by the scrollbar width; the gutter
+   * already holds that space, so the padding would shift content instead. */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+}
+
+/* highlight.js, on theme tokens (works in light and dark). */
+.hljs {
+  color: var(--foreground);
+  background: transparent;
+}
+.hljs-keyword,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-type,
+.hljs-meta .hljs-keyword {
+  color: var(--chart-4);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--chart-1);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-number,
+.hljs-variable,
+.hljs-selector-class {
+  color: var(--chart-7);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: var(--positive);
+}
+.hljs-built_in,
+.hljs-symbol {
+  color: var(--chart-5);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.hljs-name,
+.hljs-selector-tag,
+.hljs-section {
+  color: var(--chart-1);
+}
+.hljs-addition {
+  color: var(--positive);
+}
+.hljs-deletion {
+  color: var(--negative);
+}

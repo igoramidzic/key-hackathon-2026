@@ -1,0 +1,21 @@
+{
+  "name": "@sim/teams-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/http.ts",
+    "start": "tsx src/http.ts",
+    "stdio": "tsx src/stdio.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@sim/contracts": "workspace:*",
+    "@sim/mcp-kit": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "exports": {
+    "./server": "./src/server.ts"
+  }
+}

@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "../../../../packages/ui/src/theme.css";
+@source "../../../../packages/ui/src";
+
+/*
+ * ServiceNow Next Experience (Polaris) look on the shared kit's tokens: a dark slate unified
+ * navigation header, teal-green primary buttons, link blue for record references, light gray
+ * list headers and 4px corners. Every shared component reads these.
+ */
+:root {
+  --radius: 4px;
+  --avatar-radius: 9999px;
+
+  --background: #f4f5f7;
+  --foreground: #1d2833;
+  --card: #ffffff;
+  --card-foreground: #1d2833;
+  --popover: #ffffff;
+  --popover-foreground: #1d2833;
+  --primary: #1f7a6d;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef1;
+  --secondary-foreground: #1d2833;
+  --muted: #f1f2f4;
+  --muted-foreground: #5d6a76;
+  --accent: #e8f1f8;
+  --accent-foreground: #1d2833;
+  --destructive: #c8102e;
+  --border: #d4d7dc;
+  --input: #a9b2bb;
+  --ring: #1f7a6d;
+
+  --positive: #2b7a3d;
+  --negative: #c8102e;
+  --warning: #b35c00;
+
+  /* ServiceNow-specific surfaces. */
+  --nav: #1f2a32;
+  --nav-foreground: #ffffff;
+  --nav-muted: #b4bec7;
+  --nav-hover: #33424d;
+  --link: #0e6ea7;
+  --list-header: #f4f5f7;
+  --list-stripe: #f9fafb;
+  --list-hover: #e8f1f8;
+  --readonly: #f1f2f4;
+  --work-note: #fdf9e3;
+  --work-note-accent: #e8c547;
+  --brand-green: #62d84e;
+}
+
+@theme inline {
+  --font-sans: Lato, "Source Sans 3", "Source Sans Pro", "Segoe UI", system-ui, sans-serif;
+  --font-heading: Lato, "Source Sans 3", "Source Sans Pro", "Segoe UI", system-ui, sans-serif;
+
+  --color-nav: var(--nav);
+  --color-nav-foreground: var(--nav-foreground);
+  --color-nav-muted: var(--nav-muted);
+  --color-nav-hover: var(--nav-hover);
+  --color-link: var(--link);
+  --color-list-header: var(--list-header);
+  --color-list-stripe: var(--list-stripe);
+  --color-list-hover: var(--list-hover);
+  --color-readonly: var(--readonly);
+  --color-work-note: var(--work-note);
+  --color-work-note-accent: var(--work-note-accent);
+  --color-brand-green: var(--brand-green);
+}

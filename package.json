@@ -1,0 +1,28 @@
+{
+  "name": "incident-sim",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --concurrency=32",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "sim": "tsx apps/simulator/src/cli.ts",
+    "e2e": "tsx scripts/e2e.ts",
+    "worker:dev": "pnpm --filter @sim/cloudflare worker:dev",
+    "worker:deploy": "pnpm --filter @sim/cloudflare worker:deploy"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "turbo": "2.11.10",
+    "typescript": "7.0.2"
+  }
+}

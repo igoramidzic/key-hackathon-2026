@@ -1,0 +1,364 @@
+import {
+  badRequest,
+  createApi,
+  csv,
+  notFound,
+  pageQuery,
+  paginate,
+  parseBody,
+  parseQuery,
+} from '@sim/api-kit';
+import type { ResetResult } from '@sim/contracts';
+import {
+  CLOSE_CODES,
+  type CloseCode,
+  CONTACT_TYPES,
+  INCIDENT_STATES,
+  type IncidentState,
+  isActiveState,
+  LINK_TYPE_LABELS,
+  LINK_TYPES,
+  type Priority,
+} from '@sim/contracts/servicenow';
+import { z } from 'zod';
+import { Directory, matchesQuery } from './directory';
+import { IncidentStore } from './incidents';
+
+export const SERVICE = 'servicenow-api';
+
+// ---------------------------------------------------------------------------
+// Input schemas (lenient where it helps agents: "In Progress", "P2", "solution provided")
+// ---------------------------------------------------------------------------
+
+const stateValue = z.preprocess(
+  (v) =>
+    typeof v === 'string'
+      ? v
+          .trim()
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_')
+          .replace(/^cancelled$/, 'canceled')
+      : v,
+  z.enum(INCIDENT_STATES as [IncidentState, ...IncidentState[]]),
+);
+
+const level = z.coerce
+  .number()
+  .int()
+  .min(1, 'must be 1 (High), 2 (Medium) or 3 (Low)')
+  .max(3, 'must be 1 (High), 2 (Medium) or 3 (Low)')
+  .transform((n) => n as 1 | 2 | 3);
+
+const closeCode = z.preprocess(
+  (v) =>
+    typeof v === 'string'
+      ? (CLOSE_CODES.find((c) => c.toLowerCase() === v.trim().toLowerCase().replace(/_/g, ' ')) ??
+        v)
+      : v,
+  z.enum(CLOSE_CODES as [CloseCode, ...CloseCode[]], {
+    error: () => `close_code must be one of: ${CLOSE_CODES.join(', ')}`,
+  }),
+);
+
+const contactType = z
+  .enum(CONTACT_TYPES as [string, ...string[]])
+  .transform((v) => v as (typeof CONTACT_TYPES)[number]);
+
+const text = z.string().trim().min(1);
+
+const linkInput = z.object({
+  type: z
+    .enum(LINK_TYPES as [string, ...string[]])
+    .transform((v) => v as (typeof LINK_TYPES)[number]),
+  url: z.url(),
+  title: z.string().trim().optional(),
+});
+
+const createSchema = z.object({
+  short_description: text.max(160),
+  description: z.string().optional(),
+  app_tla: text.optional(),
+  caller: text.optional(),
+  opened_by: text.optional(),
+  contact_type: contactType.optional(),
+  category: text.optional(),
+  subcategory: text.optional(),
+  impact: level.optional(),
+  urgency: level.optional(),
+  assignment_group: text.optional(),
+  assigned_to: text.optional(),
+});
+
+const updateSchema = z.object({
+  state: stateValue.optional(),
+  impact: level.optional(),
+  urgency: level.optional(),
+  assignment_group: text.nullable().optional(),
+  assigned_to: text.nullable().optional(),
+  short_description: text.max(160).optional(),
+  description: z.string().optional(),
+  category: text.optional(),
+  subcategory: z.string().nullable().optional(),
+  app_tla: text.nullable().optional(),
+  caller: text.nullable().optional(),
+  contact_type: contactType.optional(),
+  close_code: closeCode.optional(),
+  close_notes: text.optional(),
+  work_note: z.string().optional(),
+  comment: z.string().optional(),
+  add_links: z.array(linkInput).max(20).optional(),
+  updated_by: text.optional(),
+});
+
+const journalSchema = z.object({
+  type: z.enum(['work_note', 'comment']),
+  text,
+  author: text.optional(),
+});
+
+const sorts = [
+  'opened_at',
+  '-opened_at',
+  'updated_at',
+  '-updated_at',
+  'priority',
+  '-priority',
+  'number',
+  '-number',
+] as const;
+
+const incidentListSchema = z.object({
+  ...pageQuery,
+  state: csv,
+  priority: csv,
+  active: z.enum(['true', 'false']).optional(),
+  app_tla: z.string().optional(),
+  assignment_group: z.string().optional(),
+  assigned_to: z.string().optional(),
+  caller: z.string().optional(),
+  q: z.string().optional(),
+  opened_after: z.string().optional(),
+  sort: z.enum(sorts).optional(),
+});
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+
+export function buildApp() {
+  const dir = new Directory();
+  const store = new IncidentStore(dir);
+
+  const app = createApi({
+    service: SERVICE,
+    stats: () => ({
+      incidents: store.records.length,
+      open_incidents: store.records.filter((r) => isActiveState(r.state)).length,
+      apps: dir.world.apps.length,
+      users: dir.world.people.length,
+      groups: dir.world.groups.length,
+    }),
+  });
+
+  app.post('/admin/reset', (c) => {
+    store.reset();
+    return c.json<ResetResult>({ ok: true, service: SERVICE, reset_at: new Date().toISOString() });
+  });
+
+  // ----- Incidents -----
+
+  app.get('/api/incidents', (c) => {
+    const query = parseQuery(c, incidentListSchema);
+    const states = query.state?.flatMap((s) => {
+      if (/^(open|active)$/i.test(s)) return ['new', 'in_progress', 'on_hold'] as IncidentState[];
+      const parsed = stateValue.safeParse(s);
+      if (!parsed.success) {
+        throw badRequest(
+          `Invalid state '${s}' (use ${INCIDENT_STATES.join(', ')}; comma separated)`,
+        );
+      }
+      return [parsed.data];
+    });
+    const priorities = query.priority?.map((p) => {
+      const n = Number(p.replace(/^p/i, ''));
+      if (!Number.isInteger(n) || n < 1 || n > 5) {
+        throw badRequest(`Invalid priority '${p}' (use 1-5, comma separated)`);
+      }
+      return n as Priority;
+    });
+    const records = store.list({
+      state: states,
+      priority: priorities,
+      active: query.active === undefined ? undefined : query.active === 'true',
+      app_tla: query.app_tla,
+      assignment_group: query.assignment_group,
+      assigned_to: query.assigned_to,
+      caller: query.caller,
+      q: query.q,
+      opened_after: query.opened_after,
+      sort: query.sort,
+    });
+    const page = paginate(records, query);
+    return c.json({ ...page, items: page.items.map((r) => store.summary(r)) });
+  });
+
+  app.get('/api/incidents/:number', (c) =>
+    c.json(store.full(store.require(c.req.param('number')))),
+  );
+
+  app.post('/api/incidents', async (c) => {
+    const body = await parseBody(c, createSchema);
+    return c.json(store.full(store.create(body)), 201);
+  });
+
+  app.patch('/api/incidents/:number', async (c) => {
+    const body = await parseBody(c, updateSchema);
+    const rec = store.update(c.req.param('number'), {
+      ...body,
+      add_links: body.add_links?.map((l) => ({ ...l, title: l.title || LINK_TYPE_LABELS[l.type] })),
+    });
+    return c.json(store.full(rec));
+  });
+
+  app.post('/api/incidents/:number/journal', async (c) => {
+    const body = await parseBody(c, journalSchema);
+    return c.json(store.addJournal(c.req.param('number'), body), 201);
+  });
+
+  // ----- CMDB: applications -----
+
+  app.get('/api/apps', (c) => {
+    const query = parseQuery(
+      c,
+      z.object({
+        ...pageQuery,
+        q: z.string().optional(),
+        tier: z.coerce.number().int().min(1).max(3).optional(),
+        business_unit: z.string().optional(),
+        support_group: z.string().optional(),
+      }),
+    );
+    const group = query.support_group
+      ? dir.requireGroup(query.support_group, 'support_group')
+      : undefined;
+    const bu = query.business_unit?.trim().toLowerCase();
+    const apps = dir.appsSorted.filter(
+      (a) =>
+        (!query.tier || a.tier === query.tier) &&
+        (!bu || a.businessUnit.toLowerCase() === bu) &&
+        (!group || a.supportGroupId === group.id) &&
+        matchesQuery(query.q, [a.tla, a.name, a.description, a.businessUnit]),
+    );
+    // Rank: exact TLA, then name matches, then description/business unit matches.
+    const q = query.q?.trim().toLowerCase();
+    if (q) {
+      const rank = (a: (typeof apps)[number]) =>
+        a.tla.toLowerCase() === q ? 0 : matchesQuery(q, [a.tla, a.name]) ? 1 : 2;
+      apps.sort((x, y) => rank(x) - rank(y) || x.tla.localeCompare(y.tla));
+    }
+    const page = paginate(apps, query);
+    return c.json({ ...page, items: page.items.map((a) => dir.appSummary(a)) });
+  });
+
+  app.get('/api/apps/:tla', (c) => {
+    const a = dir.findApp(c.req.param('tla'));
+    if (!a)
+      throw notFound(
+        `Application ${c.req.param('tla')} not found (use a 3-letter TLA such as PAY)`,
+      );
+    return c.json(
+      dir.appDetail(
+        a,
+        store.countOpen((r) => r.app_tla === a.tla),
+      ),
+    );
+  });
+
+  app.get('/api/apps/:tla/dependencies', (c) => {
+    const a = dir.findApp(c.req.param('tla'));
+    if (!a)
+      throw notFound(
+        `Application ${c.req.param('tla')} not found (use a 3-letter TLA such as PAY)`,
+      );
+    const query = parseQuery(
+      c,
+      z.object({
+        direction: z.enum(['up', 'down', 'both']).default('both'),
+        depth: z.coerce.number().int().min(1).max(5).default(1),
+      }),
+    );
+    return c.json(dir.dependencies(a, query.direction, query.depth));
+  });
+
+  // ----- Groups -----
+
+  app.get('/api/groups', (c) => {
+    const query = parseQuery(
+      c,
+      z.object({
+        ...pageQuery,
+        q: z.string().optional(),
+        type: z
+          .enum(['app_support', 'noc', 'service_desk', 'incident_management', 'infrastructure'])
+          .optional(),
+      }),
+    );
+    const groups = dir.world.groups.filter(
+      (g) =>
+        (!query.type || g.type === query.type) &&
+        matchesQuery(query.q, [g.id, g.name, g.description, g.email, ...g.appTlas]),
+    );
+    const page = paginate(groups, query);
+    return c.json({ ...page, items: page.items.map((g) => dir.groupSummary(g)) });
+  });
+
+  app.get('/api/groups/:id', (c) => {
+    const g = dir.findGroup(c.req.param('id'));
+    if (!g) throw notFound(`Group ${c.req.param('id')} not found (use an id like grp_pay_support)`);
+    return c.json(
+      dir.groupDetail(
+        g,
+        store.countOpen((r) => r.assignment_group === g.id),
+      ),
+    );
+  });
+
+  // ----- Users -----
+
+  app.get('/api/users', (c) => {
+    const query = parseQuery(
+      c,
+      z.object({
+        ...pageQuery,
+        q: z.string().optional(),
+        group: z.string().optional(),
+        role: z.string().optional(),
+      }),
+    );
+    const group = query.group ? dir.requireGroup(query.group, 'group') : undefined;
+    const members = group ? new Set([...group.memberUsernames, group.managerUsername]) : undefined;
+    const role = query.role?.trim().toLowerCase();
+    const people = dir.peopleSorted.filter(
+      (p) =>
+        (!members || members.has(p.username)) &&
+        (!role || p.role === role) &&
+        matchesQuery(query.q, [p.name, p.username, p.email, p.title]),
+    );
+    const page = paginate(people, query);
+    return c.json({ ...page, items: page.items.map((p) => dir.userSummary(p)) });
+  });
+
+  app.get('/api/users/:username', (c) => {
+    const p = dir.findUser(c.req.param('username'));
+    if (!p)
+      throw notFound(`User ${c.req.param('username')} not found (use a username like dwhitfield)`);
+    return c.json(
+      dir.userDetail(
+        p,
+        store.countOpen((r) => r.assigned_to === p.username),
+      ),
+    );
+  });
+
+  return { app, store, dir };
+}

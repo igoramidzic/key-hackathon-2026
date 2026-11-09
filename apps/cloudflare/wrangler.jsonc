@@ -1,0 +1,37 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // One Worker serves everything: the five UIs as static assets, and the APIs, MCP servers and
+  // log stream through a single Durable Object (see src/worker.ts).
+  // Reuses the hackathon's existing worker (it previously hosted the incident-lab demo).
+  "name": "hackathon-incident-lab",
+  "account_id": "7ca70a1deedbffff10d49a5e395aa978",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "SimWorld" }]
+  },
+  // Declarative Durable Object exports (the worker already uses this flow, not migrations).
+  // IncidentRoom belonged to the earlier incident-lab demo and is retired.
+  "exports": {
+    "SimWorld": { "type": "durable-object", "storage": "sqlite" },
+    "IncidentRoom": { "type": "durable-object", "state": "deleted" }
+  },
+  "vars": {
+    // Sized for the 128 MB Durable Object memory limit (see README "Hosting on Cloudflare").
+    "LOGS_CAPACITY": "15000",
+    "BACKFILL_MINUTES": "8",
+    "GITLAB_HISTORY_SCALE": "0.3",
+    "GITLAB_MAX_CACHED_REPOS": "40",
+    "TRAFFIC_RATE": "0.75",
+    "IDLE_MINUTES": "30"
+  },
+  "observability": { "enabled": true }
+}

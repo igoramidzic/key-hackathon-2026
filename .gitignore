@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+*.log
+.DS_Store
+coverage
+.env
+.env.local
+apps/cloudflare/public
+.wrangler

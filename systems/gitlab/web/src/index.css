@@ -1,0 +1,257 @@
+@import "tailwindcss";
+@import "../../../../packages/ui/src/theme.css";
+@source "../../../../packages/ui/src";
+
+/*
+ * GitLab look (Pajamas, 2024+): white page, light gray chrome, 4px corners, round avatars,
+ * blue confirm buttons. Every shared component reads these tokens.
+ */
+:root {
+  --radius: 0.25rem;
+  --avatar-radius: 9999px;
+
+  --background: #fff;
+  --foreground: #333238;
+  --card: #fff;
+  --card-foreground: #333238;
+  --popover: #fff;
+  --popover-foreground: #333238;
+  --primary: #1f75cb;
+  --primary-foreground: #fff;
+  --secondary: #ececef;
+  --secondary-foreground: #333238;
+  --muted: #ececef;
+  --muted-foreground: #626168;
+  --accent: #ececef;
+  --accent-foreground: #333238;
+  --destructive: #dd2b0e;
+  --border: #dcdcde;
+  --input: #89888d;
+  --ring: #428fdc;
+
+  --positive: #108548;
+  --negative: #dd2b0e;
+  --warning: #ab6100;
+
+  --chart-1: #1f75cb;
+  --chart-2: #9e5400;
+  --chart-3: #0a7f6d;
+  --chart-4: #7b58cf;
+  --chart-5: #c2410c;
+  --chart-6: #b0306b;
+  --chart-7: #2f6f9f;
+  --chart-8: #4d7c0f;
+
+  /* GitLab neutrals and status tints, for chrome the tokens above don't cover. */
+  --gl-subtle: #fbfafd;
+  --gl-strong: #18171d;
+  --gl-gray-50: #f5f5f5;
+  --gl-gray-300: #bfbfc3;
+  --gl-gray-500: #89888d;
+  --gl-link: #1068bf;
+  --gl-blue-50: #e9f3fc;
+  --gl-blue-100: #cbe2f9;
+  --gl-blue-700: #0b5cad;
+  --gl-green-100: #c3e6cd;
+  --gl-green-700: #24663b;
+  --gl-red-100: #fdd4cd;
+  --gl-red-700: #ae1800;
+  --gl-orange-100: #f5d9a8;
+  --gl-orange-700: #8f4700;
+  --gl-diff-add: #ecf4ee;
+  --gl-diff-add-gutter: #d6ecdb;
+  --gl-diff-del: #fbe5e1;
+  --gl-diff-del-gutter: #f6cfc7;
+}
+
+@theme inline {
+  --font-sans:
+    "GitLab Sans", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  --font-mono:
+    "GitLab Mono", "JetBrains Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", Consolas,
+    "Ubuntu Mono", "Courier New", monospace;
+  --font-heading: var(--font-sans);
+
+  --color-gl-subtle: var(--gl-subtle);
+  --color-gl-strong: var(--gl-strong);
+  --color-gl-gray-50: var(--gl-gray-50);
+  --color-gl-gray-300: var(--gl-gray-300);
+  --color-gl-gray-500: var(--gl-gray-500);
+  --color-gl-link: var(--gl-link);
+  --color-gl-blue-50: var(--gl-blue-50);
+  --color-gl-blue-100: var(--gl-blue-100);
+  --color-gl-blue-700: var(--gl-blue-700);
+  --color-gl-green-100: var(--gl-green-100);
+  --color-gl-green-700: var(--gl-green-700);
+  --color-gl-red-100: var(--gl-red-100);
+  --color-gl-red-700: var(--gl-red-700);
+  --color-gl-orange-100: var(--gl-orange-100);
+  --color-gl-orange-700: var(--gl-orange-700);
+  --color-gl-diff-add: var(--gl-diff-add);
+  --color-gl-diff-add-gutter: var(--gl-diff-add-gutter);
+  --color-gl-diff-del: var(--gl-diff-del);
+  --color-gl-diff-del-gutter: var(--gl-diff-del-gutter);
+}
+
+/*
+ * Buttons and fields the GitLab way: confirm darkens on hover, default is white with a gray
+ * border. Unlayered so they win over the kit's utility classes.
+ */
+[data-slot="button"] {
+  font-weight: 400;
+}
+[data-slot="button"][data-variant="default"]:hover {
+  background-color: #1068bf;
+}
+[data-slot="button"][data-variant="default"]:active {
+  background-color: #0b5cad;
+}
+[data-slot="button"][data-variant="outline"]:not(:focus-visible) {
+  border-color: var(--gl-gray-300);
+}
+[data-slot="button"][data-variant="outline"]:hover {
+  border-color: var(--gl-gray-500);
+  background-color: var(--gl-gray-50);
+}
+[data-slot="input"]:not(:focus-visible):not([aria-invalid="true"]),
+[data-slot="textarea"]:not(:focus-visible):not([aria-invalid="true"]) {
+  border-color: var(--gl-gray-500);
+}
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible {
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 3px var(--ring);
+}
+
+/* Syntax colors like GitLab's default "white" theme. */
+.hljs-keyword,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-meta .hljs-keyword {
+  color: #000;
+  font-weight: 600;
+}
+.hljs-type,
+.hljs-title.class_ {
+  color: #445588;
+  font-weight: 600;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #990000;
+  font-weight: 600;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: #dd1144;
+}
+.hljs-number,
+.hljs-literal {
+  color: #009999;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-selector-class {
+  color: #008080;
+}
+.hljs-built_in,
+.hljs-symbol {
+  color: #0086b3;
+}
+.hljs-name,
+.hljs-selector-tag {
+  color: #000080;
+}
+.hljs-meta {
+  color: #999999;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #998;
+  font-style: italic;
+}
+
+/* Rendered markdown (READMEs, MR descriptions, notes), on theme tokens. */
+@layer components {
+  .markdown {
+    @apply text-xs/normal text-foreground;
+  }
+  .markdown > :first-child {
+    margin-top: 0;
+  }
+  .markdown > :last-child {
+    margin-bottom: 0;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3,
+  .markdown h4 {
+    @apply mt-5 mb-2 font-semibold text-gl-strong;
+  }
+  .markdown h1 {
+    @apply border-b pb-1.5 text-xl;
+  }
+  .markdown h2 {
+    @apply border-b pb-1 text-base;
+  }
+  .markdown h3,
+  .markdown h4 {
+    @apply text-xs;
+  }
+  .markdown p,
+  .markdown ul,
+  .markdown ol,
+  .markdown pre,
+  .markdown table,
+  .markdown blockquote {
+    @apply my-2.5;
+  }
+  .markdown ul {
+    @apply list-disc pl-5;
+  }
+  .markdown ol {
+    @apply list-decimal pl-5;
+  }
+  .markdown li + li {
+    @apply mt-0.5;
+  }
+  .markdown a {
+    @apply text-gl-link hover:underline;
+  }
+  .markdown code {
+    @apply rounded-(--radius) bg-muted px-1 py-px font-mono text-[0.9em];
+  }
+  .markdown pre {
+    @apply overflow-x-auto rounded-(--radius) border bg-gl-subtle p-3 font-mono text-[13px] leading-5;
+  }
+  .markdown pre code {
+    @apply bg-transparent p-0 text-[1em];
+  }
+  .markdown blockquote {
+    @apply border-l-2 pl-3 text-muted-foreground;
+  }
+  .markdown table {
+    @apply w-full border-collapse;
+  }
+  .markdown th,
+  .markdown td {
+    @apply border px-2 py-1 text-left;
+  }
+  .markdown th {
+    @apply bg-muted font-medium;
+  }
+  .markdown hr {
+    @apply my-4 border-t;
+  }
+  .markdown input[type="checkbox"] {
+    @apply mr-1.5 align-middle accent-primary;
+  }
+  .markdown li:has(> input[type="checkbox"]) {
+    @apply -ml-5 list-none;
+  }
+}

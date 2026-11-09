@@ -1,0 +1,19 @@
+{
+  "name": "@sim/world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "gen:names": "tsx scripts/gen-names.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vitest": "5.1.0",
+    "@faker-js/faker": "10.6.0"
+  }
+}

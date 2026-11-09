@@ -1,0 +1,29 @@
+{
+  "name": "@sim/gitlab-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@faker-js/faker": "10.6.0",
+    "@hono/node-server": "2.1.6",
+    "@sim/api-kit": "workspace:*",
+    "@sim/contracts": "workspace:*",
+    "@sim/scenarios": "workspace:*",
+    "@sim/world": "workspace:*",
+    "diff": "9.0.0",
+    "hono": "4.13.17",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "5.1.0"
+  },
+  "exports": {
+    "./app": "./src/app.ts"
+  }
+}

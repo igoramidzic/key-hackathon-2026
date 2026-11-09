@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@import "../../../../packages/ui/src/theme.css";
+@source "../../../../packages/ui/src";
+
+/*
+ * This app hosts two products, each with its own chrome: the Logs Explorer is dressed as the
+ * Google Cloud console (`.theme-gcp`) and the alert console as Moogsoft (`.theme-moogsoft`).
+ * Each layout puts its class on its root; the shared components read these tokens.
+ *
+ * The kit sets fonts in `@theme inline`, so the utilities resolve to these variables, which each
+ * theme scope then sets.
+ */
+@theme inline {
+  --font-sans: var(--app-font, "Geist Variable", ui-sans-serif, system-ui, sans-serif);
+  --font-heading: var(--app-font, "Geist Variable", ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--app-mono, "Geist Mono Variable", ui-monospace, monospace);
+}
+
+/* Google Cloud console (Material): white surfaces, #dadce0 hairlines, Google blue. */
+.theme-gcp {
+  --app-font: "Google Sans Text", "Google Sans", Roboto, Arial, sans-serif;
+  --app-mono: "Roboto Mono", "Geist Mono Variable", ui-monospace, monospace;
+  --radius: 4px;
+  --avatar-radius: 9999px;
+
+  --background: #ffffff;
+  --foreground: #202124;
+  --card: #ffffff;
+  --card-foreground: #202124;
+  --popover: #ffffff;
+  --popover-foreground: #202124;
+  --primary: #1a73e8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f3f4;
+  --secondary-foreground: #202124;
+  --muted: #f1f3f4;
+  --muted-foreground: #5f6368;
+  --accent: #e8f0fe;
+  --accent-foreground: #1967d2;
+  --destructive: #d93025;
+  --border: #dadce0;
+  --input: #dadce0;
+  --ring: #1a73e8;
+
+  --positive: #188038;
+  --negative: #d93025;
+  --warning: #e37400;
+
+  --chart-1: #1a73e8;
+  --chart-2: #e8710a;
+  --chart-3: #12b5cb;
+  --chart-4: #9334e6;
+  --chart-5: #e52592;
+  --chart-6: #f9ab00;
+  --chart-7: #7cb342;
+  --chart-8: #188038;
+
+  font-family: var(--app-font);
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Moogsoft: dark navy chrome, cool-gray workspace, teal accent, tight corners. */
+.theme-moogsoft {
+  --app-font: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --app-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+  --radius: 2px;
+  --avatar-radius: 9999px;
+
+  --background: #edf0f4;
+  --foreground: #1c2b3a;
+  --card: #ffffff;
+  --card-foreground: #1c2b3a;
+  --popover: #ffffff;
+  --popover-foreground: #1c2b3a;
+  --primary: #0e9aab;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e9ef;
+  --secondary-foreground: #1c2b3a;
+  --muted: #eef2f6;
+  --muted-foreground: #5a6b7d;
+  --accent: #e0f4f6;
+  --accent-foreground: #0b6f7c;
+  --destructive: #d7262e;
+  --border: #d5dce4;
+  --input: #c3cdd8;
+  --ring: #14b3c4;
+
+  --positive: #4f9a2a;
+  --negative: #d7262e;
+  --warning: #d9822b;
+
+  /* Moogsoft severity palette. */
+  --moog-critical: #d7262e;
+  --moog-major: #f08a24;
+  --moog-minor: #f5cd19;
+  --moog-warning: #3aa8db;
+  --moog-clear: #6db33f;
+  --moog-navy: #0b1f35;
+  --moog-navy-2: #132b47;
+  --moog-teal: #2ad2c9;
+
+  font-family: var(--app-font);
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* New entries from the live stream fade in from a highlight. */
+@keyframes flash {
+  from {
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}

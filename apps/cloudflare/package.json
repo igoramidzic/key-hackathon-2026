@@ -1,0 +1,30 @@
+{
+  "name": "@sim/cloudflare",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs",
+    "worker:dev": "node scripts/build-ui.mjs && wrangler dev",
+    "worker:deploy": "node scripts/build-ui.mjs && wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sim/contracts": "workspace:*",
+    "@sim/gitlab-api": "workspace:*",
+    "@sim/gitlab-mcp": "workspace:*",
+    "@sim/logs-api": "workspace:*",
+    "@sim/logs-mcp": "workspace:*",
+    "@sim/mcp-kit": "workspace:*",
+    "@sim/servicenow-api": "workspace:*",
+    "@sim/servicenow-mcp": "workspace:*",
+    "@sim/simulator": "workspace:*",
+    "@sim/teams-api": "workspace:*",
+    "@sim/teams-mcp": "workspace:*",
+    "hono": "4.13.17"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261108.1",
+    "wrangler": "4.158.0"
+  }
+}
