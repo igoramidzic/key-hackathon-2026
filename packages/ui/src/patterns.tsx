@@ -143,7 +143,8 @@ export function SystemLinks({ className }: { className?: string }) {
 
 /**
  * The app frame: a sticky 48px header (product logo and name, nav, right-side actions; the
- * simulator also gets a tab strip linking the four systems) over a full-width page. Use `sidebar` for apps that need a persistent left pane (Teams channels,
+ * simulator also gets a tab strip linking the four systems unless `systemLinks` is false) over a
+ * full-width page. Use `sidebar` for apps that need a persistent left pane (Teams channels,
  * GitLab project nav); it renders below the header at a fixed width.
  */
 export function AppShell({
@@ -153,6 +154,7 @@ export function AppShell({
   sidebar,
   children,
   padded = true,
+  systemLinks = true,
 }: {
   system: SystemId;
   nav?: ReactNode;
@@ -161,6 +163,8 @@ export function AppShell({
   children: ReactNode;
   /** Page padding (turn off for edge-to-edge panes like chat). */
   padded?: boolean;
+  /** Simulator only: show the tab strip linking the four systems (default true). */
+  systemLinks?: boolean;
 }) {
   return (
     <div className="flex min-h-svh w-full min-w-0 flex-col bg-background">
@@ -183,7 +187,7 @@ export function AppShell({
             </div>
           </div>
         </header>
-        {system === 'simulator' && (
+        {system === 'simulator' && systemLinks && (
           <SystemLinks className="h-10 border-b bg-background/90 px-2 backdrop-blur md:px-3" />
         )}
       </div>

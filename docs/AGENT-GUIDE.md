@@ -8,6 +8,11 @@ the agent can live anywhere (a separate repo, a folder here, a notebook). It nee
 3. The **simulator API** for your own test harness: trigger, reset, and check recovery. Never
    expose it to the agent, because it serves the answer key.
 
+**Prefer clicking around?** <http://localhost:3000/docs> (or `/docs` on the hosted copy) is the
+interactive version of this guide. It shows every tool's schema read live from the servers, has
+a **Try it** console per tool with working example arguments, shows each call as curl,
+TypeScript and Python, and has a live log stream viewer.
+
 ## 1. Get the world running
 
 ```bash

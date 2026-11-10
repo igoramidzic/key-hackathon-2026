@@ -1,8 +1,9 @@
 import { createSimulatorClient, type RunPhase, type ScenarioKind } from '@sim/contracts/simulator';
-import { Button, StatusBadge, type Tone } from '@sim/ui';
+import { Button, cn, navLinkClass, StatusBadge, type Tone } from '@sim/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useEffect, useState } from 'react';
+import { NavLink } from 'react-router';
 
 /**
  * Path prefix the UI is served under: '' at the root (base '/'), or the prefix passed to
@@ -149,5 +150,21 @@ export function ConfirmButton({
       <ButtonIcon loading={loading} icon={icon} />
       {label}
     </Button>
+  );
+}
+
+/** Header nav shared by the control panel and the agent docs. */
+export function TopNav() {
+  const item = ({ isActive }: { isActive: boolean }) =>
+    cn('flex h-8 items-center border border-transparent px-2.5 text-sm', navLinkClass(isActive));
+  return (
+    <>
+      <NavLink end to="/" className={item}>
+        Control panel
+      </NavLink>
+      <NavLink to="/docs" className={item}>
+        Agent docs
+      </NavLink>
+    </>
   );
 }

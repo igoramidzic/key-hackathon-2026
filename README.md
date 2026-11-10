@@ -116,6 +116,12 @@ Only one scenario runs at a time. Reset between runs so each one starts from the
 
 ## Connecting the agent
 
+**Agent docs in the UI:** <http://localhost:3000/docs> (hosted:
+<https://hackathon-incident-lab.kualia.workers.dev/docs>). It's an interactive reference read
+live from the MCP servers: every tool's parameters, a **Try it** console with working example
+arguments, the same call as curl, TypeScript and Python, connection snippets per client, the
+live log stream, and a `sim-mcp-tools.json` download of every tool schema.
+
 Building the agent? Start with [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md): connection snippets
 for Claude Code, the Claude Agent SDK, Google ADK and raw MCP, the expected incident workflow
 step by step, the trigger/reset/verify dev loop, and troubleshooting. Coding agents get their

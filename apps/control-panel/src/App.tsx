@@ -21,6 +21,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Check, Loader2, Play, Square } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { Link } from 'react-router';
 import { HeaderActions } from './Header';
 import {
   ButtonIcon,
@@ -29,6 +30,7 @@ import {
   KIND_LABEL,
   PhaseBadge,
   sim,
+  TopNav,
   useScenarioDetail,
   useScenarios,
   useStatus,
@@ -434,13 +436,21 @@ export function App() {
   const phase = data?.engine.phase;
 
   return (
-    <AppShell system="simulator" actions={<HeaderActions status={data} offline={status.isError} />}>
+    <AppShell
+      system="simulator"
+      nav={<TopNav />}
+      actions={<HeaderActions status={data} offline={status.isError} />}
+    >
       <div className="mx-auto grid w-full max-w-5xl gap-6">
         <div className="grid gap-1.5">
           <h1 className="font-semibold text-2xl tracking-tight">Simulate an incident</h1>
           <p className="max-w-3xl text-base text-muted-foreground">
             Pick a scenario. A bad change ships, errors spread through the systems above, and your
-            agent takes it from there.
+            agent takes it from there. Building the agent? Start with the{' '}
+            <Link to="/docs" className="text-foreground underline underline-offset-2">
+              agent docs
+            </Link>
+            .
           </p>
         </div>
         {status.isError && (

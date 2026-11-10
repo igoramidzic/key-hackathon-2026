@@ -17,6 +17,10 @@ world only through the four MCP servers and the live log stream. There are two k
 | Changing the **simulated world** (systems, scenarios, UIs, simulator) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 [README.md](README.md) is the human overview: ports, scenarios, tool list, Cloudflare hosting.
+Humans browsing the tools should use the interactive docs at <http://localhost:3000/docs>
+(`apps/control-panel/src/docs`). That page reads `tools/list` live, so new or changed tools
+appear there automatically. Curated "Try it" arguments live in
+`apps/control-panel/src/docs/examples.ts`: add one when you add a tool.
 
 ## Commands
 
