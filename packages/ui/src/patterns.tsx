@@ -1,5 +1,5 @@
 import { URLS } from '@sim/contracts';
-import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Inbox, Loader2 } from 'lucide-react';
 import type * as React from 'react';
 import type { ReactNode } from 'react';
 import { cn } from './cn';
@@ -121,7 +121,7 @@ export function SystemLinks({ className }: { className?: string }) {
   return (
     <nav
       aria-label="Simulated systems"
-      className={cn('flex flex-wrap items-center gap-1', className)}
+      className={cn('flex items-stretch gap-1 overflow-x-auto', className)}
     >
       {systems.map((id) => (
         <a
@@ -130,10 +130,11 @@ export function SystemLinks({ className }: { className?: string }) {
           target="_blank"
           rel="noopener noreferrer"
           title={`${SYSTEM_META[id].tagline} (opens in a new tab)`}
-          className="inline-flex h-8 items-center gap-2 border border-transparent px-2.5 text-muted-foreground text-xs transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-muted-foreground text-sm transition-colors hover:border-foreground/40 hover:text-foreground"
         >
           <SystemLogo system={id} className="size-4" />
           {SYSTEM_META[id].name}
+          <ArrowUpRight aria-hidden="true" className="-ml-1 size-2.5 opacity-60" />
         </a>
       ))}
     </nav>
@@ -142,7 +143,7 @@ export function SystemLinks({ className }: { className?: string }) {
 
 /**
  * The app frame: a sticky 48px header (product logo and name, nav, right-side actions; the
- * simulator also gets links to the four systems) over a full-width page. Use `sidebar` for apps that need a persistent left pane (Teams channels,
+ * simulator also gets a tab strip linking the four systems) over a full-width page. Use `sidebar` for apps that need a persistent left pane (Teams channels,
  * GitLab project nav); it renders below the header at a fixed width.
  */
 export function AppShell({
@@ -172,7 +173,6 @@ export function AppShell({
                 {nav}
               </nav>
             )}
-            {system === 'simulator' && <SystemLinks className="ml-3 hidden md:flex" />}
             <div className="ml-auto flex items-center gap-2">
               {actions}
               {system !== 'simulator' && (
@@ -183,6 +183,9 @@ export function AppShell({
             </div>
           </div>
         </header>
+        {system === 'simulator' && (
+          <SystemLinks className="h-10 border-b bg-background/90 px-2 backdrop-blur md:px-3" />
+        )}
       </div>
       <div className="flex min-h-0 flex-1">
         {sidebar && (

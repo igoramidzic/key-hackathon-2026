@@ -3,6 +3,7 @@ import {
   Alert,
   AlertDescription,
   AppShell,
+  Badge,
   Button,
   Card,
   CardAction,
@@ -13,7 +14,6 @@ import {
   CardTitle,
   cn,
   ErrorState,
-  PageHeader,
   Spinner,
   ToggleGroup,
   ToggleGroupItem,
@@ -162,14 +162,14 @@ function Stepper({ items, active }: { items: Step[]; active: boolean }) {
               <div className="min-w-0">
                 <div
                   className={cn(
-                    'text-xs',
+                    'text-sm',
                     step.done || isCurrent ? 'font-medium' : 'text-muted-foreground',
                   )}
                 >
                   {step.label}
                 </div>
                 {step.at !== undefined && (
-                  <div className="text-muted-foreground text-xs tabular-nums">
+                  <div className="text-muted-foreground text-sm tabular-nums">
                     +{formatDuration(step.at)}
                   </div>
                 )}
@@ -211,7 +211,7 @@ function Reveal({ label, children }: { label: string; children: ReactNode }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-fit text-muted-foreground text-xs underline-offset-4 hover:text-foreground hover:underline"
+        className="w-fit text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
       >
         {open ? `Hide ${label}` : `Show ${label}`}
       </button>
@@ -225,7 +225,7 @@ function AnswerKey({ run }: { run: RunStatus }) {
   const key = detail.data?.answer_key;
   if (!key) return <Spinner className="justify-start p-0" />;
   return (
-    <div className="grid gap-2 border-l-2 border-foreground pl-3 text-xs">
+    <div className="grid gap-2 border-l-2 border-foreground pl-3 text-sm">
       <p>{key.root_cause}</p>
       <p className="text-muted-foreground">{key.why_it_looks_green}</p>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -247,7 +247,7 @@ function AnswerKey({ run }: { run: RunStatus }) {
 
 function EventLog({ events }: { events: RunEvent[] }) {
   return (
-    <ol className="grid gap-1 text-xs">
+    <ol className="grid gap-1.5 text-sm">
       {events.map((e, i) => (
         <li key={i} className="flex gap-3">
           <span className="w-14 shrink-0 text-right text-muted-foreground tabular-nums">
@@ -287,9 +287,9 @@ function CurrentRun({ run }: { run: RunStatus }) {
     <Card>
       <CardHeader>
         <CardDescription>{run.active ? 'Running now' : 'Last run'}</CardDescription>
-        <CardTitle className="text-base">{run.title}</CardTitle>
+        <CardTitle className="text-lg">{run.title}</CardTitle>
         <CardAction className="flex items-center gap-3">
-          <span className="text-muted-foreground text-xs tabular-nums">
+          <span className="text-muted-foreground text-sm tabular-nums">
             {formatDuration(elapsed)}
           </span>
           <PhaseBadge phase={run.phase} />
@@ -308,7 +308,7 @@ function CurrentRun({ run }: { run: RunStatus }) {
       </CardHeader>
       <CardContent className="grid gap-5">
         <Stepper items={steps(run)} active={run.active} />
-        <p className="max-w-3xl text-sm">{sentence(run)}</p>
+        <p className="max-w-3xl text-base">{sentence(run)}</p>
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm">
             <a href={run.logs_url} target="_blank" rel="noreferrer">
@@ -360,13 +360,13 @@ function ScenarioRow({
   return (
     <li className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="font-medium text-sm">{scenario.title}</span>
-          <span className="text-muted-foreground text-xs">{KIND_LABEL[scenario.kind]}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-base">{scenario.title}</span>
+          <Badge variant="secondary">{KIND_LABEL[scenario.kind]}</Badge>
         </div>
-        <p className="mt-0.5 max-w-3xl text-muted-foreground text-xs">{scenario.summary}</p>
+        <p className="mt-0.5 max-w-3xl text-muted-foreground text-sm">{scenario.summary}</p>
         {trigger.isError && (
-          <p className="mt-1 text-negative text-xs">{errorText(trigger.error)}</p>
+          <p className="mt-1 text-negative text-sm">{errorText(trigger.error)}</p>
         )}
       </div>
       <Button
@@ -394,12 +394,12 @@ function ScenarioList({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Scenarios</CardTitle>
+        <CardTitle className="text-base">Scenarios</CardTitle>
         <CardDescription>
           Each one ships a bad change and lets the consequences play out.
         </CardDescription>
         <CardAction className="flex items-center gap-2">
-          <span className="text-muted-foreground text-xs">Speed</span>
+          <span className="text-muted-foreground text-sm">Speed</span>
           <ToggleGroup
             type="single"
             size="sm"
@@ -438,11 +438,13 @@ export function App() {
   return (
     <AppShell system="simulator" actions={<HeaderActions status={data} offline={status.isError} />}>
       <div className="mx-auto grid w-full max-w-5xl gap-6">
-        <PageHeader
-          className="mb-0"
-          title="Simulate an incident"
-          description="Pick a scenario. A bad change ships, errors spread through the systems above, and your agent takes it from there."
-        />
+        <div className="grid gap-1.5">
+          <h1 className="font-semibold text-2xl tracking-tight">Simulate an incident</h1>
+          <p className="max-w-3xl text-base text-muted-foreground">
+            Pick a scenario. A bad change ships, errors spread through the systems above, and your
+            agent takes it from there.
+          </p>
+        </div>
         {status.isError && (
           <ErrorState error="The simulator isn't reachable. Is it running (pnpm dev)?" />
         )}
