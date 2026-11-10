@@ -82,7 +82,7 @@ known-correct fix, so you can check an agent's MR against it.
 | `ath-token-ttl-cascade` | ATH `keybank/ATH00/auth-token-service` | "Move token TTL to unified config loader": the new YAML config is in minutes, but the access-token TTL is used as seconds, so tokens expire after 15 s. ATH's own logs show `expires_in=15`. | Multiply by 60. |
 | `aba-checksum-cascade` | ABA `keybank/ABA00/routing-directory-service` | "Optimize ABA checksum validation": the unrolled checksum uses the wrong weights, so most valid routing numbers fail. ABA returns 200 `{valid:false}`. | Restore the 3-7-1 weights. |
 | `crd-pool-exhaustion` | CRD `keybank/CRD00/card-management-api` | "Right-size Hikari pool per DBA review": pool size 40 → 5, timeout 10 s → 2 s. | Restore 40 and 10000 ms. |
-| `tlr-business-date-helpdesk` | TLR `keybank/TLR00/teller-workstation-api` | "Use UTC consistently": the business-day timezone also becomes UTC, so afternoon transactions post to tomorrow. | Restore `America/New_York`. |
+| `tlr-business-date-helpdesk` | TLR `keybank/TLR00/teller-workstation-api` | "Use UTC consistently": the business day also moves to UTC, with the 19:00 cutoff "converted" to `00:00`, so every transaction posts to the next business day. | Restore `America/New_York` and the `19:00` cutoff. |
 
 The control panel shows the same answer key, with diffs, behind **Reveal answer key**.
 

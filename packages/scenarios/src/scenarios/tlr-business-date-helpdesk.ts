@@ -4,8 +4,9 @@ import { DEP_REPO } from '../repos/dep';
 import {
   TLR_APPLICATION_YML_BAD,
   TLR_BAD_CONTENT,
-  TLR_BUSINESS_DAY_TZ,
-  TLR_BUSINESS_DAY_TZ_BAD,
+  TLR_BUSINESS_DAY_BLOCK,
+  TLR_BUSINESS_DAY_BLOCK_BAD,
+  TLR_HOLIDAYS,
   TLR_PATHS,
   TLR_REPO,
 } from '../repos/tlr';
@@ -15,7 +16,6 @@ import {
   dev,
   easternDate,
   latency,
-  nextWeekday,
   serviceDeskAnalyst,
   stripCComments,
   stripHashComments,
@@ -29,8 +29,8 @@ import {
 
 const UTC_ZONE = /^(UTC|GMT|Z|Zulu|Etc\/UTC|Etc\/GMT|UCT|Universal)$/i;
 
-/** `teller.business-day.timezone` from application.yml (indentation-based, no YAML parser). */
-function businessDayZone(yml: string): string | undefined {
+/** A key in the `teller.business-day` block of application.yml (indentation-based, no YAML parser). */
+function businessDayValue(yml: string, key: string): string | undefined {
   const lines = yml.split('\n');
   const start = lines.findIndex((l) => /^\s*business-day:\s*$/.test(l));
   if (start < 0) return undefined;
@@ -39,25 +39,45 @@ function businessDayZone(yml: string): string | undefined {
   for (const line of lines.slice(start + 1)) {
     if (line.trim() === '') continue;
     if (indent(line) <= blockIndent) break;
-    const m = line.match(/^\s*timezone:\s*["']?([\w/+-]+)/);
+    const m = line.match(new RegExp(`^\\s*${key}:\\s*["']?([\\w/:+-]+)`));
     if (m) return m[1];
   }
   return undefined;
 }
 
-/** Fixed when the business date is computed in the bank's (US) business time zone again. */
-function tlrIsFixed(files: Record<string, string | null>): boolean {
-  const service = stripCComments(files[TLR_PATHS.businessDateService] ?? '');
+/** Minutes after midnight for "HH:MM". */
+function minutesOf(hhmm: string | undefined): number | undefined {
+  const m = hhmm?.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : undefined;
+}
+
+/** True when the business day is computed in the bank's (US) business time zone again. */
+function businessZoneOk(service: string, yml: string, props: string): boolean {
   // A zone hard-coded in BusinessDateService wins over configuration.
   if (/ZoneOffset\.UTC|ZoneId\.of\(\s*"(UTC|GMT|Z|Etc\/UTC)"\s*\)/.test(service)) return false;
   if (/ZoneId\.of\(\s*"(America\/|US\/)/.test(service)) return true;
+  const zone = businessDayValue(yml, 'timezone') ?? props.match(/timezone\s*=\s*"([^"]+)"/)?.[1];
+  return zone !== undefined && !UTC_ZONE.test(zone);
+}
 
+/**
+ * True when the posting cutoff is a real end-of-day cutoff again. "00:00" (the bad MR) makes
+ * every transaction post to the next business day; anything from noon on is a plausible cutoff.
+ */
+function cutoffOk(yml: string, props: string): boolean {
+  const configured = minutesOf(businessDayValue(yml, 'posting-cutoff'));
+  const fallback = props.match(/postingCutoff\s*=\s*LocalTime\.of\(\s*(\d+)\s*,\s*(\d+)/);
+  const cutoff =
+    configured ?? (fallback ? Number(fallback[1]) * 60 + Number(fallback[2]) : undefined);
+  return cutoff !== undefined && cutoff >= 12 * 60;
+}
+
+/** Fixed when the business date uses the Eastern business day and a sane posting cutoff. */
+function tlrIsFixed(files: Record<string, string | null>): boolean {
+  const service = stripCComments(files[TLR_PATHS.businessDateService] ?? '');
   const yml = stripHashComments(files[TLR_PATHS.applicationYml] ?? '');
   const props = stripCComments(files[TLR_PATHS.properties] ?? '');
-  const configured = businessDayZone(yml);
-  const fallback = props.match(/timezone\s*=\s*"([^"]+)"/)?.[1];
-  const zone = configured ?? fallback;
-  return zone !== undefined && !UTC_ZONE.test(zone);
+  return businessZoneOk(service, yml, props) && cutoffOk(yml, props);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,9 +93,31 @@ const BRANCHES: (readonly [readonly [string, string], number])[] = [
   [['0457', 'Syracuse Erie Blvd Branch'], 1],
 ];
 
+const HOLIDAYS = new Set<string>(TLR_HOLIDAYS);
+
+/** First business day strictly after `isoDate` (weekends and TLR holidays skipped). */
+function nextBusinessDay(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  do {
+    d.setUTCDate(d.getUTCDate() + 1);
+  } while (
+    d.getUTCDay() === 0 ||
+    d.getUTCDay() === 6 ||
+    HOLIDAYS.has(d.toISOString().slice(0, 10))
+  );
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * What BusinessDateService computes with the bad config: the UTC date, always past the 00:00
+ * cutoff, so the next business day after it. `today` is the open (Eastern) business date that
+ * drawer sessions and GL use. Matches the code at any time of day.
+ */
 function dates(ctx: LogContext) {
-  const today = easternDate(ctx.now);
-  return { today, tomorrow: nextWeekday(today) };
+  return {
+    today: easternDate(ctx.now),
+    tomorrow: nextBusinessDay(ctx.now.toISOString().slice(0, 10)),
+  };
 }
 
 function drawer(ctx: LogContext) {
@@ -104,11 +146,11 @@ export const tlrBusinessDateHelpdesk: ScenarioDefinition = {
     "Branches start calling the service desk one after another: teller receipts show tomorrow's date and drawers will not balance. Monitoring is quiet.",
   answerKey: {
     rootCause:
-      'teller-workstation-api (TLR) MR "Use UTC consistently for transaction timestamps" also changed teller.business-day.timezone from America/New_York to UTC. The 19:00 posting cutoff is now evaluated in UTC (2-3 PM Eastern), so afternoon teller transactions post to the next business day: drawer sessions (today) no longer match their transactions, drawers do not balance, and GL rejects the future-dated postings. Fix: restore America/New_York for the business day (keep UTC timestamps).',
+      'teller-workstation-api (TLR) MR "Use UTC consistently for transaction timestamps" also moved the business day to UTC: teller.business-day.timezone America/New_York -> UTC and posting-cutoff "19:00" -> "00:00" ("19:00 Eastern = 00:00 UTC"). BusinessDateService posts to the next business day when the time is not before the cutoff, and no time is before midnight, so every teller transaction posts to the next business day: drawer sessions (today) no longer match their transactions, drawers do not balance, and GL rejects the future-dated postings. Fix: restore America/New_York and the 19:00 cutoff (keep UTC timestamps). Restoring only the time zone leaves the 00:00 cutoff, which still posts everything to the next day.',
     culpritTla: 'TLR',
     affectedTlas: ['TLR', 'GLD'],
     whyItLooksGreen:
-      'Nothing errors: TLR returns 200 for every transaction and only logs WARNINGs (business date mismatch, drawer variance, GL posting deferred); GLD logs WARNING rejections. No alert rule fires, so the first signal is a phone call. Unit tests build BusinessDayProperties with America/New_York explicitly, so CI passed with the production config set to UTC.',
+      'Nothing errors: TLR returns 200 for every transaction and only logs WARNINGs (business date mismatch, drawer variance, GL posting deferred); GLD logs WARNING rejections. No alert rule fires, so the first signal is a phone call. Unit tests build BusinessDayProperties in code (America/New_York, default 19:00 cutoff) and never read application.yml, so CI passed with the production config set to UTC and 00:00.',
   },
   badMr: {
     project: TLR_REPO,
@@ -119,7 +161,7 @@ export const tlrBusinessDateHelpdesk: ScenarioDefinition = {
 ## Change
 - \`posted_at\` is an \`Instant\` (UTC); Hibernate \`jdbc.time_zone: UTC\`
 - Jackson serializes timestamps in UTC
-- The business-day clock uses the same zone (\`teller.business-day.timezone: UTC\`) so business dates and timestamps can't disagree
+- The business-day clock uses the same zone (\`teller.business-day.timezone: UTC\`) so business dates and timestamps can't disagree; the 19:00 Eastern posting cutoff is converted to UTC (\`posting-cutoff: "00:00"\`)
 - Tests updated for \`Instant\`
 
 Implements Enterprise Architecture Standard EAS-207 ("store and process all timestamps in UTC").`,
@@ -139,18 +181,18 @@ Implements Enterprise Architecture Standard EAS-207 ("store and process all time
   fix: {
     title: 'Restore America/New_York business day for teller postings',
     description: `## Why
-The AUD-4471 MR ("Use UTC consistently for transaction timestamps") set \`teller.business-day.timezone: UTC\`. The business day is a bank concept, not a timestamp: the 19:00 posting cutoff is now evaluated in UTC (2 PM Eastern in winter), so every afternoon teller transaction posts to the next business day. Drawer sessions no longer match their transactions (drawers out of balance) and GL rejects the postings as \`FUTURE_BUSINESS_DATE\`.
+The AUD-4471 MR ("Use UTC consistently for transaction timestamps") set \`teller.business-day.timezone: UTC\` and "converted" the posting cutoff to \`00:00\`. \`BusinessDateService\` posts to the next business day when the time is not before the cutoff, and nothing is before midnight, so every teller transaction posts to the next business day. Drawer sessions no longer match their transactions (drawers out of balance) and GL rejects the postings as \`FUTURE_BUSINESS_DATE\`. The business day is a bank concept, not a timestamp, and the cutoff only works in local time.
 
 ## Change
-- \`teller.business-day.timezone: America/New_York\`
+- \`teller.business-day.timezone: America/New_York\`, \`posting-cutoff: "19:00"\`
 - Timestamps stay UTC (\`Instant\`, Hibernate/Jackson UTC), which was the point of the original MR
 
 Postings deferred to the GL retry queue will be re-sent by the EOD sweep with the correct business date.`,
     edits: [
       {
         path: TLR_PATHS.applicationYml,
-        find: TLR_BUSINESS_DAY_TZ_BAD,
-        replace: `    # Business day follows branch operations (Eastern); timestamps stay UTC (EAS-207).\n${TLR_BUSINESS_DAY_TZ}`,
+        find: TLR_BUSINESS_DAY_BLOCK_BAD,
+        replace: `    # Business day follows branch operations (Eastern); timestamps stay UTC (EAS-207).\n${TLR_BUSINESS_DAY_BLOCK}`,
       },
     ],
     files: [TLR_PATHS.applicationYml, TLR_PATHS.businessDateService, TLR_PATHS.properties],
@@ -325,7 +367,7 @@ Send a technician to check the receipt printers, or tell us how to reset the dat
 
 Hi Service Desk,
 
-Since this afternoon every transaction in the Teller Workstation electronic journal has tomorrow's business date. Customers making deposits see "available tomorrow" on their receipt. I mentioned it on the regional branch call and Cleveland Main sees the same thing.
+For the last hour or so every transaction in the Teller Workstation electronic journal has tomorrow's business date. Customers making deposits see "available tomorrow" on their receipt. I mentioned it on the regional branch call and Cleveland Main sees the same thing.
 
 Our drawer totals in the system don't match the cash count either, so we can't start balancing.
 
@@ -350,7 +392,7 @@ ${headTeller.firstName}`,
 Callback: ${akron.phone}
 
 Issue:
-Started end-of-day prep early. All three drawers are out of balance in Teller Workstation: the system totals are short by exactly the transactions done since mid-afternoon. Those transactions show up when the teller filters by tomorrow's date.
+Started end-of-day prep early. All three drawers are out of balance in Teller Workstation: the system totals are short by exactly the transactions done in the last hour or two. Those transactions show up when the teller filters by tomorrow's date.
 
 Customer impact:
 - Branch cannot close the day.

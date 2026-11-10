@@ -310,9 +310,9 @@ describe.each(scenarios.map((s) => [s.id, s] as const))('%s', (_id, s) => {
 });
 
 describe('fix predicates accept reasonable alternative fixes', () => {
-  const run = (id: string, mutate: (files: Files) => Files) => {
+  const run = (id: string, ...mutations: ((files: Files) => Files)[]) => {
     const s = scenario(id);
-    const files = mutate(afterBad(s));
+    const files = mutations.reduce((acc, mutate) => mutate(acc), afterBad(s));
     return s.fix.isFixed(Object.fromEntries(s.fix.files.map((f) => [f, files[f] ?? null])));
   };
   const edit = (path: string, find: string | RegExp, replace: string) => (files: Files) => ({
@@ -424,13 +424,27 @@ describe('fix predicates accept reasonable alternative fixes', () => {
   it('tlr-business-date-helpdesk', () => {
     const id = 'tlr-business-date-helpdesk';
     const yml = TLR_PATHS.applicationYml;
-    expect(run(id, edit(yml, '    timezone: UTC', '    timezone: US/Eastern'))).toBe(true);
-    expect(run(id, edit(yml, '    timezone: UTC', '    timezone: "America/New_York"'))).toBe(true);
-    expect(run(id, edit(yml, /\n {4}timezone: UTC/, ''))).toBe(true);
-    expect(run(id, edit(yml, '    timezone: UTC', '    timezone: Etc/UTC'))).toBe(false);
+    const cutoff = edit(yml, 'posting-cutoff: "00:00"', 'posting-cutoff: "19:00"');
+    const both = (find: string | RegExp, replace: string) => [cutoff, edit(yml, find, replace)];
+    expect(run(id, ...both('    timezone: UTC', '    timezone: US/Eastern'))).toBe(true);
+    expect(run(id, ...both('    timezone: UTC', '    timezone: "America/New_York"'))).toBe(true);
+    expect(run(id, ...both(/\n {4}timezone: UTC/, ''))).toBe(true);
+    expect(run(id, ...both('    timezone: UTC', '    timezone: Etc/UTC'))).toBe(false);
+    // Removing the cutoff falls back to the 19:00 default in BusinessDayProperties.
     expect(
       run(
         id,
+        edit(yml, /\n {4}posting-cutoff: "00:00"/, ''),
+        edit(yml, '    timezone: UTC', '    timezone: America/New_York'),
+      ),
+    ).toBe(true);
+    // Half fixes: the 00:00 cutoff still posts everything to the next day, and so does UTC.
+    expect(run(id, edit(yml, '    timezone: UTC', '    timezone: America/New_York'))).toBe(false);
+    expect(run(id, cutoff)).toBe(false);
+    expect(
+      run(
+        id,
+        cutoff,
         edit(
           TLR_PATHS.businessDateService,
           'return ZoneId.of(properties.getTimezone());',

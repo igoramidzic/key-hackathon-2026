@@ -21,10 +21,29 @@ export const TLR_PATHS = {
   transactionServiceTest: `${TEST}/service/TellerTransactionServiceTest.java`,
 } as const;
 
-/** The business-day block. The UTC MR flips `timezone`. */
-export const TLR_BUSINESS_DAY_TZ = '    timezone: America/New_York';
-export const TLR_BUSINESS_DAY_TZ_BAD = `    # All timestamps are UTC (EAS-207); the business date derives from the same clock.
-    timezone: UTC`;
+/**
+ * The business-day zone and posting cutoff. The UTC MR moves both to UTC and "converts" the
+ * 19:00 Eastern cutoff to 00:00. Nothing is before midnight, so every transaction is after the
+ * cutoff and posts to the next business day, whatever the time of day.
+ */
+export const TLR_BUSINESS_DAY_BLOCK = `    timezone: America/New_York
+    # Teller transactions at or after the cutoff post to the next business day.
+    posting-cutoff: "19:00"`;
+export const TLR_BUSINESS_DAY_BLOCK_BAD = `    # All timestamps are UTC (EAS-207); the business date derives from the same clock.
+    timezone: UTC
+    # Teller transactions at or after the cutoff post to the next business day.
+    # 19:00 Eastern = 00:00 UTC.
+    posting-cutoff: "00:00"`;
+
+/** Holidays in application.yml: no business date falls on these. */
+export const TLR_HOLIDAYS = [
+  '2026-11-11',
+  '2026-11-26',
+  '2026-12-25',
+  '2027-01-01',
+  '2027-01-18',
+  '2027-02-15',
+] as const;
 
 export const TLR_APPLICATION_YML = `server:
   port: 8080
@@ -55,16 +74,9 @@ spring:
 
 teller:
   business-day:
-${TLR_BUSINESS_DAY_TZ}
-    # Teller transactions at or after the cutoff post to the next business day.
-    posting-cutoff: "19:00"
+${TLR_BUSINESS_DAY_BLOCK}
     holidays:
-      - 2026-11-11
-      - 2026-11-26
-      - 2026-12-25
-      - 2027-01-01
-      - 2027-01-18
-      - 2027-02-15
+${TLR_HOLIDAYS.map((d) => `      - ${d}`).join('\n')}
   drawer:
     variance-tolerance: 5.00
   clients:
@@ -106,7 +118,7 @@ export const TLR_APPLICATION_YML_BAD = TLR_APPLICATION_YML.replace(
         jdbc:
           time_zone: UTC
 `,
-).replace(TLR_BUSINESS_DAY_TZ, TLR_BUSINESS_DAY_TZ_BAD);
+).replace(TLR_BUSINESS_DAY_BLOCK, TLR_BUSINESS_DAY_BLOCK_BAD);
 
 const APPLICATION = `package com.keybank.tlr;
 
