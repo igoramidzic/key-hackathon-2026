@@ -1,0 +1,35 @@
+# Checks every PR and every push to main.
+#
+# Deploys are not done here: Cloudflare Workers Builds is connected to this repo and deploys the
+# Worker (apps/cloudflare) on every push to main. Build settings live in the Cloudflare dashboard
+# (Worker hackathon-incident-lab → Settings → Builds): build `pnpm --filter @sim/cloudflare build:ui`,
+# deploy `pnpm --filter @sim/cloudflare exec wrangler deploy`.
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test

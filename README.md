@@ -303,15 +303,11 @@ pnpm worker:dev
 **Live:** <https://hackathon-incident-lab.kualia.workers.dev>. MCP servers are at
 `https://hackathon-incident-lab.kualia.workers.dev/<logs|servicenow|gitlab|teams>/mcp`.
 
-**Deploys:** every merge to `main` deploys automatically (`.github/workflows/deploy.yml`). The
-workflow runs lint, typecheck and tests, builds the UIs, runs `wrangler deploy`, and then
-smoke-tests the live site. Pull requests run the checks only. It needs one repo secret,
-`CLOUDFLARE_API_TOKEN`: in the Cloudflare dashboard go to *My Profile → API Tokens → Create
-Token* and use the *Edit Cloudflare Workers* template. Then store it:
-
-```bash
-gh secret set CLOUDFLARE_API_TOKEN
-```
+**Deploys:** every push to `main` deploys automatically through Cloudflare Workers Builds, which
+is connected to this repo (Worker *hackathon-incident-lab → Settings → Builds* in the dashboard;
+build `pnpm --filter @sim/cloudflare build:ui`, deploy `pnpm --filter @sim/cloudflare exec wrangler
+deploy`). No GitHub secret is needed. GitHub Actions (`.github/workflows/check.yml`) runs lint,
+typecheck and tests on every PR and push, but does not gate the deploy.
 
 To deploy by hand (needs `npx wrangler login` once):
 
