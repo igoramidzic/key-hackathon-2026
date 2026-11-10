@@ -132,22 +132,22 @@ function steps(run: RunStatus): Step[] {
 function Stepper({ items, active }: { items: Step[]; active: boolean }) {
   const current = items.findIndex((s) => !s.done);
   return (
-    <ol className="grid grid-cols-5 gap-2">
+    <ol className="grid grid-cols-5 items-start gap-2">
       {items.map((step, i) => {
         const isCurrent = active && i === current;
         const c = STEP_COLOR[step.tone];
         return (
-          <li key={step.label} className="grid gap-2">
+          <li key={step.label} className="flex flex-col gap-2.5">
             <div
               className={cn(
                 'h-1',
                 step.done ? c.bar : isCurrent ? cn(c.soft, 'animate-pulse') : 'bg-muted',
               )}
             />
-            <div className="flex items-start gap-1.5">
+            <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  'mt-0.5 flex size-4 shrink-0 items-center justify-center border',
+                  'flex size-4 shrink-0 items-center justify-center border',
                   step.done && cn(c.box, 'text-white'),
                   isCurrent && c.ring,
                   !step.done && !isCurrent && 'border-border',
@@ -159,22 +159,20 @@ function Stepper({ items, active }: { items: Step[]; active: boolean }) {
                   <Loader2 className="size-3 animate-spin" />
                 ) : null}
               </span>
-              <div className="min-w-0">
-                <div
-                  className={cn(
-                    'text-sm',
-                    step.done || isCurrent ? 'font-medium' : 'text-muted-foreground',
-                  )}
-                >
-                  {step.label}
-                </div>
-                {step.at !== undefined && (
-                  <div className="text-muted-foreground text-sm tabular-nums">
-                    +{formatDuration(step.at)}
-                  </div>
+              <span
+                className={cn(
+                  'min-w-0 text-sm leading-5',
+                  step.done || isCurrent ? 'font-medium' : 'text-muted-foreground',
                 )}
-              </div>
+              >
+                {step.label}
+              </span>
             </div>
+            {step.at !== undefined && (
+              <div className="-mt-1.5 pl-6 text-muted-foreground text-sm tabular-nums">
+                +{formatDuration(step.at)}
+              </div>
+            )}
           </li>
         );
       })}
