@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sim-logs": { "type": "http", "url": "http://localhost:5001/mcp" },
+    "sim-servicenow": { "type": "http", "url": "http://localhost:5002/mcp" },
+    "sim-gitlab": { "type": "http", "url": "http://localhost:5003/mcp" },
+    "sim-teams": { "type": "http", "url": "http://localhost:5004/mcp" }
+  }
+}

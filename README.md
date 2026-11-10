@@ -116,6 +116,11 @@ Only one scenario runs at a time. Reset between runs so each one starts from the
 
 ## Connecting the agent
 
+Building the agent? Start with [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md): connection snippets
+for Claude Code, the Claude Agent SDK, Google ADK and raw MCP, the expected incident workflow
+step by step, the trigger/reset/verify dev loop, and troubleshooting. Coding agents get their
+orientation from [AGENTS.md](AGENTS.md) (`CLAUDE.md` imports it).
+
 ### MCP servers
 
 Four servers with 44 tools. Every tool has a typed input schema and a description of when to use
@@ -140,7 +145,8 @@ claude mcp add --transport http sim-gitlab http://localhost:5003/mcp
 claude mcp add --transport http sim-teams http://localhost:5004/mcp
 ```
 
-Or a project `.mcp.json`:
+This repo already ships a `.mcp.json` with the four local servers, so Claude Code sessions opened
+here pick them up. Elsewhere, a project `.mcp.json` looks like:
 
 ```json
 {
@@ -303,8 +309,9 @@ To deploy by hand (needs `npx wrangler login` once):
 
 ```bash
 pnpm worker:deploy
-``` To point the CLI or the e2e test
-at it, set `SIM_PUBLIC_URL`:
+```
+
+To point the CLI or the e2e test at it, set `SIM_PUBLIC_URL`:
 
 ```bash
 SIM_PUBLIC_URL=http://localhost:8787 pnpm e2e

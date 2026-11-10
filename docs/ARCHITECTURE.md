@@ -1,5 +1,8 @@
 # Architecture
 
+Conventions for changing the simulated world. To build the agent that uses it, see
+[AGENT-GUIDE.md](AGENT-GUIDE.md).
+
 A simulated bank IT estate for an automated incident-resolution agent. Four mock systems
 (Logs + Moogsoft, ServiceNow, GitLab, Teams), each with one REST API, a web UI and an MCP server,
 plus a simulator that runs background traffic and triggers incident scenarios.
