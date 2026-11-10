@@ -152,6 +152,7 @@ export function AppShell({
   nav,
   actions,
   sidebar,
+  sidebarClassName,
   children,
   padded = true,
   systemLinks = true,
@@ -160,6 +161,8 @@ export function AppShell({
   nav?: ReactNode;
   actions?: ReactNode;
   sidebar?: ReactNode;
+  /** Overrides for the sidebar pane, e.g. its width (default w-64). */
+  sidebarClassName?: string;
   children: ReactNode;
   /** Page padding (turn off for edge-to-edge panes like chat). */
   padded?: boolean;
@@ -193,7 +196,12 @@ export function AppShell({
       </div>
       <div className="flex min-h-0 flex-1">
         {sidebar && (
-          <aside className="sticky top-12 hidden h-[calc(100svh-3rem)] w-64 shrink-0 overflow-y-auto border-r bg-card md:block">
+          <aside
+            className={cn(
+              'sticky top-12 hidden h-[calc(100svh-3rem)] w-64 shrink-0 overflow-y-auto overflow-x-hidden border-r bg-card md:block',
+              sidebarClassName,
+            )}
+          >
             {sidebar}
           </aside>
         )}

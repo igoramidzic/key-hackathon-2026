@@ -23,6 +23,7 @@ import { HeaderActions } from '../Header';
 import { TopNav, useStatus } from '../lib';
 import {
   CopyButton,
+  Expandable,
   InlineCode,
   RichText,
   Section,
@@ -45,7 +46,7 @@ import {
 import { StreamPage } from './StreamPage';
 import { connectSnippets } from './snippets';
 import { ServerDown, ToolPage } from './ToolPage';
-import { TargetProvider, TargetToggle, useTarget } from './target';
+import { targetNote, useTarget } from './target';
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -60,17 +61,19 @@ export function DocsPage() {
       nav={<TopNav />}
       actions={<HeaderActions status={status.data} offline={status.isError} />}
       sidebar={<DocsSidebar />}
+      sidebarClassName="w-72"
       systemLinks={false}
     >
-      <TargetProvider>
-        <DocsMobileNav />
+      <DocsMobileNav />
+      {/* Room below the last section, so the end of a page can scroll up to eye level. */}
+      <div className="pb-[40vh]">
         <Routes>
           <Route index element={<Overview />} />
           <Route path="stream" element={<StreamPage />} />
           <Route path=":system" element={<ServerRoute />} />
           <Route path=":system/:tool" element={<ToolRoute />} />
         </Routes>
-      </TargetProvider>
+      </div>
     </AppShell>
   );
 }
@@ -113,7 +116,7 @@ function DocsSidebar() {
   const [q, setQ] = useState('');
   const needle = q.trim().toLowerCase();
   return (
-    <div className="grid gap-4 py-3">
+    <div className="grid gap-4 pt-3 pb-[40vh]">
       <div className="relative px-3">
         <Search className="absolute top-1/2 left-5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -159,9 +162,14 @@ function DocsSidebar() {
               </span>
             </NavLink>
             {tools.map((t) => (
-              <NavLink key={t.name} to={toolPath(system, t.name)} className={sideLink}>
-                <span className="truncate pl-4 font-mono text-[12.5px]">{t.name}</span>
-                <span className="ml-auto">
+              <NavLink
+                key={t.name}
+                to={toolPath(system, t.name)}
+                title={t.name}
+                className={sideLink}
+              >
+                <span className="min-w-0 truncate pl-4 font-mono text-[12.5px]">{t.name}</span>
+                <span className="ml-auto shrink-0">
                   <ToolKindBadge tool={t} compact />
                 </span>
               </NavLink>
@@ -301,11 +309,8 @@ function Overview() {
 
       <Section
         title="Endpoints"
-        description="Streamable HTTP, stateless, JSON responses, no auth. Local needs pnpm dev; hosted is shared with everyone using the live demo."
+        description={`Streamable HTTP, stateless, JSON responses, no auth. ${targetNote(target)}`}
       >
-        <div className="flex justify-end">
-          <TargetToggle />
-        </div>
         <Card className="py-0">
           <CardContent className="px-0">
             <Table>
@@ -576,13 +581,10 @@ function ServerPage({ system }: { system: SystemName }) {
           {serverLabel(system)} MCP server
         </h1>
         <p className="text-base text-muted-foreground">{meta.blurb}</p>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1">
-            <InlineCode className="text-xs">{url}</InlineCode>
-            <CopyButton text={url} />
-          </span>
-          <TargetToggle />
-        </div>
+        <span className="inline-flex items-center gap-1">
+          <InlineCode className="text-xs">{url}</InlineCode>
+          <CopyButton text={url} />
+        </span>
       </div>
       {server.isLoading && <Spinner label="Asking the server" />}
       {server.isError && <ServerDown system={system} error={server.error} />}
@@ -594,7 +596,9 @@ function ServerPage({ system }: { system: SystemName }) {
           >
             <Card>
               <CardContent className="text-sm leading-6">
-                <RichText text={server.data.instructions || 'None.'} />
+                <Expandable label="Show all instructions">
+                  <RichText text={server.data.instructions || 'None.'} />
+                </Expandable>
               </CardContent>
             </Card>
           </Section>

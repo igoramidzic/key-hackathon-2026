@@ -105,3 +105,119 @@ describe('incident lifecycle', () => {
     expect(resolved.resolved_at).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Parent / child incidents
+// ---------------------------------------------------------------------------
+
+function client(app: ReturnType<typeof buildApp>['app']) {
+  const call = async <T>(method: string, path: string, body?: unknown) => {
+    const res = await app.request(path, {
+      method,
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json()) as T };
+  };
+  return {
+    get: <T>(path: string) => call<T>('GET', path),
+    post: <T>(path: string, body: unknown) => call<T>('POST', path, body),
+    patch: <T>(path: string, body: unknown) => call<T>('PATCH', path, body),
+  };
+}
+
+const call = (caller: string, desc: string) => ({
+  short_description: desc,
+  caller,
+  opened_by: 'pnatarajan',
+  contact_type: 'phone',
+  impact: 2,
+  urgency: 2,
+  assignment_group: 'grp_service_desk',
+});
+
+describe('parent and child incidents', () => {
+  it('groups callers under a parent, copies comments and resolves the children', async () => {
+    const { app } = buildApp();
+    const api = client(app);
+    const a = (await api.post<Incident>('/api/incidents', call('mlopez', 'Teller dates wrong')))
+      .body;
+    const b = (await api.post<Incident>('/api/incidents', call('kbrandt', 'Drawer out of balance')))
+      .body;
+
+    const standalone = (
+      await api.get<Page<IncidentSummary>>(
+        '/api/incidents?active=true&contact_type=phone&relationship=standalone',
+      )
+    ).body;
+    expect(standalone.items.map((i) => i.number)).toEqual(
+      expect.arrayContaining([a.number, b.number]),
+    );
+
+    const parent = (
+      await api.post<Incident>('/api/incidents', {
+        short_description: 'TLR posting with next business date',
+        app_tla: 'TLR',
+        impact: 1,
+        urgency: 2,
+        child_incidents: [a.number, b.number],
+      })
+    ).body;
+    expect(parent.child_incidents.map((c) => c.number)).toEqual([a.number, b.number]);
+    expect(parent.journal.at(-1)!.text).toContain(
+      `Child incidents added: ${a.number}, ${b.number}`,
+    );
+
+    const child = (await api.get<Incident>(`/api/incidents/${a.number}`)).body;
+    expect(child.parent_incident).toBe(parent.number);
+    expect(child.journal.at(-1)!.text).toContain(
+      `Parent Incident changed from (empty) to ${parent.number}`,
+    );
+
+    // One level only.
+    const c = (await api.post<Incident>('/api/incidents', call('mlopez', 'Another call'))).body;
+    expect(
+      (await api.patch(`/api/incidents/${parent.number}`, { parent_incident: c.number })).status,
+    ).toBe(409);
+    expect(
+      (await api.patch(`/api/incidents/${c.number}`, { parent_incident: a.number })).status,
+    ).toBe(409);
+    const linked = await api.post<Incident>(`/api/incidents/${parent.number}/children`, {
+      children: [c.number, a.number],
+      child_comment: `Known issue, tracked in ${parent.number}.`,
+    });
+    expect(linked.status).toBe(200);
+    expect(linked.body.child_incidents).toHaveLength(3);
+
+    const children = (
+      await api.get<Page<IncidentSummary>>(`/api/incidents?parent_incident=${parent.number}`)
+    ).body;
+    expect(children.total).toBe(3);
+    const parentRow = (
+      await api.get<Page<IncidentSummary>>('/api/incidents?relationship=parent')
+    ).body.items.find((i) => i.number === parent.number);
+    expect(parentRow?.child_count).toBe(3);
+
+    await api.patch(`/api/incidents/${parent.number}`, {
+      comment: 'Fix is being deployed.',
+      state: 'resolved',
+      close_code: 'Resolved by change',
+      close_notes: 'Business date time zone restored.',
+    });
+    for (const n of [a.number, b.number, c.number]) {
+      const kid = (await api.get<Incident>(`/api/incidents/${n}`)).body;
+      expect(kid.state).toBe('resolved');
+      expect(kid.close_notes).toContain(`Resolved with parent incident ${parent.number}`);
+      expect(
+        kid.journal.some((j) => j.type === 'comment' && j.text.includes('Fix is being deployed.')),
+      ).toBe(true);
+    }
+    const resolvedParent = (await api.get<Incident>(`/api/incidents/${parent.number}`)).body;
+    expect(resolvedParent.journal.at(-1)!.text).toContain('Resolved 3 child incidents');
+    // A resolved parent takes no new children.
+    const d = (await api.post<Incident>('/api/incidents', call('mlopez', 'Late call'))).body;
+    expect(
+      (await api.patch(`/api/incidents/${d.number}`, { parent_incident: parent.number })).status,
+    ).toBe(409);
+  });
+});

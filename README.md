@@ -40,8 +40,9 @@ and seeded from a fixed seed, so every run starts from the same data. Restarting
 
 - **Logs** (`:3001`): Logs Explorer with the GCP query language, a severity histogram, expandable
   entries with stack traces and live streaming. Moogsoft alerts live under **Alerts**.
-- **ServiceNow** (`:3002`): incidents with the activity stream, the app catalog (TLA, tier, owner,
-  support group, on-call, upstream and downstream apps), support groups and people.
+- **ServiceNow** (`:3002`): incidents with the activity stream and parent/child grouping, the app
+  catalog (TLA, tier, owner, support group, on-call, upstream and downstream apps), support groups
+  and people.
 - **GitLab** (`:3003`): `keybank/<TLA>00/<repo>` groups and projects, code, commits, MRs with
   diffs, green pipelines, and a **Merge** button for humans.
 - **Teams** (`:3004`): teams, channels, members with the reason they were added, messages, and an
@@ -50,7 +51,8 @@ and seeded from a fixed seed, so every run starts from the same data. Restarting
 ## Scenarios
 
 Each scenario merges a real bad MR into a hero app, then plays out the consequences: errors in the
-logs of the affected apps, Moogsoft alerts and, for one scenario, a call to the help desk. Two
+logs of the affected apps, Moogsoft alerts and, in two scenarios, branch staff calling the help desk
+about the same problem (one incident per call, to be grouped under a parent). Two
 unrelated red-herring merges land nearby. Background traffic and unrelated commits keep flowing
 the whole time.
 
@@ -60,7 +62,7 @@ the whole time.
 | `ath-token-ttl-cascade` | Multi-app cascade | Customers get logged out of online and mobile banking, tellers lose sessions, and services across the estate reject requests as unauthorized. |
 | `aba-checksum-cascade` | Multi-app cascade | ACH batches are held, wires are rejected and customers can't add bill payees, all citing routing numbers that look perfectly valid. |
 | `crd-pool-exhaustion` | Single app | Card lock/unlock and card controls fail in the mobile app; the card management API answers slowly with errors. |
-| `tlr-business-date-helpdesk` | Help-desk call | A branch manager calls the service desk: teller receipts show tomorrow's date and drawers won't balance. Logs only show warnings, so the incident starts from the call, not from monitoring. |
+| `tlr-business-date-helpdesk` | Help-desk calls | Four branches call, mail or chat the service desk one after another: teller receipts show tomorrow's date and drawers won't balance (one caller blames the receipt printer). Logs only show warnings, so the incident starts from the calls, not from monitoring. |
 
 In the cascades the culprit service stays green: it keeps returning 200s and its MR had a passing
 pipeline. The agent has to work back from the failing apps through the dependency graph
@@ -129,7 +131,7 @@ orientation from [AGENTS.md](AGENTS.md) (`CLAUDE.md` imports it).
 
 ### MCP servers
 
-Four servers with 44 tools. Every tool has a typed input schema and a description of when to use
+Four servers with 45 tools. Every tool has a typed input schema and a description of when to use
 it; lists are paginated with `limit` and `cursor`; there are no delete tools. Writes default to
 the bot identity `svc_incident_auto` ("Incident Automation") unless you pass an author.
 
@@ -198,7 +200,7 @@ Hosted model APIs whose MCP connector calls the server from the provider's cloud
 | Server | Tools |
 | --- | --- |
 | **logs** | `search_logs`, `get_log_entry`, `tail_logs` (long-poll with a cursor), `summarize_errors` (error fingerprints per app with counts and first and last seen), `get_log_histogram`, `list_log_services`, `list_alerts`, `get_alert`, `update_alert` |
-| **servicenow** | `list_incidents`, `get_incident`, `create_incident`, `update_incident` (fields, work note, links and resolve in one call), `add_incident_note`, `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
+| **servicenow** | `list_incidents` (also by contact type, parent and relationship), `get_incident`, `create_incident` (optionally as the parent of existing incidents), `update_incident` (fields, work note, links and resolve in one call; resolving a parent resolves its children), `add_incident_note`, `link_child_incidents` (group incidents that are the same problem), `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
 | **gitlab** | `search_projects`, `get_project`, `list_recent_commits` (by project or a whole TLA), `get_commit`, `compare_refs` (accepts `main~2`, `HEAD^`), `list_merge_requests`, `get_merge_request` (diffs, pipeline, approvals), `get_file_tree`, `get_file`, `fetch_repository` (every file plus a tarball URL, i.e. "clone"), `create_merge_request` (branch, commit and MR in one call; full-content or find/replace edits), `update_merge_request` (labels), `add_merge_request_note`, `create_tag` |
 | **teams** | `list_teams`, `list_channels`, `get_channel`, `create_channel` (with initial members and reasons), `add_channel_members`, `remove_channel_member`, `post_message`, `read_messages`, `list_notifications` |
 
@@ -335,8 +337,9 @@ pnpm e2e
 
 This runs against the live stack (`pnpm dev` first). It checks that every service answers and
 that every MCP tool has a well-formed contract. It then drives the headline scenario the way an
-agent would, calling all 44 tools: it traces the cascade to CIF, opens an incident and a Teams
-channel, and opens a fix MR. A human-style merge follows, and the run must recover. Finally it runs
+agent would, calling all 45 tools: it traces the cascade to CIF, opens an incident, groups the
+bankers' calls under it, opens a Teams channel, and opens a fix MR. A human-style merge follows, the
+run must recover, and resolving the incident must resolve the calls. Finally it runs
 every other scenario, checking symptoms, a green culprit, alerts or the help-desk incident, and
 recovery. Options:
 

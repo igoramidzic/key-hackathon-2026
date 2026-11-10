@@ -10,8 +10,8 @@ import {
   TabsList,
   TabsTrigger,
 } from '@sim/ui';
-import { Check, Copy } from 'lucide-react';
-import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { Check, ChevronDown, Copy } from 'lucide-react';
+import { Fragment, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { type McpTool, type ToolKind, toolKind } from './mcp';
 
@@ -114,6 +114,78 @@ export function RichText({ text, className }: { text: string; className?: string
         ),
       )}
     </span>
+  );
+}
+
+/**
+ * Shows the first few lines of long content behind a blurred fade; click anywhere on it (or the
+ * toggle) to expand. Content that already fits is shown as is, without a toggle.
+ */
+export function Expandable({
+  children,
+  collapsedHeight = 120,
+  label = 'Show all',
+}: {
+  children: ReactNode;
+  /** Visible height in px while collapsed. */
+  collapsedHeight?: number;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const inner = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el) return;
+    const measure = () => setOverflows(el.scrollHeight > collapsedHeight + 24);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [collapsedHeight]);
+
+  const collapsed = overflows && !open;
+  return (
+    <div>
+      <div
+        className="relative overflow-hidden"
+        style={collapsed ? { maxHeight: collapsedHeight } : undefined}
+      >
+        <div ref={inner}>{children}</div>
+        {collapsed && (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-card backdrop-blur-[2px]"
+              style={{
+                maskImage: 'linear-gradient(to bottom, transparent, black 70%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 70%)',
+              }}
+            />
+            {/* The whole preview is one big "expand" target. */}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={() => setOpen(true)}
+              className="absolute inset-0 cursor-pointer"
+            />
+          </>
+        )}
+      </div>
+      {overflows && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="mt-2 inline-flex items-center gap-1 font-medium text-muted-foreground text-xs hover:text-foreground"
+        >
+          <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+          {open ? 'Show less' : label}
+        </button>
+      )}
+    </div>
   );
 }
 

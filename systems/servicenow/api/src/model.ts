@@ -60,6 +60,8 @@ export interface IncidentRecord {
   close_notes: string | null;
   reassignment_count: number;
   reopen_count: number;
+  /** Parent incident number when this incident is a child. Children cannot have children. */
+  parent_incident: string | null;
   links: LinkRecord[];
   journal: JournalRecord[];
 }

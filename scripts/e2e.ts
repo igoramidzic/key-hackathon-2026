@@ -10,10 +10,11 @@
  * 1. Every service answers (APIs, MCP servers, UIs, simulator).
  * 2. Every MCP tool has a description, described inputs, non-destructive annotations and a unique
  *    name across servers.
- * 3. Headline scenario, driven the way the agent would, MCP only (every one of the 44 tools is
- *    called): cascade appears → trace through the dependency graph to the culprit → find the bad
- *    MR → open an incident → open a Teams channel with the right people → open a fix MR. A human
- *    then merges it (REST, like the UI button) and the simulator must see recovery.
+ * 3. Headline scenario, driven the way the agent would, MCP only (every MCP tool is called):
+ *    cascade appears → trace through the dependency graph to the culprit → find the bad MR → open
+ *    an incident and group the bankers' calls under it → open a Teams channel with the right
+ *    people → open a fix MR. A human then merges it (REST, like the UI button), the simulator must
+ *    see recovery, and resolving the incident resolves the calls.
  * 4. Every other scenario: symptoms land on the expected apps, the culprit stays green, alerts or
  *    the help-desk incident appear, the known fix (opened via MCP) recovers the run.
  *
@@ -506,6 +507,60 @@ async function headline(detail: ScenarioDetail) {
   );
   const number = inc?.number as string | undefined;
 
+  // --- Bankers call the service desk about the same outage: group them under the incident.
+  let callNumbers: string[] = [];
+  if (number && detail.helpdesk.length) {
+    await waitFor(
+      async () => {
+        const r = await runStatus();
+        return (r?.helpdesk.length ?? 0) >= detail.helpdesk.length ? r : undefined;
+      },
+      120_000,
+      2000,
+    );
+    const calls = await step(
+      'find calls from staff about it',
+      'servicenow',
+      'list_incidents',
+      {
+        active: true,
+        contact_type: ['phone', 'email', 'chat'],
+        relationship: 'standalone',
+        opened_after: since,
+        limit: 20,
+      },
+      (o) =>
+        (o.items?.length ?? 0) >= detail.helpdesk.length
+          ? true
+          : `${o.items?.length ?? 0} of ${detail.helpdesk.length} calls`,
+    );
+    callNumbers = (calls?.items ?? []).map((i: { number: string }) => i.number);
+    if (callNumbers.length) {
+      await step(
+        'group the calls under the incident',
+        'servicenow',
+        'link_child_incidents',
+        {
+          parent: number,
+          children: callNumbers,
+          work_note: 'Branch calls are the same customer profile outage.',
+          child_comment: `This is a known outage tracked in ${number}. We will update you here.`,
+        },
+        (o) =>
+          o.child_incidents?.length === callNumbers.length
+            ? true
+            : `${o.child_incidents?.length} children`,
+      );
+      await step(
+        'children of the incident',
+        'servicenow',
+        'list_incidents',
+        { parent_incident: number },
+        (o) => (o.total === callNumbers.length ? true : `total ${o.total}`),
+      );
+    }
+  }
+
   // --- Teams channel with the right people
   const onCall =
     group?.on_call?.primary?.username ??
@@ -671,6 +726,14 @@ async function headline(detail: ScenarioDetail) {
         close_code: 'Resolved by change',
         close_notes: `Fixed by ${fixMr.web_url}`,
       });
+      if (callNumbers[0]) {
+        const call = await tool('servicenow', 'get_incident', { number: callNumbers[0] });
+        check(
+          "resolving the incident resolved the bankers' calls",
+          call.state === 'resolved',
+          call.state,
+        );
+      }
     }
   }
 
@@ -716,6 +779,31 @@ async function otherScenario(detail: ScenarioDetail) {
         inc.contact_type === 'phone' && !inc.app?.tla,
         `${inc.contact_type} / ${inc.app?.tla ?? 'no app'}`,
       );
+    }
+    if (detail.helpdesk.length > 1) {
+      const all = await waitFor(async () => {
+        const r = await runStatus();
+        return (r?.helpdesk.length ?? 0) >= detail.helpdesk.length ? r : undefined;
+      }, 120_000);
+      const calls = (all?.helpdesk ?? []).map((h) => h.number);
+      check(
+        `${detail.helpdesk.length} branches called in`,
+        calls.length === detail.helpdesk.length,
+      );
+      if (calls.length > 1) {
+        const parent = await tool('servicenow', 'create_incident', {
+          short_description: `${culprit} - same problem reported by ${calls.length} branches`,
+          app_tla: culprit,
+          impact: 1,
+          urgency: 2,
+          child_incidents: calls,
+        });
+        check(
+          'calls grouped under one parent',
+          parent.child_incidents?.length === calls.length,
+          parent.number,
+        );
+      }
     }
   }
   if (detail.alerts.length) {

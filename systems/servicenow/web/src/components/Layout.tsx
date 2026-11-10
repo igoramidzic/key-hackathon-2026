@@ -293,8 +293,8 @@ export function Layout({ children }: { children: ReactNode }) {
                 </div>
               </nav>
 
-              <div className="pointer-events-none absolute inset-x-0 hidden justify-center lg:flex">
-                <div className="pointer-events-auto flex h-8 max-w-[30vw] items-center gap-2 rounded-full bg-white/10 pr-2 pl-4 text-[14px] text-nav-foreground">
+              <div className="pointer-events-none absolute inset-x-0 hidden justify-center xl:flex">
+                <div className="pointer-events-auto flex h-8 max-w-[min(30vw,calc(100vw-1000px))] items-center gap-2 rounded-full bg-white/10 pr-2 pl-4 text-[14px] text-nav-foreground">
                   <span className="truncate font-semibold">{title}</span>
                   <Star className="size-4 shrink-0 text-nav-muted" aria-hidden="true" />
                 </div>

@@ -24,6 +24,7 @@ import {
 import {
   Bell,
   CircleCheck,
+  CornerDownRight,
   ExternalLink,
   GitMerge,
   Link2,
@@ -34,7 +35,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { CURRENT_USER, useIncident, useUpdateIncident } from '../api';
 import { ActivityStream } from '../components/Activity';
 import {
@@ -54,6 +55,7 @@ import {
   FormHeader,
   fieldInputClass,
 } from '../components/form';
+import { IncidentTable } from '../components/IncidentTable';
 import { Page, usePageTitle } from '../components/Layout';
 
 const LINK_ICONS: Record<LinkType, LucideIcon> = {
@@ -267,6 +269,20 @@ export function IncidentDetail() {
           <ResolvePanel incident={i} onClose={() => setResolving(false)} />
         )}
 
+        {i.parent_incident && (
+          <div className="flex items-center gap-2 rounded-(--radius) border border-link/30 bg-accent px-4 py-2.5 text-[13px]">
+            <CornerDownRight className="size-4 shrink-0 text-link" aria-hidden="true" />
+            <span>
+              Child of{' '}
+              <Link to={`/incidents/${i.parent_incident}`} className={refLinkClass}>
+                {i.parent_incident}
+              </Link>
+              . Comments on the parent are copied here, and resolving the parent resolves this
+              incident.
+            </span>
+          </div>
+        )}
+
         <FormBody className="grid gap-2.5">
           <FormColumns>
             <FormColumn>
@@ -284,6 +300,18 @@ export function IncidentDetail() {
               </FormField>
               <FormField label="Configuration item" href={i.app ? `/apps/${i.app.tla}` : undefined}>
                 {i.app ? <TlaChip app={i.app} showName className="h-5" /> : <Muted>—</Muted>}
+              </FormField>
+              <FormField
+                label="Parent Incident"
+                href={i.parent_incident ? `/incidents/${i.parent_incident}` : undefined}
+              >
+                {i.parent_incident ? (
+                  <Link to={`/incidents/${i.parent_incident}`} className={refLinkClass}>
+                    {i.parent_incident}
+                  </Link>
+                ) : (
+                  <Muted>—</Muted>
+                )}
               </FormField>
               <FormField label="Opened">
                 {formatDateTime(i.opened_at)}
@@ -343,6 +371,12 @@ export function IncidentDetail() {
             <Muted>No related links yet</Muted>
           )}
         </Section>
+
+        {i.child_incidents.length > 0 && (
+          <Section title={`Child Incidents (${i.child_incidents.length})`} bodyClassName="p-0">
+            <IncidentTable items={i.child_incidents} compact />
+          </Section>
+        )}
 
         {(i.state === 'resolved' || i.state === 'closed' || i.close_notes) && (
           <Section title="Resolution Information" bodyClassName="grid gap-2.5">

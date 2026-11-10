@@ -1,10 +1,12 @@
 import { badRequest, conflict, notFound, parseTime } from '@sim/api-kit';
 import {
   CONTACT_TYPE_LABELS,
+  type ContactType,
   type FieldChange,
   IMPACT_LABELS,
   type Incident,
   type IncidentCreateInput,
+  type IncidentRelationship,
   type IncidentSort,
   type IncidentState,
   type IncidentSummary,
@@ -13,6 +15,7 @@ import {
   type JournalEntry,
   type JournalInput,
   type JournalType,
+  type LinkChildrenInput,
   PRIORITY_LABELS,
   priorityFor,
   STATE_LABELS,
@@ -39,9 +42,20 @@ export interface IncidentFilter {
   assignment_group?: string;
   assigned_to?: string;
   caller?: string;
+  contact_type?: ContactType[];
+  category?: string;
+  parent_incident?: string;
+  relationship?: IncidentRelationship;
   q?: string;
   opened_after?: string;
+  opened_before?: string;
   sort?: IncidentSort;
+}
+
+/** Internal options for `update` (not part of the API). */
+interface UpdateOptions {
+  /** Skip the "child incident added/removed" entry on the parent (linkChildren writes one). */
+  quietParent?: boolean;
 }
 
 const CATEGORY_ALIASES: Record<string, string> = {
@@ -80,6 +94,8 @@ const FIELD_LABELS: Record<string, string> = {
   contact_type: 'Contact type',
   close_code: 'Resolution code',
   close_notes: 'Resolution notes',
+  parent_incident: 'Parent Incident',
+  child_incidents: 'Child incidents',
   links: 'Related link',
 };
 
@@ -159,19 +175,38 @@ export class IncidentStore {
       ? this.dir.requireUser(filter.caller, 'caller').username
       : undefined;
     const after = parseTime(filter.opened_after)?.toISOString();
+    const before = parseTime(filter.opened_before)?.toISOString();
+    const noApp = tla === 'NONE';
+    const contactTypes = filter.contact_type ? new Set(filter.contact_type) : undefined;
+    const category = filter.category ? normalizeCategory(filter.category) : undefined;
+    const parent = filter.parent_incident ? this.require(filter.parent_incident).number : undefined;
+    const counts = this.childCounts();
 
     const out = this.records.filter((r) => {
       if (states && !states.has(r.state)) return false;
       if (priorities && !priorities.has(priorityFor(r.impact, r.urgency))) return false;
       if (filter.active !== undefined && isActiveState(r.state) !== filter.active) return false;
-      if (tla && r.app_tla !== tla) return false;
+      if (noApp ? r.app_tla !== null : tla && r.app_tla !== tla) return false;
+      if (contactTypes && !contactTypes.has(r.contact_type)) return false;
+      if (category && r.category !== category) return false;
+      if (parent && r.parent_incident !== parent) return false;
+      if (filter.relationship) {
+        const relationship = r.parent_incident
+          ? 'child'
+          : counts.get(r.number)
+            ? 'parent'
+            : 'standalone';
+        if (relationship !== filter.relationship) return false;
+      }
       if (group && r.assignment_group !== group) return false;
       if (unassigned && r.assigned_to) return false;
       if (assignee && r.assigned_to !== assignee) return false;
       if (caller && r.caller !== caller) return false;
       if (after && r.opened_at < after) return false;
+      if (before && r.opened_at >= before) return false;
       if (filter.q) {
         const app = r.app_tla ? this.dir.world.appsByTla.get(r.app_tla) : undefined;
+        const who = r.caller ? this.dir.world.peopleByUsername.get(r.caller) : undefined;
         if (
           !matchesQuery(filter.q, [
             r.number,
@@ -179,6 +214,8 @@ export class IncidentStore {
             r.description,
             r.app_tla,
             app?.name,
+            who?.name,
+            who?.location,
           ])
         ) {
           return false;
@@ -193,6 +230,60 @@ export class IncidentStore {
     return isActiveState(r.state);
   }
 
+  /** Children of an incident, oldest first. */
+  childrenOf(number: string): IncidentRecord[] {
+    return this.records
+      .filter((r) => r.parent_incident === number)
+      .sort((a, b) => a.opened_at.localeCompare(b.opened_at) || a.number.localeCompare(b.number));
+  }
+
+  private childCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const r of this.records) {
+      if (r.parent_incident)
+        counts.set(r.parent_incident, (counts.get(r.parent_incident) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  /** Throws unless `parent` can take child incidents. */
+  private assertCanBeParent(parent: IncidentRecord, child: string) {
+    if (parent.parent_incident) {
+      throw conflict(
+        `${parent.number} is itself a child of ${parent.parent_incident}. Link ${child} to ${parent.parent_incident} instead (only one level of parent and child).`,
+      );
+    }
+    if (!isActiveState(parent.state)) {
+      throw conflict(
+        `Parent ${parent.number} is ${STATE_LABELS[parent.state]}. Only an open incident (New, In Progress or On Hold) can take child incidents.`,
+      );
+    }
+  }
+
+  /** Throws unless `child` can be attached to a parent. */
+  private assertCanBeChild(child: IncidentRecord, parent: string) {
+    const kids = this.childrenOf(child.number);
+    if (kids.length > 0) {
+      throw conflict(
+        `${child.number} is the parent of ${kids.map((k) => k.number).join(', ')} and cannot become a child. Link those incidents to ${parent} directly, or make ${child.number} the parent.`,
+      );
+    }
+    if (child.state === 'closed' || child.state === 'canceled') {
+      throw conflict(
+        `${child.number} is ${STATE_LABELS[child.state]} and can no longer be linked to a parent.`,
+      );
+    }
+  }
+
+  /** Throws unless `child` may become a child of `parent`. */
+  private assertCanLink(child: IncidentRecord, parent: IncidentRecord) {
+    if (child.number === parent.number) {
+      throw badRequest(`${child.number} cannot be its own parent.`);
+    }
+    this.assertCanBeParent(parent, child.number);
+    this.assertCanBeChild(child, parent.number);
+  }
+
   countOpen(predicate: (r: IncidentRecord) => boolean): number {
     let n = 0;
     for (const r of this.records) if (isActiveState(r.state) && predicate(r)) n++;
@@ -204,6 +295,16 @@ export class IncidentStore {
   // -------------------------------------------------------------------------
 
   create(input: IncidentCreateInput, now = new Date()): IncidentRecord {
+    if (input.parent_incident && input.child_incidents?.length) {
+      throw badRequest(
+        'Pass parent_incident or child_incidents, not both (only one level of parent and child).',
+      );
+    }
+    // Validate links before creating anything, so a bad number doesn't leave a half-made record.
+    const parent = input.parent_incident ? this.require(input.parent_incident) : undefined;
+    if (parent) this.assertCanBeParent(parent, 'the new incident');
+    const children = [...new Set((input.child_incidents ?? []).map((k) => this.require(k)))];
+    for (const child of children) this.assertCanBeChild(child, 'the new incident');
     const openedBy = this.dir.requireUser(input.opened_by ?? DEFAULT_ACTOR, 'opened_by').username;
     const caller = input.caller ? this.dir.requireUser(input.caller, 'caller').username : openedBy;
     const app = input.app_tla ? this.dir.requireApp(input.app_tla).tla : null;
@@ -242,6 +343,7 @@ export class IncidentStore {
       close_notes: null,
       reassignment_count: 0,
       reopen_count: 0,
+      parent_incident: null,
       links: [],
       journal: [],
     };
@@ -255,7 +357,61 @@ export class IncidentStore {
     });
     this.records.push(rec);
     this.index(rec);
+    if (parent)
+      this.update(rec.number, { parent_incident: parent.number, updated_by: openedBy }, now);
+    if (children.length > 0) {
+      this.linkChildren(
+        rec.number,
+        { children: children.map((c) => c.number), updated_by: openedBy },
+        now,
+      );
+    }
     return rec;
+  }
+
+  /** Attaches incidents as children of `parentKey` (one system entry on the parent). */
+  linkChildren(parentKey: string, input: LinkChildrenInput, now = new Date()): IncidentRecord {
+    const parent = this.require(parentKey);
+    const actor = this.dir.requireUser(input.updated_by ?? DEFAULT_ACTOR, 'updated_by').username;
+    const at = now.toISOString();
+    if (input.children.length === 0) throw badRequest('children must list at least one incident.');
+    const children = [...new Set(input.children.map((k) => this.require(k)))];
+    for (const child of children) {
+      if (child.parent_incident !== parent.number) this.assertCanLink(child, parent);
+    }
+    const added: string[] = [];
+    for (const child of children) {
+      if (child.parent_incident === parent.number) continue;
+      this.update(
+        child.number,
+        { parent_incident: parent.number, comment: input.child_comment, updated_by: actor },
+        now,
+        { quietParent: true },
+      );
+      added.push(child.number);
+    }
+    if (added.length > 0) {
+      parent.journal.push({
+        id: this.ids.journal(),
+        type: 'system',
+        text: `Child incidents added: ${added.join(', ')}`,
+        author: actor,
+        created_at: at,
+        changes: added.map((n) => ({
+          field: 'child_incidents',
+          label: FIELD_LABELS.child_incidents!,
+          from: null,
+          to: n,
+        })),
+      });
+    }
+    if (input.work_note?.trim())
+      parent.journal.push(this.entry('work_note', input.work_note, actor, at));
+    if (added.length > 0 || input.work_note?.trim()) {
+      parent.updated_at = at;
+      parent.updated_by = actor;
+    }
+    return parent;
   }
 
   /** Field values shown on the "Incident opened" activity entry. */
@@ -277,7 +433,12 @@ export class IncidentStore {
       .map(([field, to]) => ({ field, label: FIELD_LABELS[field]!, from: null, to }));
   }
 
-  update(key: string, input: IncidentUpdateInput, now = new Date()): IncidentRecord {
+  update(
+    key: string,
+    input: IncidentUpdateInput,
+    now = new Date(),
+    options: UpdateOptions = {},
+  ): IncidentRecord {
     const rec = this.require(key);
     const actor = this.dir.requireUser(input.updated_by ?? DEFAULT_ACTOR, 'updated_by').username;
     const at = now.toISOString();
@@ -316,6 +477,16 @@ export class IncidentStore {
     }
     if (input.close_code !== undefined) next.close_code = input.close_code;
     if (input.close_notes !== undefined) next.close_notes = input.close_notes.trim();
+    const oldParent = rec.parent_incident;
+    if (input.parent_incident !== undefined) {
+      if (input.parent_incident === null) {
+        next.parent_incident = null;
+      } else {
+        const parent = this.require(input.parent_incident);
+        if (parent.number !== rec.parent_incident) this.assertCanLink(rec, parent);
+        next.parent_incident = parent.number;
+      }
+    }
 
     const fieldChanged = (
       [
@@ -333,6 +504,7 @@ export class IncidentStore {
         'assigned_to',
         'close_code',
         'close_notes',
+        'parent_incident',
       ] as const
     ).filter((f) => next[f] !== rec[f]);
 
@@ -405,7 +577,104 @@ export class IncidentStore {
       next.updated_by = actor;
     }
     Object.assign(rec, next);
+
+    if (rec.parent_incident !== oldParent && !options.quietParent) {
+      if (oldParent)
+        this.noteChildChange(
+          oldParent,
+          `Child incident removed: ${rec.number}`,
+          rec.number,
+          null,
+          actor,
+          at,
+        );
+      if (rec.parent_incident) {
+        this.noteChildChange(
+          rec.parent_incident,
+          `Child incident added: ${rec.number}`,
+          null,
+          rec.number,
+          actor,
+          at,
+        );
+      }
+    }
+    if (input.comment?.trim()) this.copyCommentToChildren(rec, input.comment, actor, at);
+    this.cascadeToChildren(rec, actor, now);
     return rec;
+  }
+
+  private noteChildChange(
+    parentNumber: string,
+    text: string,
+    from: string | null,
+    to: string | null,
+    actor: string,
+    at: string,
+  ) {
+    const parent = this.find(parentNumber);
+    if (!parent) return;
+    parent.journal.push({
+      id: this.ids.journal(),
+      type: 'system',
+      text,
+      author: actor,
+      created_at: at,
+      changes: [{ field: 'child_incidents', label: FIELD_LABELS.child_incidents!, from, to }],
+    });
+    parent.updated_at = at;
+    parent.updated_by = actor;
+  }
+
+  /** Like ServiceNow: caller-visible comments on a parent are copied to its open children. */
+  private copyCommentToChildren(parent: IncidentRecord, text: string, actor: string, at: string) {
+    for (const child of this.childrenOf(parent.number)) {
+      if (!isActiveState(child.state)) continue;
+      child.journal.push(
+        this.entry(
+          'comment',
+          `Update from parent incident ${parent.number}:\n${text.trim()}`,
+          actor,
+          at,
+        ),
+      );
+      child.updated_at = at;
+      child.updated_by = actor;
+    }
+  }
+
+  /** Resolving or closing a parent resolves or closes its children with the same resolution. */
+  private cascadeToChildren(parent: IncidentRecord, actor: string, now: Date) {
+    if (parent.state !== 'resolved' && parent.state !== 'closed') return;
+    const done: string[] = [];
+    for (const child of this.childrenOf(parent.number)) {
+      const needs =
+        isActiveState(child.state) || (parent.state === 'closed' && child.state === 'resolved');
+      if (!needs) continue;
+      this.update(
+        child.number,
+        {
+          state: parent.state,
+          close_code: child.close_code ?? parent.close_code ?? 'Solution provided',
+          close_notes:
+            child.close_notes ??
+            `Resolved with parent incident ${parent.number}. ${parent.close_notes ?? ''}`.trim(),
+          updated_by: actor,
+        },
+        now,
+      );
+      done.push(child.number);
+    }
+    if (done.length > 0) {
+      const at = now.toISOString();
+      parent.journal.push({
+        id: this.ids.journal(),
+        type: 'system',
+        text: `${STATE_LABELS[parent.state]} ${done.length} child incident${done.length === 1 ? '' : 's'}: ${done.join(', ')}`,
+        author: actor,
+        created_at: at,
+      });
+    }
   }
 
   addJournal(key: string, input: JournalInput, now = new Date()): JournalEntry {
@@ -416,6 +685,7 @@ export class IncidentStore {
     rec.journal.push(entry);
     rec.updated_at = at;
     rec.updated_by = author;
+    if (input.type === 'comment') this.copyCommentToChildren(rec, input.text, author, at);
     return this.journalEntry(entry);
   }
 
@@ -467,6 +737,7 @@ export class IncidentStore {
       'contact_type',
       'close_code',
       'close_notes',
+      'parent_incident',
     ];
     const changes: FieldChange[] = [];
     for (const field of fields) {
@@ -506,6 +777,8 @@ export class IncidentStore {
       opened_at: r.opened_at,
       updated_at: r.updated_at,
       resolved_at: r.resolved_at,
+      parent_incident: r.parent_incident,
+      child_count: this.records.reduce((n, x) => n + (x.parent_incident === r.number ? 1 : 0), 0),
       web_url: serviceNowWebUrl.incident(r.number),
     };
   }
@@ -532,6 +805,7 @@ export class IncidentStore {
         added_by: d.userRef(l.added_by),
         added_at: l.added_at,
       })),
+      child_incidents: this.childrenOf(r.number).map((c) => this.summary(c)),
       journal: r.journal.map((j) => this.journalEntry(j)),
     };
   }

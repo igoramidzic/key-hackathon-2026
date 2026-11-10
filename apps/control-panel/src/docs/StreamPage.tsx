@@ -17,7 +17,7 @@ import { Pause, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { InlineCode, Section, Snippet, SnippetTabs } from './bits';
 import { endpoints } from './mcp';
-import { TargetToggle, useTarget } from './target';
+import { useTarget } from './target';
 
 const STREAM_PARAMS: [string, string][] = [
   ['filter', 'Logs Explorer query, e.g. severity>=ERROR AND labels.app_tla="PAY"'],
@@ -74,9 +74,6 @@ export function StreamPage() {
           Plain HTTP endpoints next to the MCP servers: a live log feed for rule-based detection,
           and the simulator API for driving test runs from a harness.
         </p>
-        <div className="flex justify-end">
-          <TargetToggle />
-        </div>
       </div>
 
       <Section

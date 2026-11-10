@@ -988,6 +988,7 @@ export function seedIncidents(dir: Directory, now: Date, ids: IdGen): IncidentRe
       close_notes: null,
       reassignment_count: 0,
       reopen_count: 0,
+      parent_incident: null,
       links: [],
       journal: [],
     };
@@ -1372,6 +1373,7 @@ function pastMajorIncident(
     close_notes: inc.closeNotes,
     reassignment_count: 0,
     reopen_count: 0,
+    parent_incident: null,
     links: [
       {
         id: ids.link(),

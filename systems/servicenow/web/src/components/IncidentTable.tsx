@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@sim/ui';
-import { Info } from 'lucide-react';
+import { CornerDownRight, Info, Network } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { GroupLink, PriorityBadge, refLinkClass, StateBadge, TlaChip, UserLink } from './bits';
 import { listHeaderRowClass, listRowClass, SortHead } from './list';
@@ -154,6 +154,24 @@ export function IncidentTable({
                       className="size-1.5 animate-pulse rounded-full bg-link"
                       title="Opened in the last 2 minutes"
                     />
+                  )}
+                  {i.child_count > 0 && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"
+                      title={`Parent of ${i.child_count} incident${i.child_count === 1 ? '' : 's'}`}
+                    >
+                      <Network className="size-3" aria-hidden="true" />
+                      {i.child_count}
+                    </span>
+                  )}
+                  {i.parent_incident && (
+                    <span title={`Child of ${i.parent_incident}`}>
+                      <CornerDownRight
+                        className="size-3 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">Child of {i.parent_incident}</span>
+                    </span>
                   )}
                 </span>
               </TableCell>

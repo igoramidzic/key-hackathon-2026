@@ -1,4 +1,4 @@
-import { getApp } from '@sim/world';
+import { getApp, PERSONAS } from '@sim/world';
 import { internalUrl, javaLog, javaPackage, nodeLog, perStack, pyLog, pyPackage } from '../logs';
 import { ATH_REPO } from '../repos/ath';
 import {
@@ -26,6 +26,7 @@ import { PAY_CONTROLLER, PAY_PAYER_VERIFICATION, PAY_PROFILE_CLIENT } from '../r
 import { TLR_CONTROLLER, TLR_PROFILE_CLIENT } from '../repos/tlr';
 import type { ScenarioDefinition } from '../types';
 import {
+  branchStaff,
   dev,
   javaFrame,
   javaStack,
@@ -37,6 +38,7 @@ import {
   paymentId,
   pos,
   pyTraceback,
+  serviceDeskAnalyst,
   springMvcFrames,
   springProxyFrames,
   stripHashComments,
@@ -247,6 +249,13 @@ const DISPATCHER_SERVLET = 'o.a.c.c.C.[.[.[/].[dispatcherServlet]';
 
 const olb = getApp('OLB');
 const mbl = getApp('MBL');
+
+// Bankers calling the service desk while monitoring fires: Teller Workstation's customer lookup
+// (TLR) fails like everything else that reads customer data. The agent should group these calls
+// under its own incident rather than work them one by one.
+const denver = branchStaff('Denver Tech Center Branch', ['Teller', 'Head Teller']);
+const seattle = branchStaff('Seattle Capitol Hill Branch', ['Relationship Banker']);
+const buffalo = branchStaff('Buffalo Elmwood Branch', ['Assistant Branch Manager']);
 
 export const cifSnakeCaseCascade: ScenarioDefinition = {
   id: 'cif-snake-case-cascade',
@@ -826,6 +835,73 @@ A snake_case migration needs a versioned \`/v2\` endpoint and consumer sign-off;
       description: 'Error rate 14.2% on fraud-scoring-engine (baseline 0.3%)',
       custom: { appd_application: 'FRD-Prod', observed_pct: 14.2, baseline_pct: 0.3 },
     }),
+  ],
+  helpdesk: [
+    {
+      atSec: 100,
+      incident: {
+        short_description: 'Teller Workstation cannot look up customers - Denver Tech Center',
+        description: `Caller: ${denver.name}, ${denver.title} - ${denver.location}
+Callback: ${denver.phone}
+
+Issue:
+Customer lookup in Teller Workstation fails at every window with "Unable to retrieve customer. Please try again." Searching by account number or by name gives the same error. Tellers cannot verify customers for withdrawals.
+
+Troubleshooting performed:
+- Logged out and back in. Same error.
+- Tried a different PC. Same error.
+
+Customer impact:
+- Line of customers waiting; branch is turning away withdrawals over the ID-only limit.`,
+        caller: denver.username,
+        opened_by: PERSONAS.serviceDeskAnalyst,
+        contact_type: 'phone',
+        category: 'application',
+        subcategory: 'Branch systems',
+        impact: 2,
+        urgency: 1,
+        assignment_group: 'IT Service Desk',
+      },
+    },
+    {
+      atSec: 140,
+      incident: {
+        short_description:
+          "Customers say online and mobile banking won't load their profile - Seattle",
+        description: `Caller: ${seattle.name}, ${seattle.title} - ${seattle.location}
+Callback: ${seattle.phone}
+
+Issue:
+Three customers at the desk this hour said the mobile app and online banking show "Something went wrong loading your profile". When I try to pull them up in Teller Workstation I get an error as well.
+
+Requested action:
+Is there an outage? We need something to tell customers.`,
+        caller: seattle.username,
+        opened_by: serviceDeskAnalyst(2, PERSONAS.serviceDeskAnalyst),
+        contact_type: 'phone',
+        category: 'application',
+        impact: 2,
+        urgency: 2,
+        assignment_group: 'IT Service Desk',
+      },
+    },
+    {
+      atSec: 185,
+      incident: {
+        short_description: 'Unable to verify customers at teller line - Buffalo Elmwood',
+        description: `Chat from ${buffalo.name}, ${buffalo.title} - ${buffalo.location}
+
+All tellers get an error on customer lookup since about 20 minutes ago. Card and cash transactions for customers we can't look up are on hold. Please advise.`,
+        caller: buffalo.username,
+        opened_by: serviceDeskAnalyst(3, PERSONAS.serviceDeskAnalyst),
+        contact_type: 'chat',
+        category: 'application',
+        subcategory: 'Branch systems',
+        impact: 2,
+        urgency: 1,
+        assignment_group: 'IT Service Desk',
+      },
+    },
   ],
   redHerrings: [
     {

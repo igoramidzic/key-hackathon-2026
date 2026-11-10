@@ -7,7 +7,9 @@ import {
   type ContactType,
   createServiceNowClient,
   INCIDENT_CATEGORIES,
+  INCIDENT_RELATIONSHIPS,
   INCIDENT_STATES,
+  type IncidentRelationship,
   type IncidentState,
   LINK_TYPES,
   type LinkType,
@@ -40,6 +42,7 @@ Data model
 - People are identified by username (e.g. dwhitfield). Usernames are the same in ServiceNow, GitLab and Teams.
 - Incidents are numbered INC0010001, INC0010002, ... Impact and urgency are 1 (High), 2 (Medium), 3 (Low); priority is derived and cannot be set: P1 = 1/1; P2 = 1/2 or 2/1; P3 = 1/3, 2/2 or 3/1; P4 = 2/3 or 3/2; P5 = 3/3. States: new → in_progress → on_hold (optional) → resolved → closed, or canceled. Resolving needs close_code + close_notes. Closed and canceled incidents are read-only except for notes.
 - The journal holds work notes (internal), comments (visible to the caller) and system entries that record field changes.
+- Parent and child incidents: when several incidents are really the same problem (several bankers calling about one outage, duplicates from monitoring), make one the parent and attach the rest as children: create_incident with child_incidents, or link_child_incidents later. One level only: a parent cannot be a child and a child cannot have children. Caller-visible comments on the parent are copied to its open children, and resolving or closing the parent resolves or closes its children with the same resolution. To find candidates: list_incidents with active, opened_after, contact_type ["phone","email","chat"] and relationship "standalone".
 - Writes act as svc_incident_auto (Incident Automation) unless you pass opened_by / updated_by / author.
 - Every record has a web_url you can paste into Teams or elsewhere.`;
 
@@ -85,6 +88,13 @@ const numberShape = z
   .string()
   .min(1)
   .describe('Incident number, e.g. "INC0010042" (a sys_id also works).');
+const incidentList = (what: string) =>
+  z
+    .array(z.string().min(1))
+    .min(1)
+    .max(100)
+    .describe(`${what}: incident numbers, e.g. ["INC0010205","INC0010207"].`);
+const contactTypeEnum = z.enum(CONTACT_TYPES as [ContactType, ...ContactType[]]);
 
 export const spec: McpServerSpec = {
   name: 'servicenow',
@@ -99,7 +109,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'list_incidents', {
       title: 'List incidents',
       description:
-        'Search incidents. Use it to check for existing or duplicate incidents on an app, see what is open for a group, or find recent history. Returns compact rows (number, priority 1-5, state, short_description, app_tla, assignment_group, assigned_to, opened_at, updated_at), newest first by default, plus total and next_cursor. Use get_incident for the full record and journal.',
+        'Search incidents. Use it to check for existing or duplicate incidents on an app, find calls from staff about the same problem (contact_type, query, opened_after) that should be grouped under a parent, see what is open for a group, or find recent history. app_tla "none" finds incidents with no application. Returns compact rows (number, priority 1-5, state, short_description, app_tla, contact_type, caller, assignment_group, assigned_to, parent_incident, child_count, opened_at, updated_at), newest first by default, plus total and next_cursor. Use get_incident for the full record and journal.',
       input: {
         state: z
           .array(stateEnum)
@@ -124,11 +134,28 @@ export const spec: McpServerSpec = {
           .optional()
           .describe('Assignee username, email or sys_id; "none" for unassigned incidents.'),
         caller: userKey('Caller').optional(),
+        contact_type: z
+          .array(contactTypeEnum)
+          .optional()
+          .describe(
+            'How they were reported: monitoring, phone, email, self_service, chat, walk_in. Example: ["phone","email"] for calls and mails from staff.',
+          ),
+        category: categoryShape.optional(),
+        parent_incident: z
+          .string()
+          .optional()
+          .describe('Only the children of this parent incident, e.g. "INC0010204".'),
+        relationship: z
+          .enum(INCIDENT_RELATIONSHIPS as [IncidentRelationship, ...IncidentRelationship[]])
+          .optional()
+          .describe(
+            'parent (has child incidents), child (attached to a parent) or standalone (neither: not grouped yet).',
+          ),
         query: z
           .string()
           .optional()
           .describe(
-            'Free text over number, short description, description and app (all words must match).',
+            'Free text over number, short description, description, app, caller name and caller location (all words must match), e.g. "teller date".',
           ),
         opened_after: z
           .string()
@@ -136,6 +163,10 @@ export const spec: McpServerSpec = {
           .describe(
             'Only incidents opened after this time: relative ("30m", "24h", "7d") or ISO 8601.',
           ),
+        opened_before: z
+          .string()
+          .optional()
+          .describe('Only incidents opened before this time: relative ("10m") or ISO 8601.'),
         sort: z
           .enum([
             '-opened_at',
@@ -171,7 +202,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'get_incident', {
       title: 'Get incident',
       description:
-        'Full incident: fields, caller, assignment, resolution, related links (Teams channel, merge requests, alerts, log queries) and the journal (work notes, comments and system field changes, oldest first).',
+        'Full incident: fields, caller, assignment, resolution, related links (Teams channel, merge requests, alerts, log queries), parent_incident and child_incidents, and the journal (work notes, comments and system field changes, oldest first).',
       input: { number: numberShape },
       annotations: READ_ONLY,
       run: async ({ number }) => incidentFull(await api.getIncident(number)),
@@ -180,7 +211,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'create_incident', {
       title: 'Create incident',
       description:
-        'Open a new incident (state new). Set app_tla to the affected application so the incident is tied to its CI. assignment_group is NOT inferred from the app: pass it explicitly (e.g. the app support group id from get_app). Priority is derived from impact × urgency (P1 = 1/1, P2 = 1/2 or 2/1, P3 = 1/3, 2/2 or 3/1, P4 = 2/3 or 3/2, P5 = 3/3). Check list_incidents for an existing open incident on the app first to avoid duplicates. Returns the full incident including number and web_url.',
+        'Open a new incident (state new). Set app_tla to the affected application so the incident is tied to its CI. assignment_group is NOT inferred from the app: pass it explicitly (e.g. the app support group id from get_app). Priority is derived from impact × urgency (P1 = 1/1, P2 = 1/2 or 2/1, P3 = 1/3, 2/2 or 3/1, P4 = 2/3 or 3/2, P5 = 3/3). Check list_incidents for an existing open incident on the app first to avoid duplicates. To group existing incidents that are the same problem (e.g. several bankers calling in), pass child_incidents: the new incident becomes their parent. Or pass parent_incident to attach the new one to an existing parent. Returns the full incident including number and web_url.',
       input: {
         short_description: z
           .string()
@@ -209,6 +240,13 @@ export const spec: McpServerSpec = {
         opened_by: userKey('Who opens it (default svc_incident_auto)').optional(),
         assignment_group: groupKey('Assignment group').optional(),
         assigned_to: userKey('Assignee (usually a member of the assignment group)').optional(),
+        child_incidents: incidentList(
+          'Existing incidents that are the same problem; they become children of the new incident',
+        ).optional(),
+        parent_incident: z
+          .string()
+          .optional()
+          .describe('Attach the new incident as a child of this open parent, e.g. "INC0010204".'),
       },
       annotations: WRITE,
       run: async (args) =>
@@ -218,7 +256,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'update_incident', {
       title: 'Update incident',
       description:
-        'Change incident fields and, in the same call, add a work note, a customer-visible comment and related links. Only the fields you pass change; each change is recorded as a system journal entry ("State changed from New to In Progress"). Changing impact or urgency recalculates priority. To resolve: state "resolved" plus close_code and close_notes. Reassigning to another group clears an assignee who is not a member. Returns the full updated incident.',
+        'Change incident fields and, in the same call, add a work note, a customer-visible comment and related links. Only the fields you pass change; each change is recorded as a system journal entry ("State changed from New to In Progress"). Changing impact or urgency recalculates priority. To resolve: state "resolved" plus close_code and close_notes; on a parent this also resolves its open children with the same resolution, and a comment on a parent is copied to its open children. parent_incident attaches the incident to a parent (null detaches it). Reassigning to another group clears an assignee who is not a member. Returns the full updated incident.',
       input: {
         number: numberShape,
         state: stateEnum
@@ -271,6 +309,11 @@ export const spec: McpServerSpec = {
           .describe(
             'Related links to attach (duplicates by URL are ignored): Teams channel, GitLab MR, alert, log query.',
           ),
+        parent_incident: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Parent incident number to attach this incident to, or null to detach it.'),
         updated_by: userKey('Who makes the change (default svc_incident_auto)').optional(),
       },
       annotations: WRITE,
@@ -283,7 +326,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'add_incident_note', {
       title: 'Add incident note',
       description:
-        'Append a work note (internal, for IT) or a comment (visible to the caller) to an incident without changing fields. Works on closed incidents too. Returns the new journal entry.',
+        'Append a work note (internal, for IT) or a comment (visible to the caller) to an incident without changing fields. A comment on a parent incident is copied to its open children, so every caller sees it. Works on closed incidents too. Returns the new journal entry.',
       input: {
         number: numberShape,
         text: z.string().min(1).describe('Note text. Plain text; newlines allowed.'),
@@ -298,6 +341,32 @@ export const spec: McpServerSpec = {
         const entry = await api.addJournal(number, { type, text, author: author ?? BOT });
         return { number: number.toUpperCase(), entry: journalRow(entry) };
       },
+    });
+
+    defineTool(server, 'link_child_incidents', {
+      title: 'Link child incidents',
+      description:
+        'Group incidents that are the same problem under one parent: each child gets parent_incident set and a system entry, and the parent lists them. Use it when several people call in about one outage, or monitoring and the service desk both opened incidents for it. One level only (a parent cannot be a child; a child cannot have children); the parent must be open. Afterwards, comments on the parent reach every caller, and resolving the parent resolves the children. Already-linked children are skipped. Returns the parent incident with its child_incidents.',
+      input: {
+        parent: numberShape.describe('Parent incident number, e.g. "INC0010204".'),
+        children: incidentList('Incidents to attach as children'),
+        work_note: z
+          .string()
+          .optional()
+          .describe('Internal note on the parent, e.g. why they are the same problem.'),
+        child_comment: z
+          .string()
+          .optional()
+          .describe(
+            'Caller-visible comment added to each newly linked child, e.g. "This is a known outage tracked in INC0010204; we will update you here."',
+          ),
+        updated_by: userKey('Who links them (default svc_incident_auto)').optional(),
+      },
+      annotations: WRITE,
+      run: async ({ parent, ...body }) =>
+        incidentFull(
+          await api.linkChildren(parent, { ...body, updated_by: body.updated_by ?? BOT }),
+        ),
     });
 
     // ---------------------------------------------------------------------

@@ -46,6 +46,14 @@ export const EXAMPLES: Record<string, { args: Record<string, unknown>; note?: st
   get_support_group: { args: { group: 'grp_cif_support' } },
   search_users: { args: { query: 'whitfield' } },
   get_user: { args: { username: 'dwhitfield' } },
+  link_child_incidents: {
+    args: {
+      parent: '<parent INC>',
+      children: ['<INC>', '<INC>'],
+      child_comment: 'Known outage, tracked in the parent incident. Updates will follow here.',
+    },
+    note: 'Use incidents you created: list_incidents with contact_type ["phone"] and relationship "standalone" finds calls to group.',
+  },
   // gitlab
   search_projects: { args: { tla: 'CIF' } },
   get_project: { args: { project: 'keybank/CIF00/customer-profile-api' } },

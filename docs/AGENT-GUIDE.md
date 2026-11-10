@@ -115,10 +115,11 @@ calls, so read it for exact argument shapes.
 | Trace | Find the shared upstream cause | `get_app` and `get_app_dependencies` (direction `upstream`) for the failing TLAs; look for a common upstream app |
 | Find the change | Which merge broke it | `list_merge_requests` (`tla`, `state: "merged"`, `merged_after`), `get_merge_request` (diff, pipeline), `list_recent_commits`, `compare_refs`, `get_file` |
 | Open incident | Record it | `create_incident` (`app_tla` = culprit, impact/urgency, `assignment_group` = the app's support group, `contact_type: "monitoring"`) |
+| Group duplicates | One parent for one problem | `list_incidents` (`active`, `contact_type: ["phone","email","chat"]`, `relationship: "standalone"`, `opened_after`), then `link_child_incidents` (or `create_incident` with `child_incidents`). Comments on the parent reach every caller; resolving it resolves them |
 | Assemble people | Right people, with reasons | `get_support_group` for on-call primary/secondary, then `create_channel` named `inc<number>-<slug>` with `members: [{user, reason}]`, `add_channel_members`, `post_message` |
 | Fix | Propose the change | `create_merge_request` (branch + commit + MR in one call; `changes` take full content or find/replace edits), `add_merge_request_note` |
 | Link up | Cross-reference everything | `update_incident` (`add_links`, `work_note`, `state`), `update_alert` (`incident_number`, `status: "acknowledged"`) |
-| Verify and close | Confirm recovery after a human merges | `tail_logs` / `summarize_errors` until errors stop, then `update_incident` with `state: "resolved"` |
+| Verify and close | Confirm recovery after a human merges | `tail_logs` / `summarize_errors` until errors stop, then `update_incident` with `state: "resolved"` (this also resolves the grouped calls) |
 
 Things that make it hard on purpose:
 
@@ -126,8 +127,12 @@ Things that make it hard on purpose:
   a green pipeline. Errors appear only in downstream apps.
 - **Red herrings.** Two unrelated merges land nearby in each scenario, and background commits and
   alerts never stop.
-- **The help-desk scenario has almost no errors**, only warnings. The incident arrives by phone,
-  unassigned to an app.
+- **The help-desk scenario has almost no errors**, only warnings. The incidents arrive by phone,
+  email and chat from four branches, unassigned to an app, each describing a different symptom
+  (one blames the receipt printer). They are one problem.
+- **Bankers call during the headline cascade too.** Branch staff report Teller Workstation lookup
+  failures while monitoring fires; group them under the agent's incident instead of working them
+  one by one.
 - **No merge tool.** The agent opens the MR; a human clicks **Merge** in the GitLab UI. The
   simulator notices within about 5 s, logs a deploy and ramps errors down.
 

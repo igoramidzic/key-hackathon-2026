@@ -1,52 +1,17 @@
-import { ToggleGroup, ToggleGroupItem } from '@sim/ui';
-import { createContext, type ReactNode, useContext, useState } from 'react';
 import { defaultTarget, type Target } from './mcp';
 
 // ---------------------------------------------------------------------------
-// Snippet target (local ports vs the hosted Worker), shared by every page.
+// Snippet target: the endpoints of wherever these docs are served from. Opened from `pnpm dev`
+// (localhost) the snippets use the local ports; opened from the hosted Worker they use its origin.
 // ---------------------------------------------------------------------------
 
-const TargetContext = createContext<{ target: Target; setTarget: (t: Target) => void }>({
-  target: 'local',
-  setTarget: () => {},
-});
+const TARGET: Target = defaultTarget();
 
-export const useTarget = () => useContext(TargetContext);
+export const useTarget = (): { target: Target } => ({ target: TARGET });
 
-function readTarget(): Target {
-  try {
-    const v = localStorage.getItem('docs.target');
-    if (v === 'local' || v === 'hosted') return v;
-  } catch {}
-  return defaultTarget();
-}
-
-export function TargetToggle() {
-  const { target, setTarget } = useTarget();
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-muted-foreground text-xs">Snippets for</span>
-      <ToggleGroup
-        type="single"
-        size="sm"
-        variant="outline"
-        value={target}
-        onValueChange={(v) => (v === 'local' || v === 'hosted') && setTarget(v)}
-      >
-        <ToggleGroupItem value="local">Local</ToggleGroupItem>
-        <ToggleGroupItem value="hosted">Hosted</ToggleGroupItem>
-      </ToggleGroup>
-    </div>
-  );
-}
-
-export function TargetProvider({ children }: { children: ReactNode }) {
-  const [target, setTargetState] = useState<Target>(readTarget);
-  const setTarget = (t: Target) => {
-    setTargetState(t);
-    try {
-      localStorage.setItem('docs.target', t);
-    } catch {}
-  };
-  return <TargetContext.Provider value={{ target, setTarget }}>{children}</TargetContext.Provider>;
+/** One line saying which endpoints the snippets use. */
+export function targetNote(target: Target): string {
+  return target === 'local'
+    ? 'Local endpoints: needs pnpm dev running.'
+    : 'Hosted endpoints: shared with everyone using the live demo.';
 }

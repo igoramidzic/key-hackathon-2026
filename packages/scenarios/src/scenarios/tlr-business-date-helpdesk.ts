@@ -11,10 +11,12 @@ import {
 } from '../repos/tlr';
 import type { LogContext, ScenarioDefinition } from '../types';
 import {
+  branchStaff,
   dev,
   easternDate,
   latency,
   nextWeekday,
+  serviceDeskAnalyst,
   stripCComments,
   stripHashComments,
   tpl,
@@ -86,13 +88,20 @@ function money(cents: number): string {
 
 const caller = getPerson(PERSONAS.branchManager);
 const headTeller = getPerson(PERSONAS.headTeller);
+// More branches calling about the same problem, so the agent has duplicates to group under one
+// parent incident. Each sees a different symptom and one blames the receipt printer.
+const lakewood = branchStaff('Lakewood Branch', ['Head Teller', 'Teller']);
+const akron = branchStaff('Akron Highland Square Branch', [
+  'Assistant Branch Manager',
+  'Branch Manager',
+]);
 
 export const tlrBusinessDateHelpdesk: ScenarioDefinition = {
   id: 'tlr-business-date-helpdesk',
   title: 'Branch drawers out of balance',
   kind: 'helpdesk',
   summary:
-    "A branch manager calls the service desk: teller receipts show tomorrow's date and drawers will not balance. Monitoring is quiet.",
+    "Branches start calling the service desk one after another: teller receipts show tomorrow's date and drawers will not balance. Monitoring is quiet.",
   answerKey: {
     rootCause:
       'teller-workstation-api (TLR) MR "Use UTC consistently for transaction timestamps" also changed teller.business-day.timezone from America/New_York to UTC. The 19:00 posting cutoff is now evaluated in UTC (2-3 PM Eastern), so afternoon teller transactions post to the next business day: drawer sessions (today) no longer match their transactions, drawers do not balance, and GL rejects the future-dated postings. Fix: restore America/New_York for the business day (keep UTC timestamps).',
@@ -274,6 +283,84 @@ Please route to the team that supports Teller Workstation / teller transaction p
         caller: PERSONAS.branchManager,
         opened_by: PERSONAS.serviceDeskAnalyst,
         contact_type: 'phone',
+        category: 'application',
+        subcategory: 'Branch systems',
+        impact: 2,
+        urgency: 1,
+        assignment_group: 'IT Service Desk',
+      },
+    },
+    {
+      atSec: 165,
+      incident: {
+        short_description:
+          "Receipt printer printing tomorrow's date on deposit receipts - Lakewood",
+        description: `Caller: ${lakewood.name}, ${lakewood.title} - ${lakewood.location}
+Callback: ${lakewood.phone}
+
+Issue:
+Deposit receipts from the window 2 receipt printer show tomorrow's date. Caller thinks the printer clock is wrong. Customer noticed it and asked whether the deposit would post today.
+
+Troubleshooting performed:
+- Power-cycled the receipt printer. Still prints tomorrow's date.
+- Printed a receipt from window 4 as well: same date.
+
+Requested action:
+Send a technician to check the receipt printers, or tell us how to reset the date.`,
+        caller: lakewood.username,
+        opened_by: serviceDeskAnalyst(0, PERSONAS.serviceDeskAnalyst),
+        contact_type: 'phone',
+        category: 'hardware',
+        subcategory: 'Receipt printer',
+        impact: 3,
+        urgency: 2,
+        assignment_group: 'IT Service Desk',
+      },
+    },
+    {
+      atSec: 210,
+      incident: {
+        short_description: "Today's teller deposits showing as next-day in the electronic journal",
+        description: `From: ${headTeller.name} <${headTeller.email}>, ${headTeller.title} - ${headTeller.location}
+
+Hi Service Desk,
+
+Since this afternoon every transaction in the Teller Workstation electronic journal has tomorrow's business date. Customers making deposits see "available tomorrow" on their receipt. I mentioned it on the regional branch call and Cleveland Main sees the same thing.
+
+Our drawer totals in the system don't match the cash count either, so we can't start balancing.
+
+Thanks,
+${headTeller.firstName}`,
+        caller: PERSONAS.headTeller,
+        opened_by: serviceDeskAnalyst(1, PERSONAS.serviceDeskAnalyst),
+        contact_type: 'email',
+        category: 'application',
+        subcategory: 'Branch systems',
+        impact: 2,
+        urgency: 2,
+        assignment_group: 'IT Service Desk',
+      },
+    },
+    {
+      atSec: 270,
+      incident: {
+        short_description:
+          'Cannot balance teller drawers, system totals missing transactions - Akron',
+        description: `Caller: ${akron.name}, ${akron.title} - ${akron.location}
+Callback: ${akron.phone}
+
+Issue:
+Started end-of-day prep early. All three drawers are out of balance in Teller Workstation: the system totals are short by exactly the transactions done since mid-afternoon. Those transactions show up when the teller filters by tomorrow's date.
+
+Customer impact:
+- Branch cannot close the day.
+- Two customers asked why their receipt shows tomorrow's date.
+
+Requested action:
+Urgent: branch closes in under two hours.`,
+        caller: akron.username,
+        opened_by: PERSONAS.serviceDeskAnalyst,
+        contact_type: 'chat',
         category: 'application',
         subcategory: 'Branch systems',
         impact: 2,

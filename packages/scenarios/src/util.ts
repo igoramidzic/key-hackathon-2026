@@ -1,5 +1,5 @@
 import type { AlertManager, AlertSeverity, Severity } from '@sim/contracts/logs';
-import { getApp, getGroup, getWorld } from '@sim/world';
+import { getApp, getGroup, getWorld, type Person } from '@sim/world';
 import type { LogContext, LogTemplate, RenderedLog, ScenarioAlert } from './types';
 
 // ---------------------------------------------------------------------------
@@ -20,6 +20,31 @@ export function groupMember(groupId: string, titlePattern: RegExp): string {
     titlePattern.test(world.peopleByUsername.get(u)?.title ?? ''),
   );
   return match ?? group.memberUsernames[0]!;
+}
+
+/**
+ * A branch employee at `location` (e.g. "Lakewood Branch"), preferring the first title that
+ * matches. Stable: the world is seeded and candidates are ordered by username.
+ */
+export function branchStaff(location: string, titles: string[]): Person {
+  const staff = getWorld()
+    .people.filter((p) => p.role === 'branch' && p.location === location)
+    .sort((a, b) => a.username.localeCompare(b.username));
+  for (const title of titles) {
+    const match = staff.find((p) => p.title === title);
+    if (match) return match;
+  }
+  if (!staff[0]) throw new Error(`No branch staff at ${location}`);
+  return staff[0];
+}
+
+/** The i-th service desk analyst other than the named persona (stable order). */
+export function serviceDeskAnalyst(index: number, except: string): string {
+  const desk = getWorld()
+    .people.filter((p) => p.role === 'service_desk' && p.username !== except)
+    .map((p) => p.username)
+    .sort();
+  return desk[index % desk.length]!;
 }
 
 // ---------------------------------------------------------------------------

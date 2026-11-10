@@ -38,12 +38,25 @@ export function incidentRow(i: IncidentSummary) {
     state: i.state,
     short_description: i.short_description,
     app_tla: i.app?.tla ?? null,
+    contact_type: i.contact_type,
+    caller: user(i.caller),
     assignment_group: group(i.assignment_group),
     assigned_to: user(i.assigned_to),
+    parent_incident: i.parent_incident,
+    child_count: i.child_count,
     opened_at: i.opened_at,
     updated_at: i.updated_at,
   };
 }
+
+const childRow = (i: IncidentSummary) => ({
+  number: i.number,
+  state: i.state,
+  short_description: i.short_description,
+  contact_type: i.contact_type,
+  caller: user(i.caller),
+  opened_at: i.opened_at,
+});
 
 export function journalRow(j: JournalEntry) {
   return { at: j.created_at, type: j.type, author: j.author.username, text: j.text };
@@ -77,6 +90,8 @@ export function incidentFull(i: Incident) {
     close_notes: i.close_notes,
     reassignment_count: i.reassignment_count,
     links: i.links.map((l) => ({ type: l.type, title: l.title, url: l.url })),
+    parent_incident: i.parent_incident,
+    child_incidents: i.child_incidents.map(childRow),
     journal: i.journal.map(journalRow),
   };
 }

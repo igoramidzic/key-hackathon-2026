@@ -5,6 +5,7 @@ import type {
   GroupType,
   ImpactUrgency,
   IncidentCategory,
+  IncidentRelationship,
   IncidentState,
   LinkType,
   Priority,
@@ -118,6 +119,8 @@ export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
   incident_management: 'Incident management',
   infrastructure: 'Infrastructure',
 };
+
+export const INCIDENT_RELATIONSHIPS: IncidentRelationship[] = ['parent', 'child', 'standalone'];
 
 /**
  * Standard ServiceNow priority matrix: 1/1→P1; 1/2,2/1→P2; 1/3,2/2,3/1→P3; 2/3,3/2→P4; 3/3→P5.

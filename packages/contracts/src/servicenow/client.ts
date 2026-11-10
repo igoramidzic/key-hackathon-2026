@@ -17,6 +17,7 @@ import type {
   IncidentUpdateInput,
   JournalEntry,
   JournalInput,
+  LinkChildrenInput,
   UserDetail,
   UserListQuery,
   UserSummary,
@@ -50,6 +51,9 @@ export function createServiceNowClient(baseUrl: string) {
       http.patch<Incident>(`/api/incidents/${seg(numberOrSysId)}`, body),
     addJournal: (numberOrSysId: string, body: JournalInput) =>
       http.post<JournalEntry>(`/api/incidents/${seg(numberOrSysId)}/journal`, body),
+    /** Attaches incidents as children of `parent`; returns the parent. */
+    linkChildren: (parent: string, body: LinkChildrenInput) =>
+      http.post<Incident>(`/api/incidents/${seg(parent)}/children`, body),
 
     // CMDB
     listApps: (query: AppListQuery = {}) => http.get<Page<AppSummary>>('/api/apps', q(query)),

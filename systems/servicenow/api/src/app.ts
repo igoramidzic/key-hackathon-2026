@@ -13,6 +13,8 @@ import {
   CLOSE_CODES,
   type CloseCode,
   CONTACT_TYPES,
+  type ContactType,
+  INCIDENT_RELATIONSHIPS,
   INCIDENT_STATES,
   type IncidentState,
   isActiveState,
@@ -87,6 +89,8 @@ const createSchema = z.object({
   urgency: level.optional(),
   assignment_group: text.optional(),
   assigned_to: text.optional(),
+  parent_incident: text.optional(),
+  child_incidents: z.array(text).max(100).optional(),
 });
 
 const updateSchema = z.object({
@@ -102,6 +106,7 @@ const updateSchema = z.object({
   app_tla: text.nullable().optional(),
   caller: text.nullable().optional(),
   contact_type: contactType.optional(),
+  parent_incident: text.nullable().optional(),
   close_code: closeCode.optional(),
   close_notes: text.optional(),
   work_note: z.string().optional(),
@@ -110,6 +115,14 @@ const updateSchema = z.object({
   updated_by: text.optional(),
 });
 
+const linkChildrenSchema = z.object({
+  children: z.array(text).min(1).max(100),
+  work_note: z.string().optional(),
+  child_comment: z.string().optional(),
+  updated_by: text.optional(),
+});
+
+const enumOf = <T extends string>(values: readonly T[]) => z.enum(values as unknown as [T, ...T[]]);
 const journalSchema = z.object({
   type: z.enum(['work_note', 'comment']),
   text,
@@ -136,10 +149,33 @@ const incidentListSchema = z.object({
   assignment_group: z.string().optional(),
   assigned_to: z.string().optional(),
   caller: z.string().optional(),
+  contact_type: csv,
+  category: z.string().optional(),
+  parent_incident: z.string().optional(),
+  relationship: enumOf(INCIDENT_RELATIONSHIPS).optional(),
   q: z.string().optional(),
   opened_after: z.string().optional(),
+  opened_before: z.string().optional(),
   sort: z.enum(sorts).optional(),
 });
+
+/** Comma-separated enum values from a csv query param, with a helpful error. */
+function csvEnum<T extends string>(
+  values: string[] | undefined,
+  allowed: readonly T[],
+  field: string,
+) {
+  return values?.map((v) => {
+    const key = v
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+    if (!(allowed as readonly string[]).includes(key)) {
+      throw badRequest(`Invalid ${field} '${v}' (use ${allowed.join(', ')}; comma separated)`);
+    }
+    return key as T;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // App
@@ -194,8 +230,13 @@ export function buildApp() {
       assignment_group: query.assignment_group,
       assigned_to: query.assigned_to,
       caller: query.caller,
+      contact_type: csvEnum<ContactType>(query.contact_type, CONTACT_TYPES, 'contact_type'),
+      category: query.category,
+      parent_incident: query.parent_incident,
+      relationship: query.relationship,
       q: query.q,
       opened_after: query.opened_after,
+      opened_before: query.opened_before,
       sort: query.sort,
     });
     const page = paginate(records, query);
@@ -223,6 +264,11 @@ export function buildApp() {
   app.post('/api/incidents/:number/journal', async (c) => {
     const body = await parseBody(c, journalSchema);
     return c.json(store.addJournal(c.req.param('number'), body), 201);
+  });
+
+  app.post('/api/incidents/:number/children', async (c) => {
+    const body = await parseBody(c, linkChildrenSchema);
+    return c.json(store.full(store.linkChildren(c.req.param('number'), body)));
   });
 
   // ----- CMDB: applications -----

@@ -23,6 +23,10 @@ export interface IncidentCreateInput {
   urgency?: ImpactUrgency;
   assignment_group?: string;
   assigned_to?: string;
+  /** Make the new incident a child of this (active) parent incident. */
+  parent_incident?: string;
+  /** Existing incidents to attach as children of the new incident (it becomes their parent). */
+  child_incidents?: string[];
 }
 
 /** Minimal incident shape the simulator reads back. */
@@ -66,6 +70,9 @@ export type CloseCode =
 export type JournalType = 'work_note' | 'comment' | 'system';
 
 export type LinkType = 'teams_channel' | 'merge_request' | 'alert' | 'log_query' | 'other';
+
+/** `parent` = has child incidents, `child` = has a parent, `standalone` = neither. */
+export type IncidentRelationship = 'parent' | 'child' | 'standalone';
 
 export type IncidentSort =
   | 'opened_at'
@@ -160,6 +167,10 @@ export interface IncidentSummary extends IncidentRef {
   opened_at: string;
   updated_at: string;
   resolved_at: string | null;
+  /** Number of the parent incident, when this incident is a child. */
+  parent_incident: string | null;
+  /** How many child incidents roll up to this one. */
+  child_count: number;
 }
 
 /** Full incident (`GET /api/incidents/:number`). A superset of `IncidentRef`. */
@@ -175,6 +186,8 @@ export interface Incident extends IncidentSummary {
   reassignment_count: number;
   reopen_count: number;
   links: IncidentLink[];
+  /** Incidents that roll up to this one (it is their parent), oldest first. */
+  child_incidents: IncidentSummary[];
   /** Activity stream, oldest first. */
   journal: JournalEntry[];
 }
@@ -191,10 +204,17 @@ export interface IncidentListQuery {
   /** Username, email or sys_id. Use `none` for unassigned. */
   assigned_to?: string;
   caller?: string;
-  /** Free text over number, short description, description and app. */
+  /** How it was reported, e.g. `phone`. */
+  contact_type?: ContactType[];
+  category?: string;
+  /** Only children of this incident. */
+  parent_incident?: string;
+  relationship?: IncidentRelationship;
+  /** Free text over number, short description, description, app and caller. */
   q?: string;
   /** ISO timestamp or relative (`24h`, `7d`). */
   opened_after?: string;
+  opened_before?: string;
   sort?: IncidentSort;
   limit?: number;
   cursor?: string;
@@ -216,6 +236,8 @@ export interface IncidentUpdateInput {
   app_tla?: string | null;
   caller?: string | null;
   contact_type?: ContactType;
+  /** Parent incident number; null detaches the incident from its parent. */
+  parent_incident?: string | null;
   /** Required (with close_notes) when moving to `resolved` or `closed`. */
   close_code?: CloseCode;
   close_notes?: string;
@@ -225,6 +247,17 @@ export interface IncidentUpdateInput {
   comment?: string;
   add_links?: IncidentLinkInput[];
   /** Who is making the change (username). Defaults to `svc_incident_auto`. */
+  updated_by?: string;
+}
+
+/** Body for `POST /api/incidents/:number/children`: attach incidents to a parent. */
+export interface LinkChildrenInput {
+  /** Incident numbers to attach. Already-attached ones are ignored. */
+  children: string[];
+  /** Internal note added to the parent. */
+  work_note?: string;
+  /** Caller-visible comment added to each newly attached child. */
+  child_comment?: string;
   updated_by?: string;
 }
 
