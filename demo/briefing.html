@@ -1,0 +1,846 @@
+<title>Operation Nightwatch Briefing</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Special+Elite&display=swap">
+<style>
+/* Layout: a 16:9 "surveillance monitor" stage (1280x720, scaled to fit) over a transport bar.
+   One deliberate dark look: night-shift ops room, amber signal light, manila case files. */
+:root {
+  color-scheme: dark;
+  --room: #060a14;      /* page behind the monitor */
+  --ink: #0b1222;       /* stage background */
+  --ink-2: #121b31;     /* panels */
+  --ink-3: #1b2744;     /* raised surfaces */
+  --line: #2b3a5c;
+  --text: #e7edf8;
+  --muted: #93a3c1;
+  --amber: #f2b441;     /* the agent / signal */
+  --red: #ef5350;       /* failing */
+  --green: #3dd6a3;     /* healthy */
+  --blue: #7fb2ff;      /* info */
+  --paper: #e9ddbc;     /* manila case file */
+  --paper-ink: #2a2415;
+  --stamp: #c8372d;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --type: "Special Elite", "Courier New", monospace;
+}
+html, body { height: 100%; }
+body {
+  background: var(--room); color: var(--text); font-family: var(--body);
+  padding-block: 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.player { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); min-width: min(100%, 320px); margin: 0 auto; }
+.screen { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--ink); border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
+.stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden;
+  background:
+    radial-gradient(900px 500px at 78% 8%, rgba(242,180,65,.07), transparent 60%),
+    linear-gradient(rgba(127,178,255,.035) 1px, transparent 1px) 0 0 / 100% 40px,
+    linear-gradient(90deg, rgba(127,178,255,.035) 1px, transparent 1px) 0 0 / 40px 100%,
+    var(--ink);
+}
+.player:fullscreen { max-width: none; background: #000; display: flex; flex-direction: column; justify-content: center; }
+.player:fullscreen .screen { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; border-radius: 0; }
+.player:fullscreen .bar { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; border-radius: 0; }
+
+/* ---------- stage chrome ---------- */
+.hud { position: absolute; left: 28px; right: 28px; top: 20px; display: flex; justify-content: space-between; font: 500 13px var(--mono); letter-spacing: .16em; color: var(--muted); text-transform: uppercase; z-index: 5; }
+.hud b { color: var(--amber); font-weight: 600; }
+.hud .rec::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 8px; animation: blink 1.6s steps(2) infinite; }
+.corner { position: absolute; width: 22px; height: 22px; border: 2px solid rgba(242,180,65,.55); z-index: 5; }
+.corner.tl { left: 12px; top: 12px; border-right: 0; border-bottom: 0; }
+.corner.tr { right: 12px; top: 12px; border-left: 0; border-bottom: 0; }
+.corner.bl { left: 12px; bottom: 12px; border-right: 0; border-top: 0; }
+.corner.br { right: 12px; bottom: 12px; border-left: 0; border-top: 0; }
+.caption { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 1040px; width: max-content; padding: 9px 18px; background: rgba(4,7,14,.82); border-radius: 4px; font: 500 21px/1.35 var(--body); text-align: center; text-wrap: balance; z-index: 6; opacity: 0; transition: opacity .2s; }
+.caption.on { opacity: 1; }
+.nocc .caption { display: none; }
+
+.scene { position: absolute; inset: 0; padding: 66px 64px 112px; opacity: 0; visibility: hidden; transition: opacity .55s ease, visibility 0s .55s; }
+.scene.active { opacity: 1; visibility: visible; transition: opacity .55s ease; }
+.kicker { font: 600 14px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--amber); }
+h1, h2 { font-family: var(--display); text-transform: uppercase; margin: 0; line-height: .95; letter-spacing: .01em; text-wrap: balance; }
+h2 { font-size: 54px; font-weight: 800; margin-top: 8px; }
+.cue { opacity: 0; transform: translateY(14px); transition: opacity .45s ease, transform .5s cubic-bezier(.2,.7,.2,1); }
+.cue.on { opacity: 1; transform: none; }
+.cue.fade { transform: none; }
+.stamp { position: absolute; font: 400 44px var(--type); letter-spacing: .08em; text-transform: uppercase; color: var(--stamp); border: 5px solid var(--stamp); border-radius: 8px; padding: 12px 22px 4px; opacity: 0; transform: rotate(-9deg) scale(2.3); transition: opacity .14s, transform .26s cubic-bezier(.2,1.5,.4,1); mix-blend-mode: normal; background: rgba(200,55,45,.06); white-space: nowrap; z-index: 4; }
+.stamp.on { opacity: .95; transform: rotate(-9deg) scale(1); }
+.stamp.green { color: var(--green); border-color: var(--green); background: rgba(61,214,163,.07); }
+.chip { display: inline-flex; align-items: center; gap: 8px; font: 500 14px var(--mono); padding: 5px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--ink-2); color: var(--muted); white-space: nowrap; }
+.pill { display: inline-block; font: 600 13px var(--mono); padding: 3px 9px; border-radius: 99px; letter-spacing: .04em; }
+.pill.red { background: rgba(239,83,80,.16); color: var(--red); border: 1px solid rgba(239,83,80,.5); }
+.pill.green { background: rgba(61,214,163,.14); color: var(--green); border: 1px solid rgba(61,214,163,.45); }
+.pill.amber { background: rgba(242,180,65,.14); color: var(--amber); border: 1px solid rgba(242,180,65,.5); }
+.pill.gray { background: var(--ink-3); color: var(--muted); border: 1px solid var(--line); }
+
+/* ---------- scene: open ---------- */
+.open { display: grid; grid-template-columns: 1fr 400px; gap: 40px; align-items: center; height: 100%; }
+.open h1 { font-size: 132px; font-weight: 800; margin: 14px 0 22px; }
+.open h1 span { color: var(--amber); }
+.lede { font-size: 25px; line-height: 1.4; color: var(--text); max-width: 600px; margin: 0 0 26px; }
+.verbs { display: flex; gap: 14px; }
+.verbs span { font: 700 26px var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 8px 18px 6px; border: 2px solid var(--amber); color: var(--amber); border-radius: 4px; }
+.radar { position: relative; width: 380px; height: 380px; border-radius: 50%; border: 2px solid rgba(242,180,65,.55);
+  background: repeating-radial-gradient(circle, transparent 0 46px, rgba(242,180,65,.2) 46px 47px), radial-gradient(circle, rgba(242,180,65,.09), transparent 70%); }
+.radar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(242,180,65,.5), transparent 22%); animation: spin 4.5s linear infinite; }
+.radar::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(242,180,65,.28), rgba(242,180,65,.28)) 50% 0 / 1px 100% no-repeat, linear-gradient(rgba(242,180,65,.28), rgba(242,180,65,.28)) 0 50% / 100% 1px no-repeat; }
+.blip { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 0 rgba(239,83,80,.7); animation: ping 2.2s ease-out infinite; }
+[data-scene="open"] .stamp { left: 590px; top: 138px; }
+
+/* ---------- scene: prob ---------- */
+.prob { display: grid; grid-template-columns: 500px 1fr; gap: 48px; height: 100%; }
+.bigclock { font: 600 92px/1 var(--mono); letter-spacing: -.02em; margin: 22px 0 6px; font-variant-numeric: tabular-nums; }
+.sub { font-size: 20px; color: var(--muted); margin: 0; }
+.alerts { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+.alert { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; padding: 10px 14px; background: rgba(239,83,80,.1); border: 1px solid rgba(239,83,80,.5); border-left-width: 5px; border-radius: 4px; font-size: 17px; }
+.alert b { font: 600 13px var(--mono); letter-spacing: .1em; color: var(--red); }
+.alert.major { background: rgba(242,180,65,.09); border-color: rgba(242,180,65,.5); }
+.alert.major b { color: var(--amber); }
+.where { font: 800 40px var(--display); text-transform: uppercase; color: var(--amber); margin-top: 22px; letter-spacing: .03em; }
+.estate { position: relative; align-self: center; justify-self: center; }
+.dots { position: relative; display: grid; grid-template-columns: repeat(25, 14px); gap: 8px; }
+.dots i { width: 14px; height: 14px; border-radius: 3px; background: #24304d; transition: background .3s, box-shadow .3s; }
+.dots i.bad { background: var(--red); box-shadow: 0 0 12px rgba(239,83,80,.75); }
+.dots i.culprit.lit { background: var(--green); box-shadow: 0 0 0 4px rgba(61,214,163,.25), 0 0 16px rgba(61,214,163,.8); }
+.tag { position: absolute; font: 600 13px var(--mono); padding: 3px 8px; border-radius: 3px; background: var(--red); color: #fff; white-space: nowrap; transform: translate(-50%, -34px); opacity: 0; transition: opacity .3s; z-index: 2; }
+.tag.on { opacity: 1; }
+.tag.ok { background: var(--green); color: #05241a; transform: translate(-50%, 24px); }
+.estate-legend { display: flex; gap: 26px; margin-top: 22px; font: 500 16px var(--mono); color: var(--muted); }
+.estate-legend b { color: var(--text); font-size: 22px; font-variant-numeric: tabular-nums; }
+.estate-legend .r b { color: var(--red); }
+
+/* ---------- scene: now ---------- */
+.now { display: grid; grid-template-columns: 1fr 320px; gap: 36px; margin-top: 22px; }
+.relay { display: flex; flex-direction: column; gap: 9px; }
+.leg { display: grid; grid-template-columns: 96px 1fr auto; gap: 18px; align-items: center; padding: 11px 18px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 5px; min-height: 58px; }
+.leg .t { font: 600 24px var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
+.leg .what { font-size: 21px; font-weight: 500; }
+.leg.bounce { border-color: rgba(239,83,80,.6); background: rgba(239,83,80,.09); }
+.leg.bounce .t { color: var(--red); }
+.elapsed { align-self: start; padding: 26px 24px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink-2); text-align: center; position: relative; }
+.elapsed .lbl { font: 600 13px var(--mono); letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+.elapsed .num { font: 600 84px/1.05 var(--mono); font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
+.elapsed .unit { font: 500 14px var(--mono); color: var(--muted); }
+.elapsed p { font-size: 18px; color: var(--text); margin: 18px 0 0; line-height: 1.4; }
+.now-wrap .stamp { right: 54px; bottom: 150px; font-size: 34px; }
+
+/* ---------- scene: cost (case file) ---------- */
+.paper { position: relative; width: 1090px; margin: 30px auto 0; padding: 34px 46px 30px; background: var(--paper); color: var(--paper-ink); border-radius: 3px; transform: rotate(-1.1deg); box-shadow: 0 24px 60px rgba(0,0,0,.55), 14px 14px 0 -4px #cdbf98; font-family: var(--type); }
+.paper header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--paper-ink); padding-bottom: 12px; font-size: 19px; letter-spacing: .06em; text-transform: uppercase; }
+.redact { display: inline-block; width: 130px; height: 17px; background: var(--paper-ink); vertical-align: -2px; margin: 0 8px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 30px 0 24px; }
+.stat .n { font: 800 88px/1 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat .n small { font-size: 44px; font-weight: 700; margin-left: 4px; }
+.stat p { margin: 10px 0 0; font-size: 18px; line-height: 1.35; }
+.typed { font-size: 20px; border-top: 1px dashed rgba(42,36,21,.5); padding-top: 16px; display: flex; justify-content: space-between; gap: 20px; }
+.typed em { font-style: normal; opacity: .65; font-size: 15px; }
+.paper .stamp { right: 56px; bottom: -40px; font-size: 40px; }
+
+/* ---------- scene: impl ---------- */
+.impl { display: grid; grid-template-columns: 250px 1fr; gap: 34px; margin-top: 22px; }
+.badge { background: var(--paper); color: var(--paper-ink); border-radius: 8px; padding: 16px 18px 18px; font-family: var(--type); box-shadow: 0 16px 40px rgba(0,0,0,.5); align-self: start; }
+.badge .top { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.avatar { position: relative; height: 150px; margin: 12px 0; background: #17213a; border-radius: 4px; overflow: hidden; }
+.avatar::before { content: ""; position: absolute; left: 50%; top: 26px; width: 58px; height: 58px; margin-left: -29px; border-radius: 50%; background: var(--amber); }
+.avatar::after { content: ""; position: absolute; left: 50%; top: 94px; width: 136px; height: 110px; margin-left: -68px; border-radius: 68px 68px 0 0; background: var(--amber); }
+.badge h3 { font: 800 30px/1 var(--display); text-transform: uppercase; margin: 0 0 10px; letter-spacing: .02em; }
+.badge dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 14px; }
+.badge dt { opacity: .6; text-transform: uppercase; font-size: 12px; padding-top: 2px; }
+.badge dd { margin: 0; }
+.right { position: relative; min-height: 440px; }
+.arch { display: grid; grid-template-columns: 230px 34px 250px 34px 1fr; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+.col .hd { font: 600 12px var(--mono); letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+.box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); }
+.box b { display: block; font-size: 19px; font-weight: 600; }
+.box span { font: 400 13px var(--mono); color: var(--muted); }
+.box.agent { border: 2px solid var(--amber); background: rgba(242,180,65,.08); text-align: center; padding: 26px 14px; }
+.box.agent b { font: 800 30px var(--display); text-transform: uppercase; color: var(--amber); letter-spacing: .03em; }
+.arrow { height: 2px; background: var(--amber); position: relative; opacity: .8; }
+.arrow::after { content: ""; position: absolute; right: -1px; top: -5px; border: 6px solid transparent; border-left-color: var(--amber); border-right: 0; }
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tools .box { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tools .box span { font-size: 15px; color: var(--amber); }
+.flow { display: flex; gap: 5px; align-items: center; margin-top: 26px; white-space: nowrap; }
+.flow .st { font: 700 17.5px var(--display); letter-spacing: .06em; text-transform: uppercase; padding: 8px 9px 6px; border-radius: 4px; background: var(--ink-3); border: 1px solid var(--line); }
+.flow .st.human { background: var(--amber); color: #1c1403; border-color: var(--amber); }
+.flow .sep { color: var(--muted); font: 600 13px var(--mono); }
+.note { margin-top: 14px; font: 500 15px var(--mono); color: var(--muted); }
+.note b { color: var(--amber); }
+.range { position: absolute; inset: 0; background: var(--ink); }
+.range h3 { font: 800 34px var(--display); text-transform: uppercase; margin: 0 0 6px; }
+.range p { font-size: 20px; color: var(--muted); margin: 0 0 24px; max-width: 760px; line-height: 1.4; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.tile { padding: 22px 16px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); }
+.tile b { display: block; font: 800 62px/1 var(--display); color: var(--amber); font-variant-numeric: tabular-nums; }
+.tile span { font-size: 16.5px; color: var(--muted); }
+.traps { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.traps .chip { font-size: 15.5px; padding: 8px 12px; color: var(--text); }
+
+/* ---------- scene: demo ---------- */
+.demo-head { display: flex; justify-content: space-between; align-items: flex-end; }
+.demo-head h2 { font-size: 44px; }
+.clockbox { text-align: right; }
+.clockbox .lbl { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.clockbox .num { font: 600 40px/1 var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
+.demo { display: grid; grid-template-columns: 218px 1fr; gap: 18px; margin-top: 14px; height: 446px; }
+.rail { display: flex; flex-direction: column; gap: 7px; }
+.step { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); color: var(--muted); font-size: 17px; font-weight: 500; transition: all .3s; }
+.step i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font: 600 12px var(--mono); font-style: normal; }
+.step.cur { border-color: var(--amber); color: var(--text); background: rgba(242,180,65,.1); }
+.step.cur i { border-color: var(--amber); color: var(--amber); }
+.step.done { color: var(--text); }
+.step.done i { background: var(--green); border-color: var(--green); color: #05241a; }
+.step.done i::before { content: "\2713"; }
+.step.done i span { display: none; }
+.rail .tagline { margin-top: auto; font: 500 11px/1.5 var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.console { position: relative; border: 1px solid var(--line); border-radius: 6px; background: #0a1020; overflow: hidden; display: flex; flex-direction: column; }
+.console .titlebar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--ink-3); border-bottom: 1px solid var(--line); font: 500 13px var(--mono); color: var(--muted); height: 36px; flex: none; }
+.console .titlebar b { color: var(--amber); font-weight: 600; }
+.console .titlebar span { white-space: nowrap; }
+.console .titlebar .call { margin-left: auto; color: var(--green); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panels { position: relative; flex: 1; }
+.panel { position: absolute; inset: 0; padding: 16px 18px; opacity: 0; visibility: hidden; transition: opacity .4s, visibility 0s .4s; }
+.panel.on { opacity: 1; visibility: visible; transition: opacity .4s; }
+.app { font: 600 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
+.app::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--c, var(--blue)); }
+/* logs */
+.hist { display: flex; align-items: flex-end; gap: 3px; height: 62px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.hist span { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+.hist u { display: block; background: var(--red); }
+.hist s { display: block; background: #3a4a70; }
+.loglines { font: 400 14.5px/26px var(--mono); white-space: nowrap; overflow: hidden; height: 260px; }
+.loglines div { display: grid; grid-template-columns: 104px 62px 46px 1fr; gap: 10px; overflow: hidden; }
+.loglines .ts { color: #6f7fa0; } .loglines .ERROR { color: var(--red); font-weight: 600; } .loglines .INFO { color: var(--blue); }
+.loglines .tla { color: var(--amber); } .loglines .lm { overflow: hidden; text-overflow: ellipsis; color: #cfd8ea; }
+.loglines .e .lm { color: #ffd0cf; }
+.logwrap { display: grid; grid-template-columns: minmax(0, 1fr) 318px; gap: 16px; }
+.banners { display: flex; flex-direction: column; gap: 8px; }
+.banner { padding: 9px 12px; border-radius: 5px; background: #2a0f14; border: 1px solid var(--red); font-size: 15px; line-height: 1.35; }
+.banner b { display: block; font: 600 12px var(--mono); letter-spacing: .12em; color: var(--red); margin-bottom: 2px; }
+.banner.agent { background: #241a05; border-color: var(--amber); }
+.banner.agent b { color: var(--amber); }
+/* graph */
+.graph { width: 100%; height: 100%; }
+.graph .n rect { fill: #2a0f14; stroke: var(--red); stroke-width: 1.5; }
+.graph .n text { fill: var(--text); font: 600 17px var(--mono); text-anchor: middle; }
+.graph .n text.s { fill: var(--muted); font: 400 10.5px var(--body); }
+.graph .n { opacity: 0; transition: opacity .3s; } .graph .n.on { opacity: 1; }
+.graph .edge { stroke: var(--amber); stroke-width: 1.6; fill: none; stroke-dasharray: 420; stroke-dashoffset: 420; transition: stroke-dashoffset .9s ease; opacity: .85; }
+.graph .edge.on { stroke-dashoffset: 0; }
+.graph .cif rect { fill: #0c2a22; stroke: var(--green); stroke-width: 2; }
+.graph .cif text { fill: var(--text); font: 600 20px var(--mono); text-anchor: middle; }
+.graph .cif text.s { fill: var(--green); font: 500 13px var(--mono); }
+.graph .ring { fill: none; stroke: var(--amber); stroke-width: 3; stroke-dasharray: 8 6; opacity: 0; transition: opacity .4s; }
+.graph .ring.on { opacity: 1; animation: march 1.2s linear infinite; }
+.graph .lbl { fill: var(--amber); font: 600 15px var(--mono); letter-spacing: .12em; opacity: 0; transition: opacity .4s; }
+.graph .lbl.on { opacity: 1; }
+.graph .cap { fill: var(--muted); font: 500 13px var(--mono); }
+/* merge request */
+.mr { display: grid; grid-template-columns: 1fr 268px; gap: 18px; height: calc(100% - 26px); }
+.card { border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); padding: 14px 16px; }
+.card h4 { margin: 4px 0 8px; font-size: 22px; font-weight: 600; line-height: 1.25; }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font: 400 13px var(--mono); color: var(--muted); }
+.diff { margin-top: 12px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; font: 400 14.5px/1.7 var(--mono); }
+.diff .f { background: var(--ink-3); padding: 3px 12px; color: var(--muted); font-size: 12.5px; }
+.diff .d { padding: 0 12px; background: rgba(239,83,80,.14); color: #ffc9c7; white-space: nowrap; }
+.diff .a { padding: 0 12px; background: rgba(61,214,163,.13); color: #b8f4e0; white-space: nowrap; }
+.effect { margin-top: 12px; font: 400 14.5px/1.6 var(--mono); color: var(--muted); }
+.effect b { color: var(--red); font-weight: 600; } .effect i { color: var(--green); font-style: normal; }
+.decoys h5 { margin: 0 0 8px; font: 600 12px var(--mono); letter-spacing: .16em; color: var(--muted); text-transform: uppercase; }
+.decoy { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 5px; margin-bottom: 9px; font-size: 15px; color: var(--muted); line-height: 1.35; }
+.decoy b { display: block; font: 600 12px var(--mono); color: var(--muted); margin-bottom: 2px; }
+.decoy s { text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+.panel .stamp { font-size: 28px; padding: 9px 16px 2px; border-width: 4px; }
+/* servicenow */
+.inc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; margin-top: 12px; font-size: 15.5px; }
+.inc div { display: grid; grid-template-columns: 138px 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(43,58,92,.6); }
+.inc span { color: var(--muted); }
+.kids { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+.kid { display: grid; grid-template-columns: 112px 62px 1fr; gap: 10px; align-items: center; padding: 7px 12px; border-radius: 4px; background: var(--ink-3); font-size: 15px; border-left: 3px solid var(--amber); }
+.kid code { font: 500 13.5px var(--mono); color: var(--amber); }
+/* teams */
+.teams { display: grid; grid-template-columns: 322px 1fr; gap: 16px; height: calc(100% - 26px); align-items: start; }
+.members { display: flex; flex-direction: column; gap: 7px; }
+.member { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 5px; background: var(--ink-2); border: 1px solid var(--line); }
+.member i { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--ink-3); color: var(--amber); font: 600 13px var(--mono); font-style: normal; }
+.member b { display: block; font-size: 16px; font-weight: 600; line-height: 1.2; }
+.member span { font-size: 12.5px; color: var(--amber); line-height: 1.25; display: block; }
+.msgs { display: flex; flex-direction: column; gap: 10px; }
+.msg { padding: 11px 14px; border-radius: 5px; background: var(--ink-2); border: 1px solid var(--line); font-size: 15.5px; line-height: 1.45; }
+.msg .who { font: 600 12.5px var(--mono); color: var(--amber); margin-bottom: 3px; }
+.msg.sys { background: transparent; border-style: dashed; color: var(--muted); font-size: 14px; }
+.msg code { font: 500 13.5px var(--mono); color: var(--green); }
+/* fix */
+.fix { display: grid; grid-template-columns: 1fr 300px; gap: 18px; height: calc(100% - 26px); position: relative; }
+.mergebtn { display: inline-block; margin-top: 12px; padding: 9px 20px; border-radius: 5px; background: #2f6fed; color: #fff; font-weight: 600; font-size: 16px; transition: background .2s, transform .1s; }
+.mergebtn .b { display: none; } .mergebtn.on { background: var(--green); color: #05241a; } .mergebtn.on .a { display: none; } .mergebtn.on .b { display: inline; }
+.cursor { position: absolute; left: 0; top: 0; width: 22px; height: 30px; transform: translate(470px, 330px); transition: transform .9s cubic-bezier(.3,.7,.2,1), opacity .3s; opacity: 0; z-index: 3; }
+.cursor.on { transform: translate(100px, 178px); opacity: 1; }
+.recov .lbl { font: 600 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.recov .num { font: 600 46px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 10px 0 14px; border-bottom: 1px solid var(--line); }
+.spark span { flex: 1; background: var(--red); min-height: 2px; }
+.fix .stamp { right: 14px; bottom: 26px; }
+.result { position: absolute; inset: 0; z-index: 7; background: rgba(8,13,26,.97); display: grid; place-items: center; text-align: center; }
+.result .big { font: 800 150px/1 var(--display); color: var(--amber); font-variant-numeric: tabular-nums; }
+.result p { font-size: 24px; margin: 6px 0 14px; }
+.result .vs { font: 500 17px var(--mono); color: var(--muted); }
+.result .vs b { color: var(--red); }
+
+/* ---------- scene: prod ---------- */
+.pipe { display: grid; grid-template-columns: 1fr 26px 1fr 26px 1fr 26px 1.15fr 26px 1fr 26px 1fr; align-items: stretch; margin-top: 24px; }
+.pipe .arrow { align-self: center; }
+.gbox { padding: 14px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink-2); min-height: 112px; }
+.gbox small { display: block; font: 600 11px var(--mono); letter-spacing: .14em; color: var(--blue); text-transform: uppercase; margin-bottom: 6px; }
+.gbox b { display: block; font-size: 18.5px; font-weight: 600; line-height: 1.2; }
+.gbox span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 6px; line-height: 1.3; }
+.gbox.key { border: 2px solid var(--amber); background: rgba(242,180,65,.08); }
+.gbox.key small { color: var(--amber); }
+.guards { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.guards .chip { font: 500 15px var(--body); color: var(--text); padding: 7px 12px; }
+.guards .chip b { color: var(--blue); font-weight: 600; }
+.phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+.phase { padding: 14px 18px; border-radius: 6px; background: var(--ink-2); border: 1px solid var(--line); border-top: 4px solid var(--amber); }
+.phase small { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--amber); }
+.phase b { display: block; font: 800 32px/1.1 var(--display); text-transform: uppercase; }
+.phase span { font-size: 16px; color: var(--muted); }
+
+/* ---------- scene: next ---------- */
+.missions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 34px; }
+.mission { position: relative; background: var(--paper); color: var(--paper-ink); padding: 22px 20px 20px; border-radius: 0 6px 4px 4px; min-height: 212px; box-shadow: 0 16px 34px rgba(0,0,0,.5); }
+.mission::before { content: attr(data-tab); position: absolute; left: 0; top: -24px; height: 24px; padding: 5px 14px 0; background: var(--paper); border-radius: 6px 6px 0 0; font: 400 13px var(--type); letter-spacing: .1em; }
+.mission b { display: block; font: 800 34px/1 var(--display); text-transform: uppercase; margin-bottom: 12px; }
+.mission span { font-size: 17.5px; line-height: 1.4; }
+.also { margin-top: 26px; font: 500 16px var(--mono); color: var(--muted); }
+.also b { color: var(--amber); }
+
+/* ---------- scene: end ---------- */
+.end { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; }
+.end h1 { font-size: 118px; font-weight: 800; margin: 12px 0 26px; }
+.end h1 span { color: var(--amber); }
+.outcomes { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.outcomes span { font: 700 26px var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 9px 18px 7px; border: 2px solid var(--amber); color: var(--amber); border-radius: 4px; }
+.end p { font-size: 23px; color: var(--muted); margin: 24px 0 0; }
+.end .stamp { right: 110px; bottom: -4px; }
+
+/* ---------- poster + transport ---------- */
+.poster { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 2.5%; background: linear-gradient(transparent 55%, rgba(4,7,14,.85)); z-index: 8; border: 0; width: 100%; cursor: pointer; }
+.poster span { display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px; border-radius: 99px; background: var(--amber); color: #1c1403; font: 600 clamp(14px, 1.8vw, 19px) var(--body); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.poster span::before { content: ""; border: 9px solid transparent; border-left: 14px solid #1c1403; border-right: 0; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #0d1528; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 6px 6px; }
+.bar button { background: none; border: 1px solid transparent; border-radius: 4px; padding: 6px 9px; cursor: pointer; font: 600 13px var(--mono); color: var(--text); min-width: 38px; }
+.bar button:hover { border-color: var(--line); background: var(--ink-3); }
+.bar button[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.bar .time { font: 500 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.seek { position: relative; flex: 1; min-width: 60px; height: 24px; display: flex; align-items: center; }
+.seek input { width: 100%; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; height: 24px; cursor: pointer; }
+.seek input::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--amber) var(--p, 0%), #2b3a5c var(--p, 0%)); }
+.seek input::-moz-range-track { height: 5px; border-radius: 3px; background: #2b3a5c; }
+.seek input::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--amber); }
+.seek input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--amber); margin-top: -4.5px; border: 0; }
+.seek input::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); border: 0; }
+.seek .tick { position: absolute; top: 5px; width: 2px; height: 14px; background: var(--room); pointer-events: none; }
+.chapters { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); margin: 12px auto 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chapters button { background: #0d1528; border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; cursor: pointer; font: 500 13px var(--body); color: var(--muted); }
+.chapters button b { font: 500 12px var(--mono); color: var(--amber); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.chapters button.cur { color: var(--text); border-color: var(--amber); }
+.keys { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); margin: 10px auto 0; font: 400 12px var(--mono); color: var(--muted); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(239,83,80,.7); } 100% { box-shadow: 0 0 0 18px rgba(239,83,80,0); } }
+@keyframes march { to { stroke-dashoffset: -28; } }
+@media (prefers-reduced-motion: reduce) {
+  .radar::before, .blip, .hud .rec::before, .graph .ring.on { animation: none; }
+  .cue, .stamp, .scene, .panel, .cursor, .graph .edge { transition-duration: .01s; }
+}
+.msg i { font: 500 13.5px var(--mono); color: var(--green); font-style: normal; }
+</style>
+
+<div class="player" id="player">
+  <div class="screen" id="screen">
+    <div class="stage" id="stage">
+      <div class="hud"><span class="rec" id="hudL"></span><span id="hudR"></span></div>
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div id="scenes"></div>
+      <div class="caption" id="cap"></div>
+    </div>
+    <button class="poster" id="poster" aria-label="Start the briefing"><span id="posterLbl"></span></button>
+  </div>
+  <div class="bar">
+    <button id="bPlay" aria-label="Play">PLAY</button>
+    <span class="time" id="time">0:00 / 0:00</span>
+    <div class="seek" id="seekWrap"><input type="range" id="seek" min="0" max="100" step="0.05" value="0" aria-label="Seek"></div>
+    <button id="bCC" aria-pressed="true" aria-label="Captions">CC</button>
+    <button id="bMute" aria-pressed="true" aria-label="Sound">SOUND</button>
+    <button id="bFS" aria-label="Fullscreen">FULL</button>
+  </div>
+</div>
+<div class="chapters" id="chapters"></div>
+<div class="keys">Space play/pause &middot; arrows skip 5 s &middot; N / P next and previous chapter &middot; C captions &middot; M sound &middot; F fullscreen</div>
+<audio id="vo" src="narration.mp4" preload="auto"></audio>
+
+<script>
+// Both blocks are written by build.py from content.yaml. Edit that file, not these.
+const TL = /*TIMELINE*/{"duration":265.58,"voice":"bm_george","scenes":[{"id":"open","title":"Briefing","s":0.0,"e":17.08},{"id":"prob","title":"The problem","s":17.08,"e":41.82},{"id":"now","title":"Today: manual","s":41.82,"e":68.66},{"id":"cost","title":"The cost","s":68.66,"e":85.94},{"id":"impl","title":"The agent","s":85.94,"e":128.57},{"id":"demo","title":"Live case","s":128.57,"e":199.91},{"id":"prod","title":"Path to production","s":199.91,"e":237.15},{"id":"next","title":"What's next","s":237.15,"e":254.52},{"id":"end","title":"Close","s":254.52,"e":265.58}],"beats":{"o1":{"s":0.9,"e":4.36,"text":"Good evening. This is your briefing on Operation Nightwatch."},"o2":{"s":4.68,"e":16.33,"text":"The target: production incidents. The asset: an AI agent that spots the trouble, files the report, and assembles the right team, before anyone picks up a phone."},"p1":{"s":17.98,"e":25.14,"text":"Seven minutes past two in the morning. A routine change ships at a bank that runs four hundred applications."},"p2":{"s":25.46,"e":29.89,"text":"Within a minute, online banking, mobile, and payments begin to fail."},"p3":{"s":30.21,"e":38.22,"text":"Alerts fire from every direction. But the service that caused it looks perfectly healthy. It is still answering every request."},"p4":{"s":38.54,"e":41.07,"text":"Nobody knows where to look, and the clock is running."},"n1":{"s":42.72,"e":46.44,"text":"Here is how that plays out today. Almost every step is manual."},"n2":{"s":46.76,"e":50.97,"text":"An operations analyst notices the alert and starts digging through logs."},"n3":{"s":51.29,"e":57.71,"text":"They work out which application is failing, look up who owns it, and open a ServiceNow incident by hand."},"n4":{"s":58.03,"e":64.63,"text":"Then the hard part: finding who is on call, starting a Teams chat, and pulling people in one at a time."},"n5":{"s":64.95,"e":67.91,"text":"Often the wrong team joins first, and the ticket bounces."},"c1":{"s":69.56,"e":70.92,"text":"The numbers tell the story."},"c2":{"s":71.24,"e":77.43,"text":"Fourteen minutes just to acknowledge the problem. Forty-seven minutes before the right people are talking to each other."},"c3":{"s":77.75,"e":85.19,"text":"More than three hours to resolve, across five different tools. And over a third of tickets go to the wrong team first."},"i1":{"s":86.84,"e":88.44,"text":"Enter Agent Nightwatch."},"i2":{"s":88.76,"e":92.41,"text":"It watches the live log stream and the alert feed around the clock."},"i3":{"s":92.73,"e":102.6,"text":"When something breaks, it works the case like an investigator, with forty-five tools across four systems: logs, ServiceNow, GitLab, and Teams."},"i4":{"s":102.92,"e":110.29,"text":"It scopes the damage, traces the dependency graph to a common cause, and finds the exact change that broke production."},"i5":{"s":110.61,"e":116.82,"text":"Then it opens the incident, briefs the right people, and proposes a fix. A human always makes the final call."},"i6":{"s":117.14,"e":127.82,"text":"To train it safely, we built an entire simulated bank: four hundred applications, twelve hundred people, and realistic failures with decoys planted along the way."},"d1":{"s":129.47,"e":130.54,"text":"Let's watch it work."},"d2":{"s":130.86,"e":136.6,"text":"A change has just shipped. Errors start in online banking, then mobile, then payments."},"d3":{"s":136.92,"e":142.48,"text":"Fifty-five seconds in, the first critical alert fires. Nightwatch is already on the case."},"d4":{"s":142.8,"e":154.89,"text":"Nine applications are failing. The agent walks the dependency graph and finds the one thing they share: the customer information file. A service that still looks green."},"d5":{"s":155.21,"e":166.02,"text":"In GitLab, it finds the suspect: a merge request that renamed every field in the customer profile. The pipeline passed. Every consumer broke."},"d6":{"s":166.34,"e":175.26,"text":"It opens a priority one incident, assigns the team that owns the service, and attaches three calls from branch staff reporting the same outage."},"d7":{"s":175.58,"e":184.92,"text":"Then it stands up a Teams channel and brings in the on-call engineers, the incident commander, and the author of the change. Each of them is told exactly why they are there."},"d8":{"s":185.24,"e":193.89,"text":"Finally, it drafts the fix. A human reviews it and clicks merge. The errors drain away, and the case is closed."},"d9":{"s":194.21,"e":199.16,"text":"From first error to a briefed team with a root cause: under three minutes."},"g1":{"s":200.81,"e":203.49,"text":"The path to production runs through Google Cloud."},"g2":{"s":203.81,"e":208.03,"text":"Cloud Logging routes errors through Pub/Sub to a detector on Cloud Run."},"g3":{"s":208.35,"e":213.73,"text":"The agent runs on Vertex AI Agent Engine, built with the Agent Development Kit."},"g4":{"s":214.05,"e":224.93,"text":"Our four tool servers move to Cloud Run and point at the real ServiceNow, GitLab, and Teams. Secret Manager holds the credentials, and every action lands in BigQuery for audit."},"g5":{"s":225.25,"e":236.4,"text":"We roll out in three phases. Shadow mode, where it only observes. Co-pilot, where a human approves each action. Then autonomy, for the patterns it has proven."},"x1":{"s":238.05,"e":239.61,"text":"And this is only the first mission."},"x2":{"s":239.93,"e":253.77,"text":"Next: rollbacks with one click. Risk scoring on changes before they merge. Post-incident reports that write themselves. And a memory of every past case, so the agent gets sharper each time."},"e1":{"s":255.42,"e":263.73,"text":"Agent Nightwatch. Faster detection, the right people, a clear root cause. And far fewer phone calls at two in the morning."},"e2":{"s":264.05,"e":264.83,"text":"End of briefing."}}}/*END*/;
+const C = /*CONTENT*/{"hud":"Operation *Nightwatch*","player":{"start":"Start briefing","replay":"Replay briefing"},"scenes":{"open":{"kicker":"Mission briefing · Hackathon 2026","title":["Operation","Nightwatch"],"lede":{"at":"o2@0.28","text":"An AI agent that spots the incident, files the report and assembles the right team."},"verbs":[{"at":"o2@0.42","text":"Detect"},{"at":"o2@0.56","text":"Report"},{"at":"o2@0.68","text":"Assemble"}],"stamp":{"at":"o1@0.55","text":"Classified"}},"prob":{"kicker":"File 01 // The problem","clock":{"start":"02:07:00","speed":"4"},"sub":"A routine change ships to production.","alerts":[{"at":"p3","level":"CRITICAL","text":"Online Banking: 5xx error rate 38.4%"},{"at":"p3@0.12","level":"CRITICAL","text":"Mobile Banking: 5xx error rate 27.9%"},{"at":"p3@0.24","level":"MAJOR","text":"Payments: failed payment rate 21.6%"}],"question":{"at":"p4","text":"Where do you look?"},"estate":{"total":"400","failing":"36","labelled":[{"at":"p2@0.3","text":"Online Banking"},{"at":"p2@0.52","text":"Mobile"},{"at":"p2@0.68","text":"Payments"}],"spread":["p2@0.8","p3@0.5"],"culprit":{"at":"p3@0.4","text":"200 OK · looks healthy"},"legend":{"total":"applications","failing":"failing","cause":"*1* cause, still green"}}},"now":{"kicker":"File 02 // Current state","headline":"Today it is a manual relay","steps":[{"at":"n2","time":"00:14","text":"Someone notices the alert","tool":"Alert console"},{"at":"n2@0.6","time":"00:26","text":"Dig through the logs","tool":"Logs Explorer"},{"at":"n3@0.1","time":"00:32","text":"Work out the app and who owns it","tool":"ServiceNow CMDB"},{"at":"n3@0.62","time":"00:37","text":"Open the incident by hand","tool":"ServiceNow"},{"at":"n4@0.25","time":"00:47","text":"Find on-call, start a chat, pull people in","tool":"Teams + phone"},{"at":"n5","time":"+00:25","text":"Wrong team joined. Reassign and repeat.","tool":"ServiceNow","style":"bounce"}],"elapsed":{"at":"n1@0.5","label":"Elapsed","unit":"hours : minutes","note":{"at":"n4.e","text":"Nobody has started on the root cause yet."}},"stamp":{"at":"n5@0.55","text":"Reassigned"}},"cost":{"kicker":"File 03 // What it costs","subject":"tier-1 incident, manual response","exhibit":"Exhibit A · illustrative figures","stats":[{"at":"c2","value":"14 min","label":"just to acknowledge the problem"},{"at":"c2@0.45","value":"47 min","label":"before the right people are talking"},{"at":"c3","value":"3h 12m","label":"mean time to resolve"},{"at":"c3@0.6","value":"38%","label":"of tickets go to the wrong team first"}],"line":{"at":"c3@0.32","text":"5 tools. 0 shared context. Every hand-off is a person copying and pasting."},"stamp":{"at":"c3.e-0.3","text":"Too slow"}},"impl":{"kicker":"File 04 // The asset","headline":"Agent Nightwatch","badge":{"at":"i1","role":"Field agent","number":"No. 0001","name":"Nightwatch","fields":[["Alias","svc_incident_auto"],["Shift","24 / 7"],["Clearance","Read, write. Never merge, never delete."]]},"signals":{"at":"i2","heading":"Signals","items":[{"title":"Live log stream","sub":"every entry, in order"},{"title":"Alert feed","sub":"Moogsoft alerts"},{"title":"Help-desk calls","sub":"new phone incidents"}]},"agent":{"at":"i1@0.4","title":"The agent","sub":"detection rules + LLM reasoning"},"tools":{"at":"i3@0.5","heading":"45 tools over MCP","items":[{"at":"i3@0.74","name":"Logs","count":"9"},{"at":"i3@0.80","name":"ServiceNow","count":"13"},{"at":"i3@0.88","name":"GitLab","count":"14"},{"at":"i3@0.95","name":"Teams","count":"9"}]},"flow":[{"at":"i4@0.02","text":"Scope"},{"at":"i4@0.25","text":"Trace"},{"at":"i4@0.62","text":"Find the change"},{"at":"i5@0.05","text":"Open incident"},{"at":"i5@0.28","text":"Brief the team"},{"at":"i5@0.48","text":"Propose fix"},{"at":"i5@0.68","text":"Human approves","style":"human"}],"note":{"at":"i5@0.7","text":"The agent has *no merge tool and no delete tool*. People stay in command."},"range":{"at":"i6","title":"The training ground: a simulated bank","text":"Mock Cloud Logging, ServiceNow, GitLab and Teams with seeded data. The agent sees only what an engineer on shift would see.","tiles":[{"at":"i6@0.36","value":"400","label":"applications"},{"at":"i6@0.50","value":"1,199","label":"people"},{"at":"i6@0.56","value":"51","label":"support groups"},{"at":"i6@0.62","value":"776","label":"code repositories"},{"at":"i6@0.68","value":"5","label":"incident scenarios"}],"chips":{"at":"i6@0.8","items":["Decoy merges in every case","The culprit stays green","Background noise never stops"]}}},"demo":{"kicker":"File 05 // Live case","headline":"The customer profile outage","tagline":["Re-enactment on the simulated bank","scenario: cif-snake-case-cascade"],"clock_label":"Mission clock","clock_prefix":"T+","clock":[["d2","0:00"],["d3","0:52"],["d3@0.3","0:55"],["d4","1:10"],["d5","1:35"],["d6","2:05"],["d7","2:30"],["d7.e","2:48"],["d8@0.3","2:48"],["d8@0.5","6:50"],["d8.e","7:50"]],"steps":[{"name":"Detect","beats":["d2","d3"],"status":"watching the log stream","calls":"logs.tail_logs()  logs.list_alerts()  logs.summarize_errors()"},{"name":"Scope and trace","beats":["d4","d4"],"status":"tracing dependencies","calls":"servicenow.get_app_dependencies()  servicenow.get_app(\"CIF\")"},{"name":"Find the change","beats":["d5","d5"],"status":"reviewing recent changes","calls":"gitlab.list_merge_requests()  gitlab.get_merge_request()"},{"name":"Open incident","beats":["d6","d6"],"status":"filing the incident","calls":"servicenow.create_incident()  servicenow.link_child_incidents()"},{"name":"Assemble team","beats":["d7","d7"],"status":"assembling the team","calls":"servicenow.get_support_group()  teams.create_channel()  teams.post_message()"},{"name":"Fix and verify","beats":["d8","d8"],"status":"fix and verify","calls":"gitlab.create_merge_request()  logs.tail_logs()  servicenow.update_incident()"}],"idle":{"before":"standing by","after":"case closed"},"logs":{"app":"Cloud Logging · Logs Explorer · production","start_time":"02:07:30","banners":[{"at":"d3@0.36","head":"MOOGSOFT · CRITICAL · OLB","text":"HTTP 5xx error rate 38.4% (threshold 5%)"},{"at":"d3@0.5","head":"MOOGSOFT · CRITICAL · MBL","text":"HTTP 5xx error rate 27.9% (threshold 5%)"},{"at":"d3@0.66","head":"NIGHTWATCH · ENGAGED","text":"Grouping errors by app: 9 apps failing since 02:07:30","style":"agent"}],"errors":[{"after":"1.0","tla":"OLB","messages":["CIF profile response failed schema validation","profile unavailable: upstream contract violation (502)"]},{"after":"2.6","tla":"MBL","messages":["customer-profile-api: customerId missing from profile response (502)"]},{"after":"3.8","tla":"PAY","messages":["Payment rejected: payer verification unavailable (502)","Unrecognized field \"customer_id\" (class CustomerProfile)"]},{"after":"5.4","tla":"FRD","messages":["customer feature extraction failed: KeyError 'customerId'"]},{"after":"6.2","tla":"NTF","messages":["notification dropped: recipient resolution failed"]},{"after":"7.0","tla":"CRD","messages":["NullPointerException: CustomerProfile.customerId() is null (500)"]},{"after":"7.8","tla":"TLR","messages":["IllegalStateException: CIF returned profile for null (500)"]}],"background":[{"tla":"CIF","message":"GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=olb-bff"},{"tla":"DEP","message":"GET /v1/accounts/{id}/balances 200 {ms}ms"},{"tla":"ATH","message":"token issued grant=refresh_token"},{"tla":"CIF","message":"GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=pay-api"}]},"graph":{"app":"ServiceNow · application dependency graph","failing":[["OLB","Online Banking"],["MBL","Mobile Banking"],["PAY","Payments Hub"],["FRD","Fraud Scoring"],["NTF","Notifications"],["CRD","Card Management"],["TLR","Teller Platform"],["DEP","Deposit Accounts"],["BPY","Bill Pay"]],"upstream":{"tla":"CIF","name":"Customer Information File"},"common":{"at":"d4@0.5","text":"COMMON UPSTREAM"},"green":{"at":"d4@0.84","text":"200 OK · LOOKS GREEN"},"notes":["9 failing apps","187 callers of CIF"],"footer":"get_app_dependencies(direction: \"up\") for each failing app"},"suspect":{"app":"GitLab · keybank/CIF00/customer-profile-api","state":"Merged","when":"30 s before the first error","pipeline":{"at":"d5@0.62","text":"Pipeline passed"},"title":"Adopt enterprise API naming standard (snake_case)","diff":{"at":"d5@0.3","file":"src/main/resources/application.yml","removed":"property-naming-strategy: LOWER_CAMEL_CASE","added":"property-naming-strategy: SNAKE_CASE"},"effect":{"at":"d5@0.48","lines":["Consumers expect [[\"customerId\"]]","CIF now returns *\"customer_id\"* with 200 OK"]},"decoys":{"at":"d5@0.7","heading":"Ruled out","items":[{"tla":"OLB","title":"Update profile error copy (DCR-482)","why":"Copy only, no logic."},{"tla":"ATH","title":"Bump jose 5.9.3 to 5.9.6","why":"Patch release, unrelated."}]},"stamp":{"at":"d5@0.8","text":"Suspect"}},"incident":{"app":"ServiceNow · incident","number":"INC0010204","priority":"P1 Critical","state":"In progress","opened_by":"opened by Incident Automation","title":"Customer profile failures across OLB, MBL, PAY after CIF change","fields":[{"label":"Application","value":"CIF · Customer Information File"},{"label":"Assignment group","value":"CIF Application Support","at":"d6@0.3"},{"label":"Contact type","value":"Monitoring"},{"label":"On call","value":"Kristin Streich","at":"d6@0.3"}],"children":[{"at":"d6@0.56","number":"INC0010205","via":"phone","text":"Denver Tech Center: Teller Workstation cannot look up customers"},{"at":"d6@0.66","number":"INC0010206","via":"phone","text":"Seattle Capitol Hill: online and mobile banking won't load profiles"},{"at":"d6@0.76","number":"INC0010207","via":"chat","text":"Buffalo Elmwood: unable to verify customers at the teller line"}]},"channel":{"app":"Teams · Incident Response · #inc0010204-customer-profile-errors","members":[{"at":"d7@0.22","name":"Kristin Streich","why":"On-call primary, CIF Application Support"},{"at":"d7@0.3","name":"Dominic Green","why":"On-call secondary, CIF Application Support"},{"at":"d7@0.4","name":"Dana Whitfield","why":"NOC shift lead, incident commander"},{"at":"d7@0.46","name":"Tom Okafor","why":"Major incident manager"},{"at":"d7@0.54","name":"Harley Donnelly","why":"CIF developer, author of the change"}],"messages":[{"at":"d7@0.12","from":"Incident Automation","text":"*P1 INC0010204.* Nine apps cannot read customer profiles. Root cause: a CIF merge switched its JSON to snake_case, so [[customerId]] is now [[customer_id]]. CIF itself returns 200. Fix MR is ready for review."},{"at":"d7@0.72","style":"system","text":"Notification to Kristin Streich: “You've been added to #inc0010204-customer-profile-errors as on-call support for CIF. Here's who else is in the channel…”"},{"at":"d7@0.9","style":"person","from":"Kristin Streich","text":"On it. Reviewing the fix now."}]},"fix":{"app":"GitLab · fix merge request · opened by the agent","states":["Open","Merged"],"label":"incident","link":"links INC0010204","title":"Revert CIF JSON naming to camelCase","diff":{"file":"src/main/resources/application.yml","removed":"property-naming-strategy: SNAKE_CASE","added":"property-naming-strategy: LOWER_CAMEL_CASE"},"button":["Merge","Merged by a human ✓"],"cursor_at":"d8@0.34","merge_at":"d8@0.5","metric":{"label":"Errors per minute","value":"1240"},"incident":"INC0010204","incident_states":["In progress","Resolved"],"closed_at":"d8@0.86","stamp":"Case closed"},"result":{"at":"d9","big":"02:48","text":"from first error to a briefed team with a root cause","versus":"Manual relay: *47 minutes* to get the right people talking"}},"prod":{"kicker":"File 06 // Path to production","headline":"Deploying on Google Cloud","pipeline":[{"at":"g2","tag":"Signals","title":"Cloud Logging","sub":"Log Router sink on errors"},{"at":"g2@0.35","tag":"Transport","title":"Pub/Sub","sub":"Durable, replayable stream"},{"at":"g2@0.65","tag":"Detect","title":"Cloud Run","sub":"Detection rules service"},{"at":"g3@0.15","tag":"Agent","title":"Vertex AI Agent Engine","sub":"Built with the Agent Development Kit","style":"key"},{"at":"g4@0.05","tag":"Tools","title":"Cloud Run","sub":"Our 4 MCP tool servers"},{"at":"g4@0.24","tag":"Real systems","title":"ServiceNow, GitLab, Teams","sub":"Same tools, real APIs"}],"guards":[{"at":"g4@0.52","name":"Secret Manager","text":"holds the credentials"},{"at":"g4@0.74","name":"BigQuery","text":"audit trail of every action"},{"at":"g4@0.9","name":"IAM","text":"least-privilege service account"},{"at":"g4@0.95","name":"Cloud Monitoring","text":"on the agent itself"}],"phases":[{"at":"g5@0.2","tag":"PHASE 1","title":"Shadow","text":"Observes and drafts. Changes nothing."},{"at":"g5@0.45","tag":"PHASE 2","title":"Co-pilot","text":"Acts once a human approves."},{"at":"g5@0.74","tag":"PHASE 3","title":"Autonomy","text":"Runs the patterns it has proven."}]},"next":{"kicker":"File 07 // Next missions","headline":"Only the first mission","missions":[{"at":"x2@0.04","tab":"MISSION A","title":"One-click rollback","text":"Revert the suspect change with a single human approval."},{"at":"x2@0.2","tab":"MISSION B","title":"Change risk scoring","text":"Flag a risky merge before it ships, using the dependency graph."},{"at":"x2@0.42","tab":"MISSION C","title":"Reports that write themselves","text":"Timeline, root cause and actions, drafted as the case closes."},{"at":"x2@0.64","tab":"MISSION D","title":"Case memory","text":"Every solved incident makes the next diagnosis faster."}],"also":{"at":"x2@0.9","text":"*Also on the board:* group help-desk calls into one incident · more signal sources · any system with an MCP server"}},"end":{"kicker":"Operation Nightwatch","title":["Agent","Nightwatch"],"outcomes":[{"at":"e1@0.2","text":"Faster detection"},{"at":"e1@0.36","text":"The right people"},{"at":"e1@0.5","text":"A clear root cause"}],"line":{"at":"e1@0.68","text":"And far fewer phone calls at two in the morning."},"stamp":{"at":"e2@0.3","text":"End of briefing"}}}}/*END*/;
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const B = TL.beats, D = TL.duration;
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const pad = (n) => String(Math.floor(n)).padStart(2, '0');
+const mmss = (s) => `${Math.floor(s / 60)}:${pad(s % 60)}`;
+const list = (v) => (Array.isArray(v) ? v : []);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// *highlight* and [[good]] marks from content.yaml
+const rich = (s) => esc(s).replace(/\*(.+?)\*/g, '<b>$1</b>').replace(/\[\[(.+?)\]\]/g, '<i>$1</i>');
+const on = (o) => (o && o.at ? ` data-on="${esc(o.at)}"` : '');
+const secs = (s) => String(s).split(':').reduce((a, p) => a * 60 + (parseFloat(p) || 0), 0);
+
+// "p2" beat start · "p2.e" beat end · "p2@0.4" 40% through · any of them "+1.5" / "-0.3" seconds
+function at(spec) {
+  const m = /^([a-z]+\d+)(\.e)?(?:@([\d.]+))?([+-][\d.]+)?$/.exec(String(spec ?? '').trim());
+  const b = m && B[m[1]];
+  if (!b) return 1e9;
+  let t = m[2] ? b.e : b.s;
+  if (m[3]) t = b.s + (b.e - b.s) * parseFloat(m[3]);
+  if (m[4]) t += parseFloat(m[4]);
+  return t;
+}
+function rng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+const heading = (s) => `<div class="kicker">${esc(s.kicker)}</div>${s.headline ? `<h2>${esc(s.headline)}</h2>` : ''}`;
+const stamp = (o, cls = '', style = '') => (o && o.text ? `<div class="stamp ${cls}"${style ? ` style="${style}"` : ''}${on(o)}>${esc(o.text)}</div>` : '');
+const diff = (d, extra = '') => `<div class="diff${extra}"${on(d)}><div class="f">${esc(d.file)}</div><div class="d">- ${esc(d.removed)}</div><div class="a">+ ${esc(d.added)}</div></div>`;
+
+/* ================= scene templates: content.yaml -> markup ================= */
+const COLS = 25;
+const T = {
+  open: (s) => `
+    <div class="open"><div>
+      <div class="kicker">${esc(s.kicker)}</div>
+      <h1>${esc(s.title[0])}<br><span>${esc(s.title[1])}</span></h1>
+      <p class="lede cue"${on(s.lede)}>${rich(s.lede.text)}</p>
+      <div class="verbs">${list(s.verbs).map((v) => `<span class="cue"${on(v)}>${esc(v.text)}</span>`).join('')}</div>
+    </div>
+    <div class="radar"><i class="blip" style="left:62%;top:27%"></i><i class="blip" style="left:28%;top:58%;animation-delay:.8s"></i><i class="blip" style="left:70%;top:66%;animation-delay:1.4s"></i></div></div>
+    ${stamp(s.stamp)}`,
+
+  prob: (s) => `
+    <div class="prob"><div>
+      <div class="kicker">${esc(s.kicker)}</div>
+      <div class="bigclock" id="clk">${esc(s.clock.start)}</div>
+      <p class="sub">${esc(s.sub)}</p>
+      <div class="alerts">${list(s.alerts).map((a) => `<div class="alert${/crit/i.test(a.level) ? '' : ' major'} cue"${on(a)}><b>${esc(a.level)}</b><span>${esc(a.text)}</span></div>`).join('')}</div>
+      <div class="where cue"${on(s.question)}>${esc(s.question.text)}</div>
+    </div>
+    <div class="estate">
+      <div class="dots" id="dots"></div>
+      <div class="estate-legend">
+        <span><b>${esc(s.estate.total)}</b> ${esc(s.estate.legend.total)}</span>
+        <span class="r"><b id="failing">0</b> ${esc(s.estate.legend.failing)}</span>
+        <span class="cue fade"${on(s.estate.culprit)}>${rich(s.estate.legend.cause)}</span>
+      </div>
+    </div></div>`,
+
+  now: (s) => `
+    ${heading(s)}
+    <div class="now">
+      <div class="relay">${list(s.steps).map((p) => `<div class="leg${p.style === 'bounce' ? ' bounce' : ''} cue"${on(p)}><span class="t">${esc(p.time)}</span><span class="what">${esc(p.text)}</span><span class="chip">${esc(p.tool)}</span></div>`).join('')}</div>
+      <div class="elapsed cue fade"${on(s.elapsed)}>
+        <div class="lbl">${esc(s.elapsed.label)}</div><div class="num" id="elapsed">00:00</div><div class="unit">${esc(s.elapsed.unit)}</div>
+        <p class="cue fade"${on(s.elapsed.note)}>${esc(s.elapsed.note.text)}</p>
+      </div>
+    </div>
+    ${stamp(s.stamp)}`,
+
+  cost: (s) => `
+    <div class="kicker">${esc(s.kicker)}</div>
+    <div class="paper">
+      <header><span>Subject:<i class="redact"></i>${esc(s.subject)}</span><span>${esc(s.exhibit)}</span></header>
+      <div class="stats" style="grid-template-columns:repeat(${list(s.stats).length},1fr)">${list(s.stats).map((x, i) => `<div class="stat cue"${on(x)}><div class="n" data-stat="${i}"></div><p>${esc(x.label)}</p></div>`).join('')}</div>
+      <div class="typed cue fade"${on(s.line)}><span>${esc(s.line.text)}</span></div>
+      ${stamp(s.stamp)}
+    </div>`,
+
+  impl: (s) => `
+    ${heading(s)}
+    <div class="impl">
+      <div class="badge cue"${on(s.badge)}>
+        <div class="top"><span>${esc(s.badge.role)}</span><span>${esc(s.badge.number)}</span></div>
+        <div class="avatar"></div><h3>${esc(s.badge.name)}</h3>
+        <dl>${list(s.badge.fields).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      </div>
+      <div class="right">
+        <div class="arch">
+          <div class="col cue"${on(s.signals)}><div class="hd">${esc(s.signals.heading)}</div>${list(s.signals.items).map((x) => `<div class="box"><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}</div>
+          <div class="arrow cue fade"${on(s.signals)}></div>
+          <div class="col cue"${on(s.agent)}><div class="hd">&nbsp;</div><div class="box agent"><b>${esc(s.agent.title)}</b><span>${esc(s.agent.sub)}</span></div></div>
+          <div class="arrow cue fade"${on(s.tools)}></div>
+          <div class="col"><div class="hd cue fade"${on(s.tools)}>${esc(s.tools.heading)}</div>
+            <div class="tools">${list(s.tools.items).map((x) => `<div class="box cue"${on(x)}><b>${esc(x.name)}</b><span>${esc(x.count)}</span></div>`).join('')}</div></div>
+        </div>
+        <div class="flow">${list(s.flow).map((x, i) => `${i ? `<span class="sep cue fade"${on(x)}>&rarr;</span>` : ''}<span class="st${x.style === 'human' ? ' human' : ''} cue"${on(x)}>${esc(x.text)}</span>`).join('')}</div>
+        <div class="note cue fade"${on(s.note)}>${rich(s.note.text)}</div>
+        <div class="range cue fade"${on(s.range)}>
+          <h3>${esc(s.range.title)}</h3><p>${esc(s.range.text)}</p>
+          <div class="tiles" style="grid-template-columns:repeat(${list(s.range.tiles).length},1fr)">${list(s.range.tiles).map((x) => `<div class="tile cue"${on(x)}><b>${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div>
+          <div class="traps cue"${on(s.range.chips)}>${list(s.range.chips.items).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
+        </div>
+      </div>
+    </div>`,
+
+  demo: (s) => {
+    const st = list(s.steps), first = (i) => st[i] && st[i].beats[0];
+    const win = (i) => `${i ? ` data-on="${esc(first(i))}"` : ''}${i < st.length - 1 ? ` data-off="${esc(first(i + 1))}"` : ''}`;
+    const L = s.logs, G = s.graph, S = s.suspect, I = s.incident, CH = s.channel, F = s.fix, R = s.result;
+    const initials = (n) => String(n).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+    return `
+    <div class="demo-head">
+      <div>${heading(s)}</div>
+      <div class="clockbox"><div class="lbl">${esc(s.clock_label)}</div><div class="num" id="mclock"></div></div>
+    </div>
+    <div class="demo">
+      <div class="rail" id="rail">
+        ${st.map((x, i) => `<div class="step"><i><span>${i + 1}</span></i>${esc(x.name)}</div>`).join('')}
+        <div class="tagline">${list(s.tagline).map(esc).join('<br>')}</div>
+      </div>
+      <div class="console">
+        <div class="titlebar"><b>${esc(String(C.hud || '').replace(/^.*\*(.+)\*.*$/, '$1').toUpperCase())}</b><span id="ctitle"></span><span class="call" id="ccall"></span></div>
+        <div class="panels">
+          <div class="panel"${win(0)}>
+            <div class="app" style="--c:var(--blue)">${esc(L.app)}</div>
+            <div class="hist" id="hist"></div>
+            <div class="logwrap"><div class="loglines" id="logs"></div>
+              <div class="banners">${list(L.banners).map((b) => `<div class="banner${b.style === 'agent' ? ' agent' : ''} cue"${on(b)}><b>${esc(b.head)}</b>${esc(b.text)}</div>`).join('')}</div></div>
+          </div>
+          <div class="panel"${win(1)}>
+            <div class="app" style="--c:var(--green)">${esc(G.app)}</div>
+            <svg class="graph" viewBox="0 0 900 370" id="graph"></svg>
+          </div>
+          <div class="panel"${win(2)}>
+            <div class="app" style="--c:#fc6d26">${esc(S.app)}</div>
+            <div class="mr">
+              <div class="card" style="position:relative">
+                <div class="meta"><span class="pill gray">${esc(S.state)}</span><span>${esc(S.when)}</span><span class="pill green cue fade"${on(S.pipeline)}>${esc(S.pipeline.text)}</span></div>
+                <h4>${esc(S.title)}</h4>
+                ${diff(S.diff, ' cue')}
+                <div class="effect cue"${on(S.effect)}>${list(S.effect.lines).map(rich).join('<br>')}</div>
+                ${stamp(S.stamp, '', 'right:16px;bottom:18px')}
+              </div>
+              <div class="decoys cue"${on(S.decoys)}><h5>${esc(S.decoys.heading)}</h5>${list(S.decoys.items).map((d) => `<div class="decoy"><b>${esc(d.tla)}</b><s>${esc(d.title)}</s><br>${esc(d.why)}</div>`).join('')}</div>
+            </div>
+          </div>
+          <div class="panel"${win(3)}>
+            <div class="app" style="--c:#62d84e">${esc(I.app)}</div>
+            <div class="card">
+              <div class="meta"><b style="font:600 20px var(--mono);color:var(--text)">${esc(I.number)}</b><span class="pill red">${esc(I.priority)}</span><span class="pill amber">${esc(I.state)}</span><span>${esc(I.opened_by)}</span></div>
+              <h4>${esc(I.title)}</h4>
+              <div class="inc">${list(I.fields).map((f) => `<div${f.at ? ` class="cue fade"${on(f)}` : ''}><span>${esc(f.label)}</span><b>${esc(f.value)}</b></div>`).join('')}</div>
+            </div>
+            <div class="kids">${list(I.children).map((k) => `<div class="kid cue"${on(k)}><code>${esc(k.number)}</code><span class="pill gray">${esc(k.via)}</span><span>${esc(k.text)}</span></div>`).join('')}</div>
+          </div>
+          <div class="panel"${win(4)}>
+            <div class="app" style="--c:#7b83eb">${esc(CH.app)}</div>
+            <div class="teams">
+              <div class="members">${list(CH.members).map((m) => `<div class="member cue"${on(m)}><i>${esc(initials(m.name))}</i><div><b>${esc(m.name)}</b><span>${esc(m.why)}</span></div></div>`).join('')}</div>
+              <div class="msgs">${list(CH.messages).map((m) => `<div class="msg${m.style === 'system' ? ' sys' : ''} cue"${on(m)}>${m.from ? `<div class="who"${m.style === 'person' ? ' style="color:var(--blue)"' : ''}>${esc(m.from)}</div>` : ''}${rich(m.text)}</div>`).join('')}</div>
+            </div>
+          </div>
+          <div class="panel"${win(5)}>
+            <div class="app" style="--c:#fc6d26">${esc(F.app)}</div>
+            <div class="fix">
+              <div class="card">
+                <div class="meta"><span class="pill amber" id="fixstate">${esc(F.states[0])}</span><span class="pill gray">${esc(F.label)}</span><span>${esc(F.link)}</span></div>
+                <h4>${esc(F.title)}</h4>
+                ${diff(F.diff)}
+                <span class="mergebtn" data-on="${esc(F.merge_at)}"><span class="a">${esc(F.button[0])}</span><span class="b">${esc(F.button[1])}</span></span>
+              </div>
+              <div class="card recov">
+                <div class="lbl">${esc(F.metric.label)}</div><div class="num" id="epm"></div>
+                <div class="spark" id="spark"></div>
+                <div class="meta"><b style="font:600 15px var(--mono);color:var(--text)">${esc(F.incident)}</b><span class="pill amber" id="incstate">${esc(F.incident_states[0])}</span></div>
+              </div>
+              <svg class="cursor" data-on="${esc(F.cursor_at)}" viewBox="0 0 22 30"><path d="M2 2v22l6-5 4 9 4-2-4-9h8z" fill="#fff" stroke="#000" stroke-width="1.5"/></svg>
+              <div class="stamp green" data-on="${esc(F.closed_at)}">${esc(F.stamp)}</div>
+            </div>
+            <div class="result cue fade"${on(R)}><div><div class="big">${esc(R.big)}</div><p>${esc(R.text)}</p><div class="vs">${rich(R.versus)}</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  prod: (s) => `
+    ${heading(s)}
+    <div class="pipe" style="grid-template-columns:${list(s.pipeline).map((x) => (x.style === 'key' ? '1.15fr' : '1fr')).join(' 26px ')}">
+      ${list(s.pipeline).map((x, i) => `${i ? `<div class="arrow cue fade"${on(x)}></div>` : ''}<div class="gbox${x.style === 'key' ? ' key' : ''} cue"${on(x)}><small>${esc(x.tag)}</small><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}
+    </div>
+    <div class="guards">${list(s.guards).map((g) => `<span class="chip cue"${on(g)}><b>${esc(g.name)}</b> ${esc(g.text)}</span>`).join('')}</div>
+    <div class="phases" style="grid-template-columns:repeat(${list(s.phases).length},1fr)">${list(s.phases).map((p) => `<div class="phase cue"${on(p)}><small>${esc(p.tag)}</small><b>${esc(p.title)}</b><span>${esc(p.text)}</span></div>`).join('')}</div>`,
+
+  next: (s) => `
+    ${heading(s)}
+    <div class="missions" style="grid-template-columns:repeat(${list(s.missions).length},1fr)">${list(s.missions).map((m) => `<div class="mission cue" data-tab="${esc(m.tab)}"${on(m)}><b>${esc(m.title)}</b><span>${esc(m.text)}</span></div>`).join('')}</div>
+    <div class="also cue fade"${on(s.also)}>${rich(s.also.text)}</div>`,
+
+  end: (s) => `
+    <div class="end">
+      <div class="kicker">${esc(s.kicker)}</div>
+      <h1>${esc(s.title[0])} <span>${esc(s.title[1])}</span></h1>
+      <div class="outcomes">${list(s.outcomes).map((o) => `<span class="cue"${on(o)}>${esc(o.text)}</span>`).join('')}</div>
+      <p class="cue fade"${on(s.line)}>${esc(s.line.text)}</p>
+      ${stamp(s.stamp)}
+    </div>`,
+};
+
+/* ================= per-scene setup + per-frame drawing ================= */
+const SETUP = {
+  prob(s, st) {
+    const e = s.estate, total = +e.total || 400, rows = Math.ceil(total / COLS);
+    const dots = $('#dots'), els = [];
+    for (let i = 0; i < total; i++) { const d = document.createElement('i'); dots.appendChild(d); els.push(d); }
+    const cell = (rowFrac, col) => Math.min(total - 1, Math.floor(rowFrac * (rows - 1)) * COLS + col);
+    const culprit = cell(0.5, 12);
+    els[culprit].classList.add('culprit');
+    const spots = [[0.2, 5], [0.33, 19], [0.8, 3], [0.6, 21], [0.93, 15], [0.07, 13]];
+    const badAt = new Map(), named = list(e.labelled).slice(0, spots.length);
+    named.forEach((l, i) => badAt.set(cell(...spots[i]), at(l.at)));
+    const r = rng(2026), [t0, t1] = list(e.spread).map(at), want = Math.min(+e.failing || 0, total - 1), rest = Math.max(1, want - named.length);
+    let guard = 0;
+    while (badAt.size < want && guard++ < 5000) {
+      const i = Math.floor(r() * total);
+      if (i !== culprit && !badAt.has(i)) badAt.set(i, t0 + ((badAt.size - named.length) / rest) * (t1 - t0));
+    }
+    const place = (i) => `left:${(i % COLS) * 22 + 7}px;top:${Math.floor(i / COLS) * 22 + 7}px`;
+    named.forEach((l, i) => dots.insertAdjacentHTML('beforeend', `<span class="tag"${on(l)} style="${place(cell(...spots[i]))}">${esc(l.text)}</span>`));
+    dots.insertAdjacentHTML('beforeend', `<span class="tag ok"${on(e.culprit)} style="${place(culprit)}">${esc(e.culprit.text)}</span>`);
+    Object.assign(st, { els, badAt, culprit, litAt: at(e.culprit.at), t0: secs(s.clock.start), speed: +s.clock.speed || 1 });
+  },
+  now(s, st) {
+    let total = 0;
+    st.pts = list(s.steps).map((p) => { const m = secs(String(p.time).replace('+', '')); total = String(p.time).startsWith('+') ? total + m : m; return [at(p.at), total]; });
+  },
+  cost(s, st) {
+    st.stats = list(s.stats).map((x, i) => ({ el: $(`[data-stat="${i}"]`), t: at(x.at), parts: String(x.value).split(/(\d[\d,]*(?:\.\d+)?)/).filter((p) => p !== '') }));
+  },
+  demo(s, st) {
+    const steps = list(s.steps), b0 = steps[0].beats[0];
+    st.steps = steps.map((x, i) => ({ ...x, s: at(x.beats[0]), e: i < steps.length - 1 ? at(steps[i + 1].beats[0]) : at(x.beats[1] + '.e') + 0.2 }));
+    st.clock = list(s.clock).map(([spec, v]) => [at(spec), secs(v)]);
+    st.stepEls = $$('.step', $('#rail'));
+    // dependency graph
+    const G = s.graph, apps = list(G.failing), b1 = steps[1].beats[0];
+    const gap = apps.length > 1 ? 800 / (apps.length - 1) : 0, w = Math.min(88, Math.max(48, gap - 12));
+    let h = '';
+    apps.forEach(([tla, name], i) => {
+      const x = apps.length > 1 ? 50 + i * gap : 450;
+      h += `<path class="edge" data-on="${b1}@${(0.2 + i * 0.025).toFixed(3)}" d="M${x} 76 C ${x} 170, 450 150, 450 232"/>`;
+      h += `<g class="n" data-on="${b1}+${(i * 0.07).toFixed(2)}"><rect x="${x - w / 2}" y="16" width="${w}" height="60" rx="5"/><text x="${x}" y="43">${esc(tla)}</text><text class="s" x="${x}" y="62">${esc(name)}</text></g>`;
+    });
+    h += `<g class="cif"><rect x="330" y="234" width="240" height="74" rx="6"/><text x="450" y="266">${esc(G.upstream.tla)}</text><text class="s" x="450" y="290" text-anchor="middle">${esc(G.upstream.name)}</text></g>`;
+    h += `<rect class="ring"${on(G.common)} x="320" y="224" width="260" height="94" rx="10"/>`;
+    h += `<text class="lbl"${on(G.common)} x="596" y="262">${esc(G.common.text)}</text><text class="lbl"${on(G.green)} x="596" y="286" style="fill:var(--green)">${esc(G.green.text)}</text>`;
+    list(G.notes).forEach((n, i) => { h += `<text class="cap" x="20" y="${262 + i * 20}">${esc(n)}</text>`; });
+    h += `<text class="cap" x="450" y="346" text-anchor="middle">${esc(G.footer)}</text>`;
+    $('#graph').innerHTML = h;
+    // log lines, in the order the apps start failing
+    const L = s.logs, r = rng(7), pick = (a) => a[Math.floor(r() * a.length)], seen = new Set();
+    const errs = list(L.errors).map((e) => ({ ...e, after: +e.after || 0 })), bg = list(L.background), base = secs(L.start_time);
+    const fill = (m) => String(m).replace(/\{id\}/g, () => String(10000000 + Math.floor(r() * 89999999))).replace(/\{ms\}/g, () => String(6 + Math.floor(r() * 30)));
+    st.logs = []; st.logT0 = at(b0); st.lastLogN = -1;
+    for (let i = 0; i < 70; i++) {
+      const tau = -3.2 + i * 0.4, live = errs.filter((e) => tau >= e.after), fresh = live.find((e) => !seen.has(e.tla));
+      let row;
+      if (fresh || (live.length && r() < 0.74)) { const e = fresh || pick(live); seen.add(e.tla); row = ['ERROR', e.tla, pick(list(e.messages))]; }
+      else if (bg.length) { const b = pick(bg); row = ['INFO', b.tla, fill(b.message)]; }
+      else continue;
+      const sim = base + tau * 5, ms = pad(Math.floor(r() * 99)) + Math.floor(r() * 9);
+      st.logs.push({ tau, sev: row[0], tla: row[1], msg: row[2], ts: `${pad(sim / 3600)}:${pad((sim / 60) % 60)}:${pad(sim % 60)}.${ms}` });
+    }
+    const hist = $('#hist'), hr = rng(11);
+    for (let i = 0; i < 44; i++) hist.insertAdjacentHTML('beforeend', '<span><u></u><s></s></span>');
+    st.hist = $$('span', hist).map((el, i) => ({ el, base: 10 + hr() * 8, err: i < 14 ? 0 : Math.min(42, (i - 13) * 5 + hr() * 8) }));
+    const spark = $('#spark'), sr = rng(5);
+    for (let i = 0; i < 26; i++) spark.insertAdjacentHTML('beforeend', '<span></span>');
+    st.spark = $$('span', spark).map((el) => ({ el, h: 60 + sr() * 40 }));
+    const F = s.fix, last = steps[steps.length - 1];
+    Object.assign(st, { mergeAt: at(F.merge_at), closedAt: at(F.closed_at), drainEnd: at(last.beats[1] + '.e') - 0.6, peak: +String(F.metric.value).replace(/,/g, '') || 0 });
+  },
+};
+
+const DRAW = {
+  prob(t, sc, s, st) {
+    const sim = st.t0 + (t - sc.s) * st.speed;
+    $('#clk').textContent = `${pad((sim / 3600) % 24)}:${pad((sim / 60) % 60)}:${pad(sim % 60)}`;
+    let n = 0;
+    st.badAt.forEach((when, i) => { const bad = t >= when; if (bad) n++; st.els[i].classList.toggle('bad', bad); });
+    st.els[st.culprit].classList.toggle('lit', t >= st.litAt);
+    $('#failing').textContent = n;
+  },
+  now(t, sc, s, st) {
+    let v = 0, prev = 0;
+    for (const [a, target] of st.pts) { if (t >= a) v = prev + (target - prev) * ease((t - a) / 0.8); prev = target; }
+    v = Math.round(v);
+    $('#elapsed').textContent = `${pad(v / 60)}:${pad(v % 60)}`;
+  },
+  cost(t, sc, s, st) {
+    for (const x of st.stats) {
+      const k = ease((t - x.t) / 0.9);
+      let nth = 0;
+      x.el.innerHTML = x.parts.map((p) => {
+        if (!/^\d/.test(p)) return `<small>${esc(p.trim())}</small>${/\s$/.test(p) ? ' ' : ''}`;
+        const dec = (p.split('.')[1] || '').length, target = parseFloat(p.replace(/,/g, ''));
+        let out = (target * k).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+        if (nth++ > 0) out = out.padStart(p.length, '0');
+        return out;
+      }).join('');
+    }
+  },
+  demo(t, sc, s, st) {
+    const c = st.clock;
+    let m = c.length ? c[c.length - 1][1] : 0;
+    if (c.length && t <= c[0][0]) m = c[0][1];
+    else for (let i = 1; i < c.length; i++) if (t <= c[i][0]) { const [a, va] = c[i - 1], [b, vb] = c[i]; m = va + (vb - va) * ((t - a) / (b - a || 1)); break; }
+    $('#mclock').textContent = `${s.clock_prefix || ''}${pad(m / 60)}:${pad(m % 60)}`;
+    let cur = -1;
+    st.steps.forEach((x, i) => {
+      const isCur = t >= x.s && t < x.e;
+      if (isCur) cur = i;
+      st.stepEls[i].classList.toggle('done', t >= x.e);
+      st.stepEls[i].classList.toggle('cur', isCur);
+    });
+    $('#ctitle').textContent = cur < 0 ? (t < st.steps[0].s ? s.idle.before : s.idle.after) : st.steps[cur].status;
+    $('#ccall').textContent = cur < 0 ? '' : st.steps[cur].calls;
+    const tau = t - st.logT0, n = st.logs.filter((l) => l.tau <= tau).length;
+    if (n !== st.lastLogN) {
+      st.lastLogN = n;
+      $('#logs').innerHTML = st.logs.slice(Math.max(0, n - 10), n).map((l) => `<div class="${l.sev === 'ERROR' ? 'e' : ''}"><span class="ts">${l.ts}</span><span class="${l.sev}">${l.sev}</span><span class="tla">${esc(l.tla)}</span><span class="lm">${esc(l.msg)}</span></div>`).join('');
+    }
+    const head = 14 + tau / 0.42;
+    st.hist.forEach((h, i) => { const vis = clamp(head - i); h.el.firstChild.style.height = h.err * vis + 'px'; h.el.lastChild.style.height = h.base * (i < 14 ? 1 : vis) + 'px'; });
+    const F = s.fix, f = 1 - ease((t - st.mergeAt - 0.15) / Math.max(0.5, st.drainEnd - st.mergeAt - 0.15)), clear = f < 0.08;
+    st.spark.forEach((b) => { b.el.style.height = Math.max(2, b.h * f) + '%'; b.el.style.background = clear ? 'var(--green)' : ''; });
+    $('#epm').textContent = Math.round(st.peak * f).toLocaleString('en-US');
+    $('#epm').style.color = clear ? 'var(--green)' : 'var(--red)';
+    const merged = t >= st.mergeAt, closed = t >= st.closedAt;
+    $('#fixstate').textContent = F.states[merged ? 1 : 0]; $('#fixstate').className = 'pill ' + (merged ? 'green' : 'amber');
+    $('#incstate').textContent = F.incident_states[closed ? 1 : 0]; $('#incstate').className = 'pill ' + (closed ? 'green' : 'amber');
+  },
+};
+
+/* ================= build the stage ================= */
+$('#hudL').innerHTML = rich(C.hud);
+const scenes = TL.scenes.filter((s) => T[s.id] && C.scenes[s.id]).map((s) => {
+  const el = document.createElement('section');
+  el.className = 'scene' + (s.id === 'now' ? ' now-wrap' : '');
+  el.dataset.scene = s.id;
+  el.innerHTML = T[s.id](C.scenes[s.id]);
+  $('#scenes').appendChild(el);
+  return { ...s, el, content: C.scenes[s.id], state: {} };
+});
+scenes.forEach((sc) => SETUP[sc.id] && SETUP[sc.id](sc.content, sc.state));
+
+const cues = $$('[data-on],[data-off]').map((el) => ({ el, on: el.dataset.on ? at(el.dataset.on) : -1, off: el.dataset.off ? at(el.dataset.off) : 1e9, st: null }));
+const beatList = Object.values(B).sort((a, b) => a.s - b.s);
+const cap = $('#cap'), stage = $('#stage'), hudR = $('#hudR');
+let lastScene = null, lastCap = null;
+
+function render(t) {
+  let sc = scenes[scenes.length - 1];
+  for (const s of scenes) if (t < s.e) { sc = s; break; }
+  if (sc && sc !== lastScene) {
+    scenes.forEach((s) => s.el.classList.toggle('active', s === sc));
+    lastScene = sc;
+    hudR.textContent = sc.title;
+    $$('#chapters button').forEach((b, i) => b.classList.toggle('cur', scenes[i] === sc));
+  }
+  for (const c of cues) { const live = t >= c.on && t < c.off; if (live !== c.st) { c.st = live; c.el.classList.toggle('on', live); } }
+  const beat = beatList.find((b) => t >= b.s - 0.12 && t < b.e + 0.3);
+  if (beat !== lastCap) { lastCap = beat; cap.classList.toggle('on', !!beat); if (beat) cap.textContent = beat.text; }
+  if (sc && DRAW[sc.id]) DRAW[sc.id](t, sc, sc.content, sc.state);
+  seekEl.value = t; seekEl.style.setProperty('--p', (t / D) * 100 + '%');
+  timeEl.textContent = `${mmss(t)} / ${mmss(D)}`;
+}
+
+/* ---------- clock: the voice-over is the master; a timer stands in if audio can't play ---------- */
+const audio = $('#vo'), seekEl = $('#seek'), timeEl = $('#time'), poster = $('#poster'), bPlay = $('#bPlay');
+let playing = false, fallback = false, fbBase = 0, fbStart = 0, shown = -1;
+seekEl.max = D;
+audio.addEventListener('error', () => { if (!fallback) { fallback = true; fbBase = 0; } });
+const now = () => clamp(fallback ? (playing ? fbBase + (performance.now() - fbStart) / 1000 : fbBase) : audio.currentTime, 0, D);
+function setPlaying(p) { playing = p; bPlay.textContent = p ? 'PAUSE' : 'PLAY'; bPlay.setAttribute('aria-label', p ? 'Pause' : 'Play'); if (p) poster.hidden = true; }
+function useTimer() { fallback = true; fbBase = clamp(audio.currentTime || fbBase, 0, D); fbStart = performance.now(); setPlaying(true); }
+function play() {
+  if (now() >= D - 0.05) seek(0);
+  if (fallback) { fbStart = performance.now(); setPlaying(true); return; }
+  const p = audio.play();
+  if (p && p.then) p.then(() => setPlaying(true)).catch(useTimer); else setPlaying(true);
+}
+function pause() { if (fallback) fbBase = now(); else audio.pause(); setPlaying(false); }
+function seek(t) { t = clamp(t, 0, D); if (fallback) { fbBase = t; fbStart = performance.now(); } else { try { audio.currentTime = t; } catch (e) { fallback = true; fbBase = t; } } shown = -1; }
+const toggle = () => (playing ? pause() : play());
+function chapter(delta) { const i = scenes.indexOf(lastScene); const j = clamp(i + delta, 0, scenes.length - 1); seek(delta < 0 && now() - scenes[i].s > 2 ? scenes[i].s : scenes[j].s); }
+audio.addEventListener('ended', () => setPlaying(false));
+
+function frame() {
+  const t = now();
+  if (playing && t >= D - 0.02) { pause(); poster.hidden = false; $('#posterLbl').textContent = C.player.replay; }
+  if (t !== shown) { shown = t; render(t); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- transport ---------- */
+const chapters = $('#chapters'), seekWrap = $('#seekWrap');
+scenes.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.innerHTML = `<b>${mmss(s.s)}</b>${esc(s.title)}`;
+  b.onclick = () => { seek(s.s); if (!playing) play(); };
+  chapters.appendChild(b);
+  if (i) seekWrap.insertAdjacentHTML('beforeend', `<i class="tick" style="left:calc(${(s.s / D) * 100}% - 1px)"></i>`);
+});
+poster.onclick = play; bPlay.onclick = toggle;
+$('#screen').addEventListener('click', (e) => { if (e.target.closest('.poster')) return; toggle(); });
+seekEl.addEventListener('input', () => seek(parseFloat(seekEl.value)));
+const bCC = $('#bCC'), bMute = $('#bMute'), player = $('#player');
+function press(btn, state) { btn.setAttribute('aria-pressed', state); }
+bCC.onclick = () => { const off = stage.classList.toggle('nocc'); press(bCC, !off); };
+bMute.onclick = () => { audio.muted = !audio.muted; press(bMute, !audio.muted); };
+$('#bFS').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (player.requestFullscreen) player.requestFullscreen().catch(() => {}); };
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea') && e.key !== ' ') return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); toggle(); }
+  else if (k === 'arrowright') seek(now() + 5);
+  else if (k === 'arrowleft') seek(now() - 5);
+  else if (k === 'n') chapter(1);
+  else if (k === 'p') chapter(-1);
+  else if (k === 'c') bCC.click();
+  else if (k === 'm') bMute.click();
+  else if (k === 'f') $('#bFS').click();
+});
+const fit = () => { stage.style.transform = `scale(${$('#screen').clientWidth / 1280})`; };
+new ResizeObserver(fit).observe($('#screen')); fit();
+// Used by render.py: jump to a time on the timer clock, without the audio element.
+window.__seek = (t) => { fallback = true; seek(t); render(now()); };
+// At rest the title card shows complete, behind the start button.
+render(0);
+if (scenes[0]) {
+  $$('[data-on]', scenes[0].el).forEach((el) => el.classList.add('on'));
+  cues.forEach((c) => { if (scenes[0].el.contains(c.el)) c.st = true; });
+}
+$('#posterLbl').textContent = `${C.player.start} · ${mmss(D)} · sound on`;
+shown = 0;
+requestAnimationFrame(frame);
+</script>
