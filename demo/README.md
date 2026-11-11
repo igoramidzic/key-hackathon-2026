@@ -1,6 +1,6 @@
 # Demo briefing
 
-A 4½-minute narrated, self-playing presentation of the project ("Operation Nightwatch").
+A five-minute narrated, self-playing presentation of the project ("Operation NightWatch").
 
 | File | What it is | Edit it? |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ points at a narration line that does not exist.
 
 ## Things worth knowing
 
-- **Numbers that are spoken and shown** (the four metrics, "under three minutes", "four hundred
+- **Numbers that are spoken and shown** (the four resolve times, "under three minutes", "four hundred
   applications") are in two places: the `narration` line and the `screen` block. They are marked
   `<- spoken too` in `content.yaml`. Change both.
 - **Timing follows the voice.** Each on-screen item has `at: <beat>`, so rewriting a narration
