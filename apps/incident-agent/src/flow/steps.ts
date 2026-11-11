@@ -12,6 +12,7 @@ import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
+import { declareIncident, linkAlerts, syncIncidentApp } from './incident';
 import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
 import { triage } from './triage';
@@ -142,8 +143,30 @@ export function triaged(deps: FlowDeps): StepFn {
       );
     }
     startDeepRca(deps, ctx, c);
-    return { wait: Math.max(2_000, 5_000 / deps.config.speed) };
+
+    // A case split off another one only gets an incident if its app is still failing.
+    if (c.split_from && !(c.scope?.affected_apps ?? []).some((a) => a.error_count > 0)) {
+      return { next: 'abandoned', why: `split from ${c.split_from} and no longer failing` };
+    }
+
+    // #18: declare the incident and link the alerts.
+    await declareIncident(deps, c);
+    await linkAlerts(deps, c);
+    return { next: 'declared', why: `${c.incident!.number} opened` };
   };
+}
+
+/**
+ * Upkeep every phase after declaring runs first: link new alerts, re-point the incident when the
+ * deep RCA names a different culprit. Cheap and idempotent.
+ */
+export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
+  if (!c.incident) return;
+  const fresh = c.signals.some(
+    (s) => s.source === 'alert' && !c.alerts.some((a) => a.id === s.alert_id),
+  );
+  if (fresh) await linkAlerts(deps, c);
+  await syncIncidentApp(deps, c);
 }
 
 export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
