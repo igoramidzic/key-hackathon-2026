@@ -28,6 +28,7 @@ import { errorMessage, hhmm } from '../util';
 import { flush, postNow, queue, wasAnnounced } from './announce';
 import { assembleChannel, notInvited, syncMembers, upstreamSuspect } from './assemble';
 import { groupCallers } from './callers';
+import { chatHooks, pollChat } from './chat';
 import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
@@ -180,7 +181,7 @@ export function triaged(deps: FlowDeps): StepFn {
  * Upkeep every phase after declaring runs first: link new alerts, re-point the incident when the
  * deep RCA names a different culprit. Cheap and idempotent.
  */
-export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
+export async function upkeep(deps: FlowDeps, c: Case, ctx?: StepContext): Promise<void> {
   if (!c.incident) return;
   const fresh = c.signals.some(
     (s) => s.source === 'alert' && !c.alerts.some((a) => a.id === s.alert_id),
@@ -201,6 +202,22 @@ export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
         queue(deps, c, `callers:${added.map((a) => a.number).join(',')}`, callersGrouped(c, added));
     } catch (err) {
       deps.log.warn(`${c.id} caller grouping failed: ${errorMessage(err)}`);
+    }
+  }
+  // #21: read what humans wrote in the channel and react.
+  if (ctx && c.channel && wasAnnounced(c, 'briefing')) {
+    const last = c.milestones.chat_polled ? Date.parse(c.milestones.chat_polled) : 0;
+    if (Date.now() - last >= Math.max(2_000, 8_000 / deps.config.speed)) {
+      c.milestones.chat_polled = new Date().toISOString();
+      try {
+        await pollChat(
+          deps,
+          c,
+          chatHooks(deps, ctx, (cc, hint) => startDeepRca(deps, ctx, cc, { force: true, hint })),
+        );
+      } catch (err) {
+        deps.log.warn(`${c.id} chat poll failed: ${errorMessage(err)}`);
+      }
     }
   }
   // #20: status updates for what changed since the briefing.
@@ -261,8 +278,8 @@ export function announceChanges(deps: FlowDeps, c: Case): void {
 
 /** assembled → briefed: the first message in the channel (#20). */
 export function assembled(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     const pending = await notInvited(deps, c);
     await postNow(
       deps,
@@ -332,7 +349,7 @@ export function startFix(deps: FlowDeps, ctx: StepContext, c: Case, force = fals
 /** investigating: deep RCA in the background; once it's confident, write the fix (#22). */
 export function investigating(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
-    await upkeep(deps, c);
+    await upkeep(deps, c, ctx);
     if (c.fix_mr) return { next: 'fix_proposed', why: `${c.fix_mr.project}!${c.fix_mr.iid}` };
     if (fixReadyToStart(deps, c)) startFix(deps, ctx, c);
     else startDeepRca(deps, ctx, c);
@@ -342,8 +359,8 @@ export function investigating(deps: FlowDeps): StepFn {
 
 /** fix_proposed → awaiting_merge: ask the owners to review and merge (#22). */
 export function fixProposed(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     const who = await reviewers(deps, c);
     await flush(deps, c, true);
     await postNow(
@@ -362,8 +379,8 @@ export function fixProposed(deps: FlowDeps): StepFn {
 
 /** awaiting_merge → shipping: a human merges the fix in GitLab (#23). */
 export function awaitingMerge(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     const state = await checkMerge(deps, c);
     if (state === 'merged')
       return { next: 'shipping', why: `${c.fix_mr!.project}!${c.fix_mr!.iid} merged` };
@@ -392,8 +409,8 @@ export function awaitingMerge(deps: FlowDeps): StepFn {
 
 /** shipping → verifying: emergency change, KBR promotes it (#23). */
 export function shipping(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     const poll = { wait: Math.max(2_000, 5_000 / deps.config.speed) };
     if (!c.change) {
       await raiseChange(deps, c);
@@ -430,7 +447,7 @@ export function shipping(deps: FlowDeps): StepFn {
 /** verifying → resolution_drafted (or resolved): confirm recovery, then the resolution (#24). */
 export function verifying(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
-    await upkeep(deps, c);
+    await upkeep(deps, c, ctx);
     const r = await verifyRecovery(deps, c);
     if (r.status === 'healthy') {
       const link = await afterLink(deps, c);
@@ -478,8 +495,8 @@ export function verifying(deps: FlowDeps): StepFn {
 
 /** resolution_drafted → resolved: a human reviews and resolves the incident (#24). */
 export function resolutionDrafted(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     const inc = await deps.mcp.call<{ state: string; resolved_by?: { username: string } | null }>(
       'get_incident',
       { number: c.incident!.number },
@@ -507,8 +524,8 @@ export function resolutionDrafted(deps: FlowDeps): StepFn {
 
 /** declared → assembled: the incident channel with the right people (#19). */
 export function declared(deps: FlowDeps): StepFn {
-  return async (c) => {
-    await upkeep(deps, c);
+  return async (c, ctx) => {
+    await upkeep(deps, c, ctx);
     await assembleChannel(deps, c);
     c.milestones.members_key = membershipKey(deps, c);
     return { next: 'assembled', why: `#${c.channel!.name} with ${c.members.length} people` };
