@@ -13,7 +13,10 @@ import { CaseStore } from './cases/store';
 import { printChecks, runChecks } from './check';
 import { ConfigError, loadConfig } from './config';
 import { logger, setLogLevel } from './log';
+import { McpGateway } from './mcp/gateway';
+import { AlertPoller } from './watchers/alerts';
 import { LogWatcher } from './watchers/logWatcher';
+import { httpTail, ServiceNowFeed } from './watchers/serviceNowFeed';
 
 const USAGE = `Usage: pnpm agent [command]
 
@@ -69,12 +72,32 @@ async function watch(config: ReturnType<typeof loadConfig>): Promise<number> {
   const stop = new AbortController();
   process.once('SIGINT', () => stop.abort());
   process.once('SIGTERM', () => stop.abort());
+  const mcp = new McpGateway({ urls: config.mcp, dryRun: true });
   const logs = new LogWatcher(config, logger('logs'), {
     onSignal: () => {},
-    onReset: () => log.warn('world reset'),
+    onReset: () => log.warn('world reset (log stream)'),
   });
-  log.info('watching; Ctrl-C to stop');
-  await logs.run(stop.signal);
+  const feed = new ServiceNowFeed(
+    httpTail(config.serviceNowApi),
+    mcp,
+    config.identity,
+    logger('snow'),
+    {
+      onHuman: (s) =>
+        log.info(
+          `human ${s.incident_number} via ${s.contact_type} from ${s.caller ?? '?'} (${s.location ?? '?'}): ${s.short_description}`,
+        ),
+      onIncidentEvent: () => {},
+      onReset: () => log.warn('world reset (ServiceNow epoch)'),
+      owns: () => false,
+    },
+  );
+  const alerts = new AlertPoller(mcp, logger('alerts'), (s) =>
+    log.info(`alert ${s.alert_id} ${s.severity} ${s.app_tla}/${s.service}: ${s.description}`),
+  );
+  log.info('watching logs, ServiceNow and Moogsoft (no actions); Ctrl-C to stop');
+  await Promise.all([logs.run(stop.signal), feed.run(stop.signal), alerts.run(stop.signal)]);
+  await mcp.close();
   return 0;
 }
 
