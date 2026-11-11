@@ -180,6 +180,7 @@ export function endpoints(target: Target) {
   return {
     mcp: (s: SystemName) => (local ? `http://localhost:${PORTS[s].mcp}/mcp` : `${h}/${s}/mcp`),
     logsApi: local ? `http://localhost:${PORTS.logs.api}` : `${h}/logs`,
+    servicenowApi: local ? `http://localhost:${PORTS.servicenow.api}` : `${h}/servicenow`,
     simApi: local ? `http://localhost:${PORTS.simulator.api}` : h,
     controlPanel: local ? `http://localhost:${PORTS.simulator.web}` : h,
   };

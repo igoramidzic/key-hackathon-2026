@@ -1,6 +1,10 @@
 import type { Health, Page, ResetResult } from '../common';
-import { createHttp, type QueryValue } from '../http';
+import { createHttp, type QueryValue, toQuery } from '../http';
 import type {
+  ActivityEvent,
+  ActivityStreamQuery,
+  ActivityTailQuery,
+  ActivityTailResult,
   AppDetail,
   AppListQuery,
   AppSummary,
@@ -80,6 +84,52 @@ export function createServiceNowClient(baseUrl: string) {
     /** Simulator only (KBR): records a release starting, succeeding or failing. */
     recordRelease: (numberOrSysId: string, body: ChangeReleaseInput) =>
       http.post<ChangeRequest>(`/admin/change_requests/${seg(numberOrSysId)}/release`, body),
+
+    // Activity feed: every journal entry on incidents and change requests, in order
+    /** `GET /api/activity/tail`: events after a seq cursor; can long-poll (`wait_seconds`). */
+    activityTail: (query: ActivityTailQuery = {}) =>
+      http.get<ActivityTailResult>('/api/activity/tail', q(query)),
+    /**
+     * URL of the Server-Sent Events stream: `event: activity`, `id: <seq>`, data =
+     * ActivityEvent JSON. Starts live (or after `after_seq` / `Last-Event-ID`); `: heartbeat`
+     * comments every 15s; `event: reset` when the API is reset (seqs restart).
+     */
+    activityStreamUrl: (query: ActivityStreamQuery = {}) =>
+      `${baseUrl}/api/activity/stream${toQuery(q(query))}`,
+    /**
+     * Follows the feed by long-polling (no EventSource needed): yields events in seq order,
+     * starting live, or after `after_seq` (0 replays history). Resyncs to live after a reset.
+     * Stops when `signal` aborts.
+     */
+    followActivity: async function* (
+      query: Omit<ActivityTailQuery, 'wait_seconds'> = {},
+      opts: { signal?: AbortSignal; wait_seconds?: number } = {},
+    ): AsyncGenerator<ActivityEvent> {
+      const { after_seq, ...filters } = query;
+      const wait_seconds = opts.wait_seconds ?? 25;
+      let cursor = after_seq;
+      let epoch: number | undefined;
+      if (cursor === undefined) {
+        const head = await http.get<ActivityTailResult>('/api/activity/tail', q({ limit: 1 }));
+        cursor = head.last_seq;
+        epoch = head.epoch;
+      }
+      while (!opts.signal?.aborted) {
+        const r: ActivityTailResult = await http.get<ActivityTailResult>(
+          '/api/activity/tail',
+          q({ ...filters, after_seq: cursor, wait_seconds }),
+        );
+        if (epoch !== undefined && r.epoch !== epoch) {
+          // World reset: seqs restarted. Skip the reseeded baseline, carry on live.
+          epoch = r.epoch;
+          cursor = r.last_seq;
+          continue;
+        }
+        epoch = r.epoch;
+        for (const event of r.items) yield event;
+        cursor = r.cursor;
+      }
+    },
 
     // CMDB
     listApps: (query: AppListQuery = {}) => http.get<Page<AppSummary>>('/api/apps', q(query)),

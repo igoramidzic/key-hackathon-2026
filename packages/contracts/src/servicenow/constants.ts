@@ -1,5 +1,7 @@
 import { URLS } from '../config';
 import type {
+  ActivityKind,
+  ActivityTable,
   ChangeCloseCode,
   ChangeRisk,
   ChangeState,
@@ -218,3 +220,16 @@ export function parseMergeRequestRef(
   if (ref) return { project: ref[1]!, iid: Number(ref[2]) };
   return null;
 }
+
+export const ACTIVITY_TABLES: ActivityTable[] = ['incident', 'change_request'];
+
+export const ACTIVITY_KINDS: ActivityKind[] = [
+  'incident.opened',
+  'incident.updated',
+  'incident.work_note',
+  'incident.comment',
+  'change_request.opened',
+  'change_request.updated',
+  'change_request.work_note',
+  'change_request.comment',
+];

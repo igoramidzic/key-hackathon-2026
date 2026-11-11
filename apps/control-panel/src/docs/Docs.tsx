@@ -135,7 +135,7 @@ function DocsSidebar() {
           </NavLink>
           <NavLink to="/docs/stream" className={sideLink}>
             <Radio className="size-3.5" />
-            Log stream &amp; simulator API
+            Live streams &amp; simulator API
           </NavLink>
         </nav>
       )}
@@ -194,7 +194,7 @@ function DocsMobileNav() {
       aria-label="Docs page"
     >
       <option value="/docs">Getting started</option>
-      <option value="/docs/stream">Log stream &amp; simulator API</option>
+      <option value="/docs/stream">Live streams &amp; simulator API</option>
       {servers.map(({ system, label, query }) => (
         <optgroup key={system} label={label}>
           <option value={`/docs/${system}`}>{label} overview</option>
@@ -222,7 +222,7 @@ const WORKFLOW: { step: string; goal: string; tools: [SystemName, string][]; not
       ['logs', 'summarize_errors'],
       ['servicenow', 'list_incidents'],
     ],
-    note: 'Or run your own rules on the live log stream. In the help-desk scenario the trigger is a phone incident in ServiceNow.',
+    note: 'Or run your own rules on the live log stream. In the help-desk scenario the trigger is a phone incident in ServiceNow: watch for it on the ServiceNow activity feed.',
   },
   {
     step: 'Scope',
@@ -300,10 +300,10 @@ function Overview() {
       <div className="grid gap-2">
         <h1 className="font-semibold text-2xl tracking-tight">Build the incident agent</h1>
         <p className="max-w-3xl text-base text-muted-foreground">
-          Your agent works the simulated estate through four MCP servers, plus an optional live log
-          stream for rule-based detection. The tool reference in the sidebar is read live from the
-          running servers, so it always matches what your agent will see. Every tool has a{' '}
-          <strong className="text-foreground">Try it</strong> console.
+          Your agent works the simulated estate through four MCP servers, plus optional live streams
+          (logs and ServiceNow activity) for rule-based detection. The tool reference in the sidebar
+          is read live from the running servers, so it always matches what your agent will see.
+          Every tool has a <strong className="text-foreground">Try it</strong> console.
         </p>
       </div>
 

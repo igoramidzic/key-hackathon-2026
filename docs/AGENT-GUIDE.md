@@ -4,7 +4,8 @@ How to build an agent that resolves incidents in the simulated world. The world 
 the agent can live anywhere (a separate repo, a folder here, a notebook). It needs only:
 
 1. The four **MCP servers** (logs, servicenow, gitlab, teams) for investigation and actions.
-2. Optionally the **live log stream** (SSE) if you build rule-based detection.
+2. Optionally the **live log stream** and **ServiceNow activity feed** (SSE or long-poll) if you
+   build a detector that watches the world and kicks off the agent.
 3. The **simulator API** for your own test harness: trigger, reset, and check recovery. Never
    expose it to the agent, because it serves the answer key.
 
@@ -196,7 +197,39 @@ severity>=ERROR AND labels.app_tla=("OLB" OR "MBL") AND jsonPayload.message:"cus
 resource.labels.container_name="payments-api" httpRequest.status>=500 -"client disconnected"
 ```
 
-## 6. Rules for the agent
+## 6. ServiceNow activity feed (incidents from people, not logs)
+
+Every journal entry on an incident or change request (opened, field changes, work notes,
+comments), in the order ServiceNow recorded it. Use it to react to phone, email and chat
+incidents from bankers without polling `list_incidents`.
+
+```bash
+# Long-poll: blocks up to 30 s, returns as soon as something matches. Pass back `cursor`.
+curl -s "http://localhost:4002/api/activity/tail?after_seq=0&wait_seconds=30&kind=incident.opened&contact_type=phone,email,chat"
+# Or Server-Sent Events, one `activity` event per entry, `id` = seq
+curl -N "http://localhost:4002/api/activity/stream?table=incident"
+```
+
+Filters (comma-separated): `table` (`incident`, `change_request`), `kind` (`incident.opened`,
+`incident.updated`, `incident.work_note`, `incident.comment`, and the same for
+`change_request.*`), `app_tla`, `contact_type`. Each event has `seq`, `kind`, `number`,
+`app_tla`, `at`, the journal `entry` (with `changes` for field updates), and the record as it is
+now (`incident` or `change_request` summary). Omit `after_seq` to start live; `after_seq=0`
+replays seeded history. The tail returns an `epoch` that changes when the world is reset (seqs
+restart); the stream sends `event: reset`. Hosted: `https://hackathon-incident-lab.kualia.workers.dev/servicenow`.
+
+From TypeScript, `@sim/contracts` has a long-poll follower for both tails:
+
+```ts
+import { createServiceNowClient } from '@sim/contracts/servicenow';
+
+const sn = createServiceNowClient('http://localhost:4002');
+for await (const ev of sn.followActivity({ kind: 'incident.opened', contact_type: 'phone,email,chat' })) {
+  console.log(ev.number, ev.incident?.short_description);
+}
+```
+
+## 7. Rules for the agent
 
 - Find the root cause from the systems, not from `packages/scenarios`, the README spoilers or the
   simulator API. Don't hardcode TLAs, MR titles or fixes.

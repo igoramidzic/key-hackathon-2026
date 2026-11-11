@@ -40,6 +40,28 @@ const FIELDS: [string, string][] = [
   ['trace', 'Ties one request together across services'],
 ];
 
+const ACTIVITY_PARAMS: [string, string][] = [
+  ['table', 'incident, change_request (comma separated)'],
+  [
+    'kind',
+    'incident.opened, incident.updated, incident.work_note, incident.comment, change_request.* (comma separated)',
+  ],
+  ['app_tla', 'Only these apps, e.g. CIF,OLB'],
+  ['contact_type', 'Incidents opened via phone, email, chat, self_service, walk_in or monitoring'],
+  ['after_seq', 'Resume after this seq (same as Last-Event-ID); 0 replays seeded history'],
+];
+
+const ACTIVITY_FIELDS: [string, string][] = [
+  ['seq', 'Monotonic across incidents and change requests; also the SSE event id'],
+  ['kind', 'e.g. incident.opened, incident.updated, incident.comment'],
+  ['number', 'INC… or CHG… number'],
+  ['app_tla', 'App TLA of the record, or null'],
+  ['at', 'When the journal entry was recorded (ISO 8601, UTC)'],
+  ['entry', '{ type, text, author, changes } the journal entry; changes lists field updates'],
+  ['incident', 'Incident summary as it is now (state, priority, caller, contact_type, web_url)'],
+  ['change_request', 'Change request summary as it is now, for change events'],
+];
+
 const SIM_API: [string, string, string][] = [
   [
     'GET',
@@ -66,13 +88,15 @@ export function StreamPage() {
   const { target } = useTarget();
   const ep = endpoints(target);
   const streamUrl = `${ep.logsApi}/api/logs/stream`;
+  const activityUrl = `${ep.servicenowApi}/api/activity/stream`;
   return (
     <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-10">
       <div className="grid gap-2">
-        <h1 className="font-semibold text-2xl tracking-tight">Log stream &amp; simulator API</h1>
+        <h1 className="font-semibold text-2xl tracking-tight">Live streams &amp; simulator API</h1>
         <p className="max-w-3xl text-base text-muted-foreground">
-          Plain HTTP endpoints next to the MCP servers: a live log feed for rule-based detection,
-          and the simulator API for driving test runs from a harness.
+          Plain HTTP endpoints next to the MCP servers: live log and ServiceNow activity feeds for a
+          detector that decides when to start the agent, and the simulator API for driving test runs
+          from a harness.
         </p>
       </div>
 
@@ -136,6 +160,64 @@ resource.labels.container_name="payments-api" httpRequest.status>=500 -"client d
             The same syntax works in the <InlineCode>search_logs</InlineCode> tool and the Logs
             Explorer UI.
           </p>
+        </div>
+      </Section>
+
+      <Section
+        title="ServiceNow activity feed"
+        description="Every journal entry on incidents and change requests (opened, field changes, work notes, comments) in the order ServiceNow recorded it. Use it to react to incidents raised by people (bankers phoning the service desk), which never show up in the logs. Same mechanics as the log stream: SSE or long-poll, resumable by seq, 'reset' event on world reset."
+      >
+        <SnippetTabs
+          tabs={[
+            {
+              id: 'curl',
+              label: 'curl',
+              language: 'bash',
+              code: `curl -N "${activityUrl}?kind=incident.opened&contact_type=phone,email,chat"`,
+            },
+            {
+              id: 'ts',
+              label: 'TypeScript',
+              language: 'typescript',
+              code: `import { createServiceNowClient } from '@sim/contracts/servicenow';
+
+// Long-polls under the hood: works in Node without an EventSource library.
+const sn = createServiceNowClient('${ep.servicenowApi}');
+for await (const ev of sn.followActivity({ kind: 'incident.opened', contact_type: 'phone,email,chat' })) {
+  console.log(ev.number, ev.incident?.short_description);
+}`,
+            },
+            {
+              id: 'py',
+              label: 'Python',
+              language: 'python',
+              code: `import requests
+
+url = "${ep.servicenowApi}/api/activity/tail"
+head = requests.get(url, params={"limit": 1}).json()
+cursor, epoch = head["last_seq"], head["epoch"]  # start live
+while True:
+    r = requests.get(url, params={"after_seq": cursor, "wait_seconds": 30,
+                                  "kind": "incident.opened", "contact_type": "phone,email,chat"}).json()
+    if r["epoch"] != epoch:  # world reset: seqs restarted, carry on live
+        cursor, epoch = r["last_seq"], r["epoch"]
+        continue
+    for ev in r["items"]:
+        print(ev["number"], ev["incident"]["short_description"])
+    cursor = r["cursor"]`,
+            },
+            {
+              id: 'poll',
+              label: 'Long-poll',
+              language: 'bash',
+              code: `curl -s "${ep.servicenowApi}/api/activity/tail?after_seq=0&wait_seconds=30&table=incident"   # then pass the returned cursor`,
+            },
+          ]}
+        />
+        <LiveActivity />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ParamCard title="Query parameters (all optional)" rows={ACTIVITY_PARAMS} />
+          <ParamCard title="Event fields" rows={ACTIVITY_FIELDS} />
         </div>
       </Section>
 
@@ -294,6 +376,111 @@ function LiveTail() {
                 {e.resource?.labels?.container_name}
               </span>
               <span className="truncate">{e.jsonPayload?.message}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
+interface ActivityEvent {
+  seq: number;
+  kind: string;
+  number: string;
+  app_tla: string | null;
+  at: string;
+  entry: { type: string; text: string; author?: { username: string } };
+  incident?: { short_description: string; contact_type: string; priority: number };
+  change_request?: { short_description: string };
+}
+
+const KIND_CLASS: Record<string, string> = {
+  'incident.opened': 'text-warning',
+  'change_request.opened': 'text-warning',
+};
+
+/** Connects to this host's ServiceNow activity stream and shows the newest events. */
+function LiveActivity() {
+  const [on, setOn] = useState(false);
+  const [table, setTable] = useState('incident');
+  const [opened, setOpened] = useState(false);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [state, setState] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle');
+
+  useEffect(() => {
+    if (!on) {
+      setState('idle');
+      return;
+    }
+    const params = new URLSearchParams();
+    if (table) params.set('table', table);
+    if (opened) params.set('kind', 'incident.opened,change_request.opened');
+    const es = new EventSource(`${URLS.servicenow.api}/api/activity/stream?${params}`);
+    setState('connecting');
+    es.onopen = () => setState('live');
+    es.onerror = () => setState('error');
+    es.addEventListener('activity', (e) => {
+      const ev = JSON.parse((e as MessageEvent).data) as ActivityEvent;
+      setEvents((prev) => [ev, ...prev].slice(0, 40));
+    });
+    es.addEventListener('reset', () => setEvents([]));
+    return () => es.close();
+  }, [on, table, opened]);
+
+  return (
+    <Card className="gap-3 py-3">
+      <div className="flex flex-wrap items-center gap-2 px-4">
+        <span className="mr-auto font-medium text-sm">Watch it live (this host)</span>
+        <NativeSelect
+          value={table}
+          onChange={(e) => setTable(e.target.value)}
+          className="h-7 w-40 text-xs"
+          aria-label="Table"
+        >
+          <option value="incident">Incidents</option>
+          <option value="change_request">Change requests</option>
+          <option value="">Both</option>
+        </NativeSelect>
+        <NativeSelect
+          value={opened ? 'opened' : 'all'}
+          onChange={(e) => setOpened(e.target.value === 'opened')}
+          className="h-7 w-40 text-xs"
+          aria-label="Kinds"
+        >
+          <option value="all">All activity</option>
+          <option value="opened">Newly opened only</option>
+        </NativeSelect>
+        <Button size="sm" variant={on ? 'outline' : 'default'} onClick={() => setOn(!on)}>
+          {on ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+          {on ? 'Stop' : 'Connect'}
+        </Button>
+      </div>
+      <div className="mx-4 h-64 overflow-auto border bg-muted/30 font-mono text-[11.5px] leading-5">
+        {events.length === 0 ? (
+          <div className="grid h-full place-items-center px-4 text-center text-muted-foreground">
+            {state === 'error'
+              ? 'Stream unreachable. Is pnpm dev running?'
+              : state === 'idle'
+                ? 'Connect to watch incidents and changes arrive.'
+                : 'Waiting for activity… (pnpm sim trigger a scenario, or edit an incident)'}
+          </div>
+        ) : (
+          events.map((e) => (
+            <div key={e.seq} className="flex gap-2 whitespace-nowrap px-2">
+              <span className="text-muted-foreground tabular-nums">{e.seq}</span>
+              <span className="text-muted-foreground">{e.at.slice(11, 19)}</span>
+              <span className={cn('w-44 shrink-0', KIND_CLASS[e.kind])}>{e.kind}</span>
+              <span className="w-24 shrink-0">{e.number}</span>
+              <span className="w-8 shrink-0">{e.app_tla}</span>
+              <span className="w-16 shrink-0 text-muted-foreground">
+                {e.incident?.contact_type ?? ''}
+              </span>
+              <span className="truncate">
+                {e.kind.endsWith('.opened')
+                  ? (e.incident?.short_description ?? e.change_request?.short_description)
+                  : e.entry.text}
+              </span>
             </div>
           ))
         )}

@@ -117,6 +117,8 @@ export class IncidentStore {
   private nextNumber = FIRST_NUMBER;
   private journalSeq = 0;
   private linkSeq = 0;
+  /** Changes on every reset (journal seqs restart), so feed readers can tell. */
+  epoch = 0;
   readonly ids: IdGen = {
     journal: () => `jrn_${String(++this.journalSeq).padStart(6, '0')}`,
     link: () => `lnk_${String(++this.linkSeq).padStart(5, '0')}`,
@@ -128,6 +130,7 @@ export class IncidentStore {
 
   /** Restores the seeded baseline (timestamps relative to now). */
   reset(now = new Date()) {
+    this.epoch = Math.max(now.getTime(), this.epoch + 1);
     this.journalSeq = 0;
     this.linkSeq = 0;
     this.records = seedIncidents(this.dir, now, this.ids);
@@ -136,6 +139,11 @@ export class IncidentStore {
     // New incidents continue after the highest seeded number.
     this.nextNumber =
       Math.max(FIRST_NUMBER - 1, ...this.records.map((r) => Number(r.number.slice(3)))) + 1;
+  }
+
+  /** Seq of the newest journal entry on any incident or change request (shared generator). */
+  get lastJournalSeq() {
+    return this.journalSeq;
   }
 
   private index(rec: IncidentRecord) {

@@ -10,6 +10,11 @@ import {
 } from '@sim/api-kit';
 import type { ResetResult } from '@sim/contracts';
 import {
+  ACTIVITY_KINDS,
+  ACTIVITY_TABLES,
+  type ActivityKind,
+  type ActivityTable,
+  type ActivityTailResult,
   CHANGE_RISKS,
   CHANGE_STATES,
   CHANGE_TYPES,
@@ -28,7 +33,9 @@ import {
   LINK_TYPES,
   type Priority,
 } from '@sim/contracts/servicenow';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { ActivityFeed, type ActivityFilter } from './activity';
 import { ChangeStore } from './changes';
 import { Directory, matchesQuery } from './directory';
 import { IncidentStore } from './incidents';
@@ -318,6 +325,37 @@ const importSchema = z.object({
   deployments: z.array(deploymentRecord).optional(),
 });
 
+const activityFilterShape = {
+  table: csv,
+  kind: csv,
+  app_tla: csv,
+  contact_type: csv,
+};
+const activitySeq = z.coerce.number().int().min(0);
+const activityTailSchema = z.object({
+  ...activityFilterShape,
+  after_seq: activitySeq.optional(),
+  wait_seconds: z.coerce.number().min(0).max(30).default(0),
+  limit: z.coerce.number().int().min(1).max(500).default(50),
+});
+const activityStreamSchema = z.object({
+  ...activityFilterShape,
+  after_seq: activitySeq.optional(),
+});
+
+function activityFilter(
+  q: z.infer<typeof activityTailSchema> | z.infer<typeof activityStreamSchema>,
+): ActivityFilter {
+  return {
+    tables: csvEnum<ActivityTable>(q.table, ACTIVITY_TABLES, 'table'),
+    kinds: csvEnum<ActivityKind>(q.kind, ACTIVITY_KINDS, 'kind'),
+    appTlas: q.app_tla?.map((t) => t.toUpperCase()),
+    contactTypes: csvEnum<ContactType>(q.contact_type, CONTACT_TYPES, 'contact_type'),
+  };
+}
+
+const HEARTBEAT_MS = 15_000;
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -326,6 +364,7 @@ export function buildApp() {
   const dir = new Directory();
   const store = new IncidentStore(dir);
   const changes = new ChangeStore(dir, store);
+  const activity = new ActivityFeed(store, changes);
 
   const app = createApi({
     service: SERVICE,
@@ -337,13 +376,106 @@ export function buildApp() {
       groups: dir.world.groups.length,
       change_requests: changes.records.length,
       scheduled_changes: changes.records.filter((r) => r.state === 'scheduled').length,
+      activity_last_seq: activity.lastSeq,
+      activity_waiters: activity.subscribers,
     }),
+  });
+
+  // Every write goes through this app, so waking feed readers after each one covers them all.
+  app.use('*', async (c, next) => {
+    await next();
+    if (c.req.method !== 'GET' && c.req.method !== 'OPTIONS') activity.wake();
   });
 
   app.post('/admin/reset', (c) => {
     store.reset();
     changes.reset();
     return c.json<ResetResult>({ ok: true, service: SERVICE, reset_at: new Date().toISOString() });
+  });
+
+  // ----- Activity feed (incidents + change requests, for programmatic watchers) -----
+
+  app.get('/api/activity/tail', async (c) => {
+    const p = parseQuery(c, activityTailSchema);
+    const filter = activityFilter(p);
+    const result = (items: ActivityTailResult['items'], cursor: number, hasMore: boolean) =>
+      c.json<ActivityTailResult>({
+        items,
+        cursor,
+        last_seq: activity.lastSeq,
+        epoch: activity.epoch,
+        has_more: hasMore,
+      });
+    if (p.after_seq === undefined) {
+      return result(activity.latest(filter, p.limit), activity.lastSeq, false);
+    }
+    const deadline = Date.now() + p.wait_seconds * 1000;
+    const signal = c.req.raw.signal;
+    let after = p.after_seq;
+    for (;;) {
+      const r = activity.readAfter(after, filter, p.limit);
+      after = r.cursor;
+      const remaining = deadline - Date.now();
+      if (r.items.length > 0 || remaining <= 0 || signal.aborted) {
+        return result(r.items, r.cursor, r.hasMore);
+      }
+      await activity.waitForActivity(remaining, signal);
+    }
+  });
+
+  app.get('/api/activity/stream', (c) => {
+    const p = parseQuery(c, activityStreamSchema);
+    const filter = activityFilter(p);
+    const lastEventId = c.req.header('Last-Event-ID');
+    let after =
+      lastEventId && /^\d+$/.test(lastEventId)
+        ? Number(lastEventId)
+        : (p.after_seq ?? activity.lastSeq);
+    const reqSignal = c.req.raw.signal;
+
+    return streamSSE(c, async (stream) => {
+      const ac = new AbortController();
+      const abort = () => ac.abort();
+      stream.onAbort(abort);
+      reqSignal.addEventListener('abort', abort, { once: true });
+      try {
+        let epoch = activity.epoch;
+        await stream.write(`retry: 2000\n: connected last_seq=${activity.lastSeq}\n\n`);
+        let lastWrite = Date.now();
+        while (!ac.signal.aborted && !stream.aborted && !stream.closed) {
+          if (activity.epoch !== epoch) {
+            // Reset: seqs restarted. Skip the reseeded baseline and carry on live.
+            epoch = activity.epoch;
+            after = activity.lastSeq;
+            await stream.writeSSE({ event: 'reset', data: JSON.stringify({ reset: true, epoch }) });
+            lastWrite = Date.now();
+          }
+          const r = activity.readAfter(after, filter, 200);
+          after = r.cursor;
+          for (const event of r.items) {
+            if (ac.signal.aborted) break;
+            await stream.writeSSE({
+              id: String(event.seq),
+              event: 'activity',
+              data: JSON.stringify(event),
+            });
+          }
+          if (r.items.length > 0) lastWrite = Date.now();
+          if (r.hasMore) continue;
+          const idleFor = Date.now() - lastWrite;
+          const woke = await activity.waitForActivity(
+            Math.max(250, HEARTBEAT_MS - idleFor),
+            ac.signal,
+          );
+          if (!woke && !ac.signal.aborted && Date.now() - lastWrite >= HEARTBEAT_MS - 250) {
+            await stream.write(': heartbeat\n\n');
+            lastWrite = Date.now();
+          }
+        }
+      } finally {
+        reqSignal.removeEventListener('abort', abort);
+      }
+    });
   });
 
   // ----- Incidents -----
@@ -605,5 +737,5 @@ export function buildApp() {
     );
   });
 
-  return { app, store, changes, dir };
+  return { app, store, changes, dir, activity };
 }

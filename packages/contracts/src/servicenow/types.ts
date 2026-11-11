@@ -638,3 +638,82 @@ export interface ChangeImportInput {
   release_id?: string;
   deployments?: ChangeDeployment[];
 }
+
+// ---------------------------------------------------------------------------
+// Activity feed (`GET /api/activity/tail`, `GET /api/activity/stream`)
+// ---------------------------------------------------------------------------
+
+export type ActivityTable = 'incident' | 'change_request';
+
+/**
+ * What a journal entry means: `opened` (the record's first entry), `updated` (other system
+ * entries with field changes), `work_note` or `comment`.
+ */
+export type ActivityKind =
+  | 'incident.opened'
+  | 'incident.updated'
+  | 'incident.work_note'
+  | 'incident.comment'
+  | 'change_request.opened'
+  | 'change_request.updated'
+  | 'change_request.work_note'
+  | 'change_request.comment';
+
+/**
+ * One journal entry on an incident or change request, in the order ServiceNow recorded it.
+ * `seq` is monotonic across both tables until the API is reset.
+ */
+export interface ActivityEvent {
+  seq: number;
+  kind: ActivityKind;
+  table: ActivityTable;
+  /** INC… or CHG… number. */
+  number: string;
+  /** TLA of the record's application, when it has one. */
+  app_tla: string | null;
+  /** When the entry was recorded (imported history can be in the past). */
+  at: string;
+  entry: JournalEntry;
+  /** The incident as it is now (not as it was at `seq`), for `table: "incident"`. */
+  incident?: IncidentSummary;
+  /** The change request as it is now, for `table: "change_request"`. */
+  change_request?: ChangeRequestSummary;
+}
+
+export interface ActivityFilterQuery {
+  /** Comma-separated: `incident`, `change_request`. */
+  table?: string;
+  /** Comma-separated kinds, e.g. `incident.opened,incident.comment`. */
+  kind?: string;
+  /** Comma-separated TLAs. */
+  app_tla?: string;
+  /** Comma-separated incident contact types, e.g. `phone,email` (incidents only). */
+  contact_type?: string;
+}
+
+export interface ActivityTailQuery extends ActivityFilterQuery {
+  /** Return events with seq > after_seq (0 replays everything). Omit to get the latest `limit`. */
+  after_seq?: number;
+  /** When nothing new matches yet, wait up to this many seconds (0-30). */
+  wait_seconds?: number;
+  /** 1-500, default 50. */
+  limit?: number;
+}
+
+export interface ActivityTailResult {
+  /** Matching events in seq order. */
+  items: ActivityEvent[];
+  /** Pass as `after_seq` on the next call. */
+  cursor: number;
+  last_seq: number;
+  /** Changes when the API is reset (seq restarts): drop local state and restart from 0. */
+  epoch: number;
+  /** True when more matching events are already available after `cursor`. */
+  has_more: boolean;
+}
+
+/** Query for `GET /api/activity/stream` (Server-Sent Events). */
+export interface ActivityStreamQuery extends ActivityFilterQuery {
+  /** Replay matching events with seq > after_seq first. `Last-Event-ID` takes precedence. */
+  after_seq?: number;
+}
