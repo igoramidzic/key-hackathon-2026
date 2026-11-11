@@ -10,7 +10,15 @@ import type { Correlator } from '../correlate/correlator';
 import type { DependencyGraph } from '../correlate/graph';
 import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
-import { appsJoined, briefing, failure, fixReady, rootCauseUpdate } from '../messages/teams';
+import {
+  appsJoined,
+  briefing,
+  changeRaised,
+  failure,
+  fixReady,
+  promoted,
+  rootCauseUpdate,
+} from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
 import { flush, postNow, queue, wasAnnounced } from './announce';
@@ -19,6 +27,7 @@ import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
+import { checkMerge, followChange, raiseChange } from './ship';
 import { triage } from './triage';
 
 export interface FlowDeps {
@@ -329,6 +338,73 @@ export function fixProposed(deps: FlowDeps): StepFn {
   };
 }
 
+/** awaiting_merge → shipping: a human merges the fix in GitLab (#23). */
+export function awaitingMerge(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    const state = await checkMerge(deps, c);
+    if (state === 'merged')
+      return { next: 'shipping', why: `${c.fix_mr!.project}!${c.fix_mr!.iid} merged` };
+    if (state === 'closed') {
+      const mr = c.fix_mr!;
+      await flush(deps, c, true);
+      await postNow(
+        deps,
+        c,
+        `fix_closed:${mr.iid}`,
+        {
+          body: `**${mr.project}!${mr.iid} was closed without merging.** What's wrong with it? Tell me here and I'll rework the fix: ${mr.web_url}`,
+          mentions: [],
+          importance: 'high',
+        },
+        `Fix ${mr.web_url} was closed without merging; asked the channel what to change.`,
+      );
+      c.milestones.fix_attempt = String(Number(c.milestones.fix_attempt ?? '1') + 1);
+      c.fix_mr = null;
+      deps.store.save(c);
+      return { next: 'investigating', why: 'fix MR closed without merging' };
+    }
+    return { wait: Math.max(3_000, 10_000 / deps.config.speed) };
+  };
+}
+
+/** shipping → verifying: emergency change, KBR promotes it (#23). */
+export function shipping(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    const poll = { wait: Math.max(2_000, 5_000 / deps.config.speed) };
+    if (!c.change) {
+      await raiseChange(deps, c);
+      await flush(deps, c, true);
+      await postNow(deps, c, `change:${c.change!.number}`, changeRaised(c), null);
+      return poll;
+    }
+    const progress = await followChange(deps, c);
+    if (progress.status === 'deployed') {
+      await postNow(deps, c, `promoted:${c.change.number}`, promoted(c), null);
+      return { next: 'verifying', why: `KBR promoted ${c.change.number}` };
+    }
+    if (progress.status === 'aborted')
+      queue(deps, c, `kbr_abort:${c.change.number}`, {
+        body: `**KBR sent ${c.change.number} back:** ${progress.note}. ${c.fix_mr ? `Please merge ${c.fix_mr.web_url} first; I'll reschedule the change as soon as it is merged.` : ''}`,
+        mentions: [],
+        importance: 'high',
+      });
+    if (progress.status === 'retried')
+      queue(deps, c, `kbr_retry:${c.change.number}:${progress.note.slice(0, 30)}`, {
+        body: `**Rescheduled ${c.change.number}** for now after KBR's note ("${progress.note}"): the fix is merged.`,
+        mentions: [],
+        importance: 'normal',
+      });
+    if (progress.status === 'canceled') {
+      deps.store.event(c, 'decision', `${c.change.number} was canceled; raising a new change`);
+      c.change = null;
+      deps.store.save(c);
+    }
+    return poll;
+  };
+}
+
 /** declared → assembled: the incident channel with the right people (#19). */
 export function declared(deps: FlowDeps): StepFn {
   return async (c) => {
@@ -348,6 +424,8 @@ export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
     briefed: briefed(deps),
     investigating: investigating(deps),
     fix_proposed: fixProposed(deps),
+    awaiting_merge: awaitingMerge(deps),
+    shipping: shipping(deps),
   };
 }
 

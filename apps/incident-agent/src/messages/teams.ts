@@ -151,7 +151,7 @@ export function briefing(
 }
 
 export function rootCauseUpdate(
-  c: Case,
+  _c: Case,
   rc: RootCause,
   previous: { tla: string; number?: string | null } | null,
 ): Message {
@@ -231,7 +231,12 @@ export function promoted(c: Case): Message {
   };
 }
 
-export function recovered(c: Case, before: number, after: number, logsUrl: string | null): Message {
+export function recovered(
+  _c: Case,
+  before: number,
+  after: number,
+  logsUrl: string | null,
+): Message {
   return {
     body: `**Recovered.** Errors on the affected apps went from ${before.toFixed(1)}/min to ${after.toFixed(1)}/min after the deploy and stayed there${logsUrl ? ` (${md('logs', logsUrl)})` : ''}.`,
     mentions: [],
@@ -239,7 +244,7 @@ export function recovered(c: Case, before: number, after: number, logsUrl: strin
   };
 }
 
-export function notRecovered(c: Case, after: number, logsUrl: string | null): Message {
+export function notRecovered(_c: Case, after: number, logsUrl: string | null): Message {
   return {
     body: `**Not recovered yet:** still ${after.toFixed(1)} errors/min after the deploy${logsUrl ? ` (${md('logs', logsUrl)})` : ''}. Re-checking the root cause.`,
     mentions: [],

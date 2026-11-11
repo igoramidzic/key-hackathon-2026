@@ -142,7 +142,7 @@ function culpritMr(c: Case) {
 }
 
 function fixDescription(
-  deps: FlowDeps,
+  _deps: FlowDeps,
   c: Case,
   mr: MrDetail,
   strategy: string,
@@ -289,7 +289,9 @@ export async function proposeFix(
 
 export function fixBranch(c: Case): string {
   const inc = (c.incident?.number ?? c.id).toLowerCase();
-  return `fix/${inc}-${slugify(c.root_cause?.culprit_tla ?? c.scope?.summary ?? 'fix', 30)}`;
+  const attempt = Number(c.milestones.fix_attempt ?? '1');
+  const base = `fix/${inc}-${slugify(c.root_cause?.culprit_tla ?? c.scope?.summary ?? 'fix', 30)}`;
+  return attempt > 1 ? `${base}-v${attempt}` : base;
 }
 
 interface CreatedMr {
