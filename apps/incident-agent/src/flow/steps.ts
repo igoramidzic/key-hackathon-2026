@@ -13,6 +13,7 @@ import type { Mcp } from '../mcp/gateway';
 import {
   appsJoined,
   briefing,
+  callersGrouped,
   changeRaised,
   failure,
   fixReady,
@@ -23,9 +24,10 @@ import {
   rootCauseUpdate,
 } from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
-import { hhmm } from '../util';
+import { errorMessage, hhmm } from '../util';
 import { flush, postNow, queue, wasAnnounced } from './announce';
 import { assembleChannel, notInvited, syncMembers, upstreamSuspect } from './assemble';
+import { groupCallers } from './callers';
 import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
@@ -185,6 +187,22 @@ export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
   );
   if (fresh) await linkAlerts(deps, c);
   await syncIncidentApp(deps, c);
+  // #25: group the bankers' calls under the incident, until the case is resolved.
+  const calls = c.signals.filter((x) => x.source === 'human').length;
+  const lastCheck = c.milestones.callers_checked ? Date.parse(c.milestones.callers_checked) : 0;
+  if (
+    calls !== Number(c.milestones.callers_seen ?? '-1') ||
+    Date.now() - lastCheck >= Math.max(10_000, 30_000 / deps.config.speed)
+  ) {
+    c.milestones.callers_seen = String(calls);
+    try {
+      const { added } = await groupCallers(deps, c);
+      if (added.length && c.channel)
+        queue(deps, c, `callers:${added.map((a) => a.number).join(',')}`, callersGrouped(c, added));
+    } catch (err) {
+      deps.log.warn(`${c.id} caller grouping failed: ${errorMessage(err)}`);
+    }
+  }
   // #20: status updates for what changed since the briefing.
   if (wasAnnounced(c, 'briefing')) {
     announceChanges(deps, c);
