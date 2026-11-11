@@ -5,6 +5,7 @@
  *   pnpm agent --check    connectivity check, then exit
  *   pnpm agent cases      list cases with phase and links
  *   pnpm agent case <id>  print one case's timeline
+ *   pnpm agent watch      run the detectors only and print signals
  */
 
 import { printCase, printCases } from './cases/cli';
@@ -12,6 +13,7 @@ import { CaseStore } from './cases/store';
 import { printChecks, runChecks } from './check';
 import { ConfigError, loadConfig } from './config';
 import { logger, setLogLevel } from './log';
+import { LogWatcher } from './watchers/logWatcher';
 
 const USAGE = `Usage: pnpm agent [command]
 
@@ -20,6 +22,7 @@ Commands:
   --check       Check connectivity to the four MCP servers and the live feeds, then exit
   cases         List cases with their phase and links
   case <id>     Print a case's timeline (id prefix or incident number)
+  watch         Run the detectors only and print signals (no actions)
   help          Show this help
 
 Env: SIM_PUBLIC_URL (hosted world), AGENT_LLM (auto|claude|off), ANTHROPIC_API_KEY,
@@ -47,6 +50,8 @@ async function main(argv: string[]): Promise<number> {
         return 2;
       }
       return printCase(new CaseStore(config.dataDir), argv[1]) ? 0 : 1;
+    case 'watch':
+      return watch(config);
     case 'run': {
       const ok = printChecks(await runChecks(config), config);
       if (!ok) return 1;
@@ -57,6 +62,20 @@ async function main(argv: string[]): Promise<number> {
       console.error(`Unknown command: ${command}\n\n${USAGE}`);
       return 2;
   }
+}
+
+async function watch(config: ReturnType<typeof loadConfig>): Promise<number> {
+  const log = logger('watch');
+  const stop = new AbortController();
+  process.once('SIGINT', () => stop.abort());
+  process.once('SIGTERM', () => stop.abort());
+  const logs = new LogWatcher(config, logger('logs'), {
+    onSignal: () => {},
+    onReset: () => log.warn('world reset'),
+  });
+  log.info('watching; Ctrl-C to stop');
+  await logs.run(stop.signal);
+  return 0;
 }
 
 main(process.argv.slice(2)).then(
