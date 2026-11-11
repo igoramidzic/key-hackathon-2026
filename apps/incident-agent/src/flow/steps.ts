@@ -4,7 +4,7 @@
  */
 import type { Orchestrator, StepContext, StepFn } from '../cases/orchestrator';
 import type { CaseStore } from '../cases/store';
-import type { Case, Phase } from '../cases/types';
+import { type Case, isTerminal, type Phase } from '../cases/types';
 import type { AgentConfig } from '../config';
 import type { Correlator } from '../correlate/correlator';
 import type { DependencyGraph } from '../correlate/graph';
@@ -32,7 +32,7 @@ import { chatHooks, pollChat } from './chat';
 import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
-import { splitOff } from './regroup';
+import { autoRegroup, humanRegroup, splitOff } from './regroup';
 import { checkMerge, followChange, raiseChange } from './ship';
 import { triage } from './triage';
 import { afterLink, resolveAlerts, verifyRecovery, writeResolution } from './verify';
@@ -213,13 +213,21 @@ export async function upkeep(deps: FlowDeps, c: Case, ctx?: StepContext): Promis
         await pollChat(
           deps,
           c,
-          chatHooks(deps, ctx, (cc, hint) => startDeepRca(deps, ctx, cc, { force: true, hint })),
+          chatHooks(
+            deps,
+            ctx,
+            (cc, hint) => startDeepRca(deps, ctx, cc, { force: true, hint }),
+            humanRegroup(deps, ctx),
+          ),
         );
       } catch (err) {
         deps.log.warn(`${c.id} chat poll failed: ${errorMessage(err)}`);
       }
     }
   }
+  // #29: regroup when the deep RCA says an app is unexplained or another case has the same culprit.
+  if (ctx) await autoRegroup(deps, ctx, c);
+  if (c.phase === 'abandoned') return;
   // #20: status updates for what changed since the briefing.
   if (wasAnnounced(c, 'briefing')) {
     announceChanges(deps, c);
@@ -280,6 +288,7 @@ export function announceChanges(deps: FlowDeps, c: Case): void {
 export function assembled(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const pending = await notInvited(deps, c);
     await postNow(
       deps,
@@ -350,6 +359,7 @@ export function startFix(deps: FlowDeps, ctx: StepContext, c: Case, force = fals
 export function investigating(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     if (c.fix_mr) return { next: 'fix_proposed', why: `${c.fix_mr.project}!${c.fix_mr.iid}` };
     if (fixReadyToStart(deps, c)) startFix(deps, ctx, c);
     else startDeepRca(deps, ctx, c);
@@ -361,6 +371,7 @@ export function investigating(deps: FlowDeps): StepFn {
 export function fixProposed(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const who = await reviewers(deps, c);
     await flush(deps, c, true);
     await postNow(
@@ -381,6 +392,7 @@ export function fixProposed(deps: FlowDeps): StepFn {
 export function awaitingMerge(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const state = await checkMerge(deps, c);
     if (state === 'merged')
       return { next: 'shipping', why: `${c.fix_mr!.project}!${c.fix_mr!.iid} merged` };
@@ -411,6 +423,7 @@ export function awaitingMerge(deps: FlowDeps): StepFn {
 export function shipping(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const poll = { wait: Math.max(2_000, 5_000 / deps.config.speed) };
     if (!c.change) {
       await raiseChange(deps, c);
@@ -448,6 +461,7 @@ export function shipping(deps: FlowDeps): StepFn {
 export function verifying(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const r = await verifyRecovery(deps, c);
     if (r.status === 'healthy') {
       const link = await afterLink(deps, c);
@@ -497,6 +511,7 @@ export function verifying(deps: FlowDeps): StepFn {
 export function resolutionDrafted(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     const inc = await deps.mcp.call<{ state: string; resolved_by?: { username: string } | null }>(
       'get_incident',
       { number: c.incident!.number },
@@ -526,6 +541,7 @@ export function resolutionDrafted(deps: FlowDeps): StepFn {
 export function declared(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await upkeep(deps, c, ctx);
+    if (isTerminal(c.phase)) return undefined;
     await assembleChannel(deps, c);
     c.milestones.members_key = membershipKey(deps, c);
     return { next: 'assembled', why: `#${c.channel!.name} with ${c.members.length} people` };
