@@ -207,6 +207,26 @@ export async function mergeCases(
     (!primary.root_cause || secondary.root_cause.confidence > primary.root_cause.confidence)
   )
     primary.root_cause = secondary.root_cause;
+  // One fix: the primary adopts a fix MR (and its change) the secondary already opened.
+  if (secondary.fix_mr && !primary.fix_mr) {
+    primary.fix_mr = secondary.fix_mr;
+    primary.fix = secondary.fix;
+    primary.change ??= secondary.change;
+    store.event(
+      primary,
+      'decision',
+      `Adopted ${secondary.fix_mr.project}!${secondary.fix_mr.iid} from ${secondary.id} as this incident's fix`,
+      {
+        url: secondary.fix_mr.web_url,
+      },
+    );
+  } else if (secondary.fix_mr && primary.fix_mr && secondary.fix_mr.iid !== primary.fix_mr.iid) {
+    store.event(
+      primary,
+      'decision',
+      `${secondary.id} had its own fix ${secondary.fix_mr.web_url}; keeping ${primary.fix_mr.web_url}`,
+    );
+  }
   if (primary.scope && secondary.scope)
     for (const a2 of secondary.scope.affected_apps)
       if (!primary.scope.affected_apps.some((x) => x.tla === a2.tla))

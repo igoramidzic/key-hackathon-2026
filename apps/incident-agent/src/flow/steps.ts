@@ -106,10 +106,11 @@ export function startDeepRca(
   if (!opts.force && done && done.state !== 'failed') return false;
   if (!opts.force && done?.state === 'failed' && done.runs >= 3) return false;
   const hint = opts.hint;
-  return ctx.spawn(c, name, async () => {
+  return ctx.spawn(c, name, async (signal) => {
     const started = Date.now();
     const { rootCause, source } = await deepRca(deps, c, hint);
     const current = deps.store.get(c.id) ?? c;
+    if (signal.aborted || current.merged_into) return;
     if (!rootCause) {
       deps.store.event(current, 'decision', 'Deep RCA found no promoted change near the onset');
       return;
@@ -340,9 +341,17 @@ export function startFix(deps: FlowDeps, ctx: StepContext, c: Case, force = fals
   if (ctx.isRunning(c, name) || c.fix_mr) return false;
   const prev = c.background[name];
   if (!force && prev && (prev.state === 'done' || prev.runs >= 3)) return false;
-  return ctx.spawn(c, name, async () => {
+  return ctx.spawn(c, name, async (signal) => {
     const { fix, source, problems } = await proposeFix(deps, c);
     const current = deps.store.get(c.id) ?? c;
+    if (signal.aborted || current.merged_into || isTerminal(current.phase)) {
+      deps.store.event(
+        current,
+        'decision',
+        `Fix not opened: the case was ${current.merged_into ? `merged into ${current.merged_into}` : current.phase} while it was being written`,
+      );
+      return;
+    }
     if (!fix) {
       deps.store.event(current, 'decision', `No automatic fix: ${problems.join('; ')}`);
       queue(deps, current, `no_fix:${problems.join(';').slice(0, 60)}`, {
