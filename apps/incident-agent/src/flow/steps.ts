@@ -16,7 +16,10 @@ import {
   changeRaised,
   failure,
   fixReady,
+  notRecovered,
   promoted,
+  recovered,
+  resolutionDrafted as resolutionMessage,
   rootCauseUpdate,
 } from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
@@ -29,6 +32,7 @@ import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
 import { checkMerge, followChange, raiseChange } from './ship';
 import { triage } from './triage';
+import { afterLink, resolveAlerts, verifyRecovery, writeResolution } from './verify';
 
 export interface FlowDeps {
   config: AgentConfig;
@@ -405,6 +409,84 @@ export function shipping(deps: FlowDeps): StepFn {
   };
 }
 
+/** verifying → resolution_drafted (or resolved): confirm recovery, then the resolution (#24). */
+export function verifying(deps: FlowDeps): StepFn {
+  return async (c, ctx) => {
+    await upkeep(deps, c);
+    const r = await verifyRecovery(deps, c);
+    if (r.status === 'healthy') {
+      const link = await afterLink(deps, c);
+      await flush(deps, c, true);
+      await postNow(deps, c, 'recovered', recovered(c, r.beforePerMin, r.afterPerMin, link));
+      const { resolved } = await writeResolution(deps, c);
+      if (resolved) {
+        await resolveAlerts(deps, c);
+        await postNow(deps, c, 'resolution', resolutionMessage(c, true), null);
+        return {
+          next: 'resolved',
+          why: `recovered (${r.beforePerMin.toFixed(1)} → ${r.afterPerMin.toFixed(1)} errors/min) and resolved`,
+        };
+      }
+      await postNow(deps, c, 'resolution', resolutionMessage(c, false), null);
+      return {
+        next: 'resolution_drafted',
+        why: `recovered (${r.beforePerMin.toFixed(1)} → ${r.afterPerMin.toFixed(1)} errors/min)`,
+      };
+    }
+    if (r.status === 'timeout') {
+      const link = await afterLink(deps, c);
+      await postNow(
+        deps,
+        c,
+        `not_recovered:${c.change?.number ?? ''}`,
+        notRecovered(c, r.afterPerMin, link),
+      );
+      // Back to the root cause with a fresh fix attempt.
+      c.milestones.fix_attempt = String(Number(c.milestones.fix_attempt ?? '1') + 1);
+      c.fix_mr = null;
+      c.change = null;
+      c.verification = null;
+      if (c.background.fix) c.background.fix = { ...c.background.fix, state: 'failed' };
+      deps.store.save(c);
+      startDeepRca(deps, ctx, c, {
+        force: true,
+        hint: 'the fix was deployed but the errors did not stop',
+      });
+      return { next: 'investigating', why: 'errors did not stop after the fix' };
+    }
+    return { wait: Math.max(5_000, 15_000 / deps.config.speed) };
+  };
+}
+
+/** resolution_drafted → resolved: a human reviews and resolves the incident (#24). */
+export function resolutionDrafted(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    const inc = await deps.mcp.call<{ state: string; resolved_by?: { username: string } | null }>(
+      'get_incident',
+      { number: c.incident!.number },
+      { caseId: c.id, quiet: true },
+    );
+    if (inc.state === 'resolved' || inc.state === 'closed') {
+      await resolveAlerts(deps, c);
+      if (c.resolution) c.resolution.resolved_at ??= new Date().toISOString();
+      await postNow(
+        deps,
+        c,
+        'resolved',
+        {
+          body: `**${c.incident!.number} resolved**${inc.resolved_by ? ` by @${inc.resolved_by.username}` : ''}. Alerts closed; the grouped calls were resolved with it. Thanks, everyone.`,
+          mentions: [],
+          importance: 'normal',
+        },
+        null,
+      );
+      return { next: 'resolved', why: `${c.incident!.number} resolved` };
+    }
+    return { wait: Math.max(5_000, 20_000 / deps.config.speed) };
+  };
+}
+
 /** declared → assembled: the incident channel with the right people (#19). */
 export function declared(deps: FlowDeps): StepFn {
   return async (c) => {
@@ -426,6 +508,8 @@ export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
     fix_proposed: fixProposed(deps),
     awaiting_merge: awaitingMerge(deps),
     shipping: shipping(deps),
+    verifying: verifying(deps),
+    resolution_drafted: resolutionDrafted(deps),
   };
 }
 
