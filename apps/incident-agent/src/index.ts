@@ -8,6 +8,7 @@
  *   pnpm agent watch      run the detectors only and print signals
  */
 
+import { Agent } from './agent';
 import { printCase, printCases } from './cases/cli';
 import { CaseStore } from './cases/store';
 import { printChecks, runChecks } from './check';
@@ -58,7 +59,10 @@ async function main(argv: string[]): Promise<number> {
     case 'run': {
       const ok = printChecks(await runChecks(config), config);
       if (!ok) return 1;
-      logger('agent').info('No orchestrator yet; exiting.');
+      const stop = new AbortController();
+      process.once('SIGINT', () => stop.abort());
+      process.once('SIGTERM', () => stop.abort());
+      await new Agent(config).run(stop.signal);
       return 0;
     }
     default:
