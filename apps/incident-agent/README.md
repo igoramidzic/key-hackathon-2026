@@ -6,14 +6,21 @@ Epic: GitHub issue #28. Building against the world: [docs/AGENT-GUIDE.md](../../
 
 ```bash
 pnpm dev                 # the world (the agent is not part of it)
-pnpm agent --check       # connectivity: tools/list on the 4 MCP servers + both live feeds
-pnpm agent               # run the agent; live timeline at http://localhost:4100
+pnpm agent --check       # connectivity: the 4 MCP servers, both live feeds and the model
+pnpm agent               # run the agent (AI phases with Claude); live timeline at http://localhost:4100
+pnpm agent --deterministic   # the same without a model: deterministic heuristics only
 pnpm agent cases         # cases on disk with phase and links
 pnpm agent case <id>     # one case's timeline (id prefix or incident number)
 pnpm agent watch         # the detectors only: print signals, take no action
 pnpm agent timeline      # serve the live timeline from the cases on disk
-pnpm agent:eval          # run every scenario unattended and print a scorecard
+pnpm agent:eval          # run every scenario unattended and print a scorecard (--deterministic too)
 ```
+
+The AI phases need Claude credentials. The agent uses, in order, `ANTHROPIC_API_KEY`,
+`CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) or the Claude Code login (`claude auth login`).
+Put the key or token in `apps/incident-agent/.env` (gitignored; it never overrides variables that
+are already set). `pnpm agent --check` pings the model, and the agent refuses to start in AI mode
+when the model can't be reached, rather than quietly running without it.
 
 Demo: `pnpm sim reset`, start `pnpm agent` (with `AGENT_SPEED=4` to match), then
 `pnpm sim trigger cif-snake-case-cascade --speed 4`. Watch the timeline page and the Teams channel;
@@ -45,14 +52,29 @@ SNOW feed ──┘   (one problem,          │                                
   cause changes, add late joiners to the channel, group callers, read the channel and answer,
   merge or split cases, and post coalesced status updates mirrored as work notes.
 
-## Deterministic plumbing, LLM for judgment
+## AI for judgment, deterministic plumbing
 
-Every phase works without a model: triage, RCA (ranking promoted changes by how many failing apps
-depend on them, timing and diff relevance), the revert fix, caller grouping and chat all have a
-deterministic implementation. With `ANTHROPIC_API_KEY` set (`AGENT_LLM=auto`), read-only Claude
-Agent SDK phases refine them: Sonnet for triage, grouping and chat, Opus for RCA and the fix.
-Phases get read tools only and return JSON validated with zod; the orchestrator performs every
-write, and every link comes from a tool result (`phases/runner.ts`, `phases/claude.ts`).
+Watching the feeds, correlating signals into cases, the state machine and every write are plain
+code. The judgment is Claude's: by default every phase is a read-only Claude Agent SDK
+investigation that returns JSON validated with zod.
+
+| Phase | Model | Tools |
+| --- | --- | --- |
+| Triage: scope, onset, severity, log links, grouping check | `AGENT_MODEL` (Sonnet) | logs, CMDB |
+| Quick RCA: up to three suspect changes for the briefing | `AGENT_MODEL` (Sonnet) | changes, MRs, CMDB, logs |
+| Deep RCA: the culprit, its mechanism, evidence, what's ruled out | `AGENT_MODEL_DEEP` (Opus) | changes, MRs, code, logs, CMDB |
+| Fix: revert or forward fix, validated against main | `AGENT_MODEL_DEEP` (Opus) | GitLab read tools |
+| Caller grouping, chat classification and answers | `AGENT_MODEL` (Sonnet) | none / read tools |
+
+Phases get read tools only (`phases/runner.ts`, `phases/claude.ts`); the orchestrator performs every
+write. Whatever the model names is checked against the systems: change requests and MRs must exist
+(their links come from the tools), log links are re-resolved through `search_logs`, fixes must apply
+to main and touch only the culprit's files.
+
+**Deterministic mode** (`AGENT_LLM=off` or `--deterministic`) replaces each phase with code: ranking
+promoted changes by how many failing apps depend on them, timing and diff relevance; a mechanical
+revert; vocabulary matching for calls. In AI mode the same code is only a fallback when an AI phase
+fails, and the timeline says so ("AI deep RCA failed …; falling back").
 
 ## Layout
 
@@ -82,8 +104,8 @@ test/             vitest; fixtures are recorded logs and the CMDB graph
 | Variable | Default | |
 | --- | --- | --- |
 | `SIM_PUBLIC_URL` | unset | Use the hosted world (`<base>/<system>/mcp`, feeds under `<base>/logs`, `<base>/servicenow`) |
-| `AGENT_LLM` | `auto` | `claude`, `off` (deterministic only), or `auto` (Claude when `ANTHROPIC_API_KEY` is set) |
-| `ANTHROPIC_API_KEY` | unset | Credentials for the Claude Agent SDK |
+| `AGENT_LLM` | `claude` | `claude` (AI phases) or `off` / `deterministic` (no model) |
+| `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` | unset | Claude credentials; else the Claude Code login |
 | `AGENT_MODEL` / `AGENT_MODEL_DEEP` | `claude-sonnet-5-5` / `claude-opus-5-5` | Fast phases / RCA and fix |
 | `AGENT_DRY_RUN` | `false` | Log write tools instead of calling them |
 | `AGENT_AUTO_RESOLVE` | `false` | Resolve the incident after recovery instead of drafting the resolution |

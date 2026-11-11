@@ -34,7 +34,9 @@ import { createTeamsClient, type TeamsClient } from '@sim/contracts/teams';
 import { CaseStore } from '../src/cases/store';
 import { type Case, isTerminal } from '../src/cases/types';
 import { type AgentConfig, loadConfig } from '../src/config';
+import { loadDotEnv } from '../src/env';
 import { color } from '../src/log';
+import { pingClaude } from '../src/phases/claude';
 import {
   type HumanMerge,
   type Observed,
@@ -55,13 +57,14 @@ const SCENARIOS = [
 ] as const;
 
 const USAGE = `Usage: pnpm agent:eval [--scenario <id>[,<id>…]] [--speed <n>] [--timeout <min>]
-                       [--baseline <sec>] [--verbose]
+                       [--baseline <sec>] [--verbose] [--deterministic]
 
   --scenario  scenario id(s); default all five: ${SCENARIOS.join(', ')}
   --speed     scenario speed, also passed to the agent as AGENT_SPEED (default 4)
   --timeout   minutes per scenario from the trigger to recovery (default 20)
   --baseline  seconds the agent watches the world before the trigger (default 15)
   --verbose   echo the agent's output (it is always written to agent.log)
+  --deterministic  run the agent without a model (AGENT_LLM=off); default is AI phases with Claude
 
 Resets the shared world before and after every scenario.`;
 
@@ -450,7 +453,19 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   const opts = parseArgs(argv);
+  loadDotEnv();
+  if (argv.includes('--deterministic')) process.env.AGENT_LLM = 'off';
   const config = loadConfig({ ...process.env, AGENT_SPEED: String(opts.speed) });
+  if (config.llm.mode === 'claude') {
+    // Fail before touching the world: an agent without a model would only fail the scenarios.
+    const ping = await pingClaude(config.llm.model);
+    if (!ping.ok) {
+      console.error(
+        `Claude is not reachable (${ping.detail}).\nRun \`claude auth login\`, put ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in apps/incident-agent/.env, or pass --deterministic.`,
+      );
+      return 2;
+    }
+  }
   const clients: Clients = {
     sim: createSimulatorClient(process.env.SIMULATOR_URL ?? URLS.simulator.api),
     gitlab: createGitlabClient(URLS.gitlab.api),

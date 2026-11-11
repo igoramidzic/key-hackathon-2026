@@ -14,6 +14,7 @@ import { printCase, printCases } from './cases/cli';
 import { CaseStore } from './cases/store';
 import { printChecks, runChecks } from './check';
 import { ConfigError, loadConfig } from './config';
+import { loadDotEnv } from './env';
 import { logger, setLogLevel } from './log';
 import { McpGateway } from './mcp/gateway';
 import { startTimelineServer } from './timeline/server';
@@ -24,18 +25,25 @@ import { httpTail, ServiceNowFeed } from './watchers/serviceNowFeed';
 const USAGE = `Usage: pnpm agent [command]
 
 Commands:
-  (none)        Watch the world and run the incident process
-  --check       Check connectivity to the four MCP servers and the live feeds, then exit
+  (none)        Watch the world and run the incident process (AI phases with Claude)
+  --check       Check the four MCP servers, the live feeds and the model, then exit
   cases         List cases with their phase and links
   case <id>     Print a case's timeline (id prefix or incident number)
   watch         Run the detectors only and print signals (no actions)
   timeline      Serve the live case timeline from the cases on disk (the agent also serves it)
   help          Show this help
 
-Env: SIM_PUBLIC_URL (hosted world), AGENT_LLM (auto|claude|off), ANTHROPIC_API_KEY,
-     AGENT_DRY_RUN, AGENT_AUTO_RESOLVE, AGENT_SPEED. See apps/incident-agent/README.md.`;
+Flags:
+  --deterministic   No model: deterministic heuristics only (same as AGENT_LLM=off)
 
-async function main(argv: string[]): Promise<number> {
+Env (also read from apps/incident-agent/.env): ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+     (else the Claude Code login), AGENT_LLM (claude|off), SIM_PUBLIC_URL, AGENT_DRY_RUN,
+     AGENT_AUTO_RESOLVE, AGENT_SPEED. See apps/incident-agent/README.md.`;
+
+async function main(rawArgv: string[]): Promise<number> {
+  loadDotEnv();
+  if (rawArgv.includes('--deterministic')) process.env.AGENT_LLM = 'off';
+  const argv = rawArgv.filter((a) => a !== '--deterministic');
   const command = argv[0] ?? 'run';
   if (command === 'help' || command === '--help' || command === '-h') {
     console.log(USAGE);

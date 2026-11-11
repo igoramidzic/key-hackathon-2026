@@ -11,7 +11,8 @@ describe('loadConfig', () => {
     expect(c.serviceNowApi).toBe('http://localhost:4002');
     expect(c.dryRun).toBe(false);
     expect(c.autoResolve).toBe(false);
-    expect(c.llm.mode).toBe('off');
+    expect(c.llm.mode).toBe('claude');
+    expect(c.llm.reason).toContain('Claude Code login');
     expect(c.llm.model).toBe('claude-sonnet-5-5');
     expect(c.llm.deepModel).toBe('claude-opus-5-5');
   });
@@ -24,9 +25,15 @@ describe('loadConfig', () => {
     expect(c.serviceNowApi).toBe('https://lab.example.dev/servicenow');
   });
 
-  it('turns Claude on in auto mode when credentials exist', () => {
-    expect(loadConfig({ ANTHROPIC_API_KEY: 'sk-test' }).llm.mode).toBe('claude');
-    expect(loadConfig({ ANTHROPIC_API_KEY: 'sk-test', AGENT_LLM: 'off' }).llm.mode).toBe('off');
+  it('uses Claude by default; deterministic mode is a toggle', () => {
+    expect(loadConfig({ ANTHROPIC_API_KEY: 'sk-test' }).llm).toMatchObject({
+      mode: 'claude',
+      reason: expect.stringContaining('ANTHROPIC_API_KEY'),
+    });
+    expect(loadConfig({ AGENT_LLM: 'off' }).llm.mode).toBe('off');
+    expect(loadConfig({ AGENT_LLM: 'deterministic' }).llm.mode).toBe('off');
+    expect(loadConfig({ AGENT_LLM: 'auto' }).llm.mode).toBe('claude');
+    expect(() => loadConfig({ AGENT_LLM: 'gpt' })).toThrow('AGENT_LLM');
   });
 
   it('parses booleans and scales windows by speed', () => {

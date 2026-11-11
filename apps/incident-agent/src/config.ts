@@ -57,8 +57,15 @@ const EnvSchema = z.object({
   AGENT_LOGS_API_URL: url,
   AGENT_SERVICENOW_API_URL: url,
 
-  /** `auto` uses Claude when credentials are present, otherwise the deterministic heuristics. */
-  AGENT_LLM: z.enum(['auto', 'claude', 'off']).default('auto'),
+  /**
+   * `claude` (default): the AI phases investigate with Claude. `off` (or `deterministic`, or the
+   * `--deterministic` flag): deterministic heuristics only, no model. `auto` is accepted as an
+   * alias of `claude` for older setups.
+   */
+  AGENT_LLM: z
+    .enum(['claude', 'off', 'deterministic', 'auto'])
+    .default('claude')
+    .transform((v) => (v === 'deterministic' ? 'off' : v === 'auto' ? 'claude' : v)),
   ANTHROPIC_API_KEY: z.string().optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   AGENT_MODEL: z.string().min(1).default('claude-sonnet-5-5'),
@@ -157,18 +164,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const e = parsed.data;
   const base = e.SIM_PUBLIC_URL ? pathUrls(e.SIM_PUBLIC_URL) : serviceUrls(e.SIM_HOST);
 
-  const hasCreds = Boolean(e.ANTHROPIC_API_KEY || e.CLAUDE_CODE_OAUTH_TOKEN);
-  let mode: 'claude' | 'off' = 'off';
-  let reason = 'AGENT_LLM=off: deterministic heuristics only';
-  if (e.AGENT_LLM === 'claude') {
-    mode = 'claude';
-    reason = 'AGENT_LLM=claude';
-  } else if (e.AGENT_LLM === 'auto') {
-    mode = hasCreds ? 'claude' : 'off';
-    reason = hasCreds
-      ? 'Claude credentials found'
-      : 'no ANTHROPIC_API_KEY: deterministic heuristics only';
-  }
+  const mode: 'claude' | 'off' = e.AGENT_LLM === 'off' ? 'off' : 'claude';
+  const credentials = e.ANTHROPIC_API_KEY
+    ? 'ANTHROPIC_API_KEY'
+    : e.CLAUDE_CODE_OAUTH_TOKEN
+      ? 'CLAUDE_CODE_OAUTH_TOKEN'
+      : 'the Claude Code login';
+  const reason =
+    mode === 'off'
+      ? 'deterministic mode (AGENT_LLM=off / --deterministic): no model'
+      : `Claude via the Agent SDK, using ${credentials}`;
 
   const speed = e.AGENT_SPEED;
   return {
