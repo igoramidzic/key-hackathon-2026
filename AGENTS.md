@@ -8,12 +8,13 @@ A **simulated bank IT estate** for an automated incident-resolution agent. Four 
 (Logs + Moogsoft alerts, ServiceNow, GitLab, Teams), each with a REST API, a web UI and an MCP
 server, plus a simulator that runs background traffic and triggers incident scenarios.
 
-The **incident agent itself is not in this repo yet.** It is built separately and talks to the
-world only through the four MCP servers and the live log stream. There are two kinds of work here:
+The **incident agent** lives in `apps/incident-agent` (`@sim/incident-agent`). It talks to the
+world only through the four MCP servers, the live log stream and the ServiceNow activity feed.
+There are two kinds of work here:
 
 | You are… | Read |
 | --- | --- |
-| Building or running the **incident agent** against the simulated world | [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) |
+| Building or running the **incident agent** against the simulated world | [apps/incident-agent/README.md](apps/incident-agent/README.md) and [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) |
 | Changing the **simulated world** (systems, scenarios, UIs, simulator) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 [README.md](README.md) is the human overview: ports, scenarios, tool list, Cloudflare hosting.
@@ -29,6 +30,8 @@ pnpm install
 pnpm dev                                   # all 14 processes; control panel on :3000
 pnpm sim list | status | reset | stop      # drive the simulator from the CLI
 pnpm sim trigger cif-snake-case-cascade --speed 4
+pnpm agent --check                         # incident agent: connectivity check (not part of pnpm dev)
+pnpm agent                                 # run the incident agent against the world
 pnpm e2e                                   # end-to-end check against the running stack
 pnpm test && pnpm typecheck && pnpm lint   # run before committing
 ```

@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "turbo run dev --concurrency=32",
+    "dev": "turbo run dev --concurrency=32 --filter=!@sim/incident-agent",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "lint": "biome check .",
@@ -15,7 +15,9 @@
     "sim": "tsx apps/simulator/src/cli.ts",
     "e2e": "tsx scripts/e2e.ts",
     "worker:dev": "pnpm --filter @sim/cloudflare worker:dev",
-    "worker:deploy": "pnpm --filter @sim/cloudflare worker:deploy"
+    "worker:deploy": "pnpm --filter @sim/cloudflare worker:deploy",
+    "agent": "tsx apps/incident-agent/src/index.ts",
+    "agent:eval": "tsx apps/incident-agent/eval/run.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",

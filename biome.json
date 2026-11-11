@@ -57,5 +57,41 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/incident-agent/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@sim/scenarios": "Answer key: the incident agent must find root causes from logs, ServiceNow and GitLab.",
+                  "@sim/contracts/simulator": "Answer key: only apps/incident-agent/eval may use the simulator API.",
+                  "@sim/simulator": "Answer key: only apps/incident-agent/eval may use the simulator.",
+                  "@sim/world": "Use the CMDB over MCP (search_apps, get_app) instead of the seeded world."
+                },
+                "patterns": [
+                  {
+                    "group": ["@sim/scenarios/**", "@sim/simulator/**", "@sim/world/**"],
+                    "message": "Answer key: the incident agent may only reach the world through MCP and the live feeds."
+                  },
+                  {
+                    "group": [
+                      "**/packages/scenarios/**",
+                      "**/apps/simulator/**",
+                      "**/packages/world/**"
+                    ],
+                    "message": "Answer key: the incident agent may only reach the world through MCP and the live feeds."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
