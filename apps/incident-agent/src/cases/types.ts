@@ -340,6 +340,19 @@ export const Case = z.object({
   chat_cursor: z.string().nullable().default(null),
   /** Last status message posted, to coalesce updates. */
   last_post_at: z.string().nullable().default(null),
+  /** Updates waiting for the coalescing window (#20). */
+  outbox: z
+    .array(
+      z.object({
+        key: z.string(),
+        body: z.string(),
+        mentions: z.array(z.string()).default([]),
+        importance: z.enum(['normal', 'high', 'urgent']).default('normal'),
+        work_note: z.string().nullable().default(null),
+        at: z.string(),
+      }),
+    )
+    .default([]),
   timeline: z.array(TimelineEvent).default([]),
 });
 export type Case = z.output<typeof Case>;

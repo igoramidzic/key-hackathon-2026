@@ -1,0 +1,81 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`message templates (snapshots) > apps joined 1`] = `
+"**Another app is failing with the same cause:**
+- PAY - Payments Hub: errors on both sides name CIF"
+`;
+
+exports[`message templates (snapshots) > briefing 1`] = `
+"## 🚨 P1: Online banking, mobile and teller customer lookups failing
+
+**What's broken:** Customers and tellers cannot load customer profiles.
+**Since:** 19:14 UTC · **Priority:** P1 (3 tier-1 apps failing)
+**Incident:** [INC0010234](http://sn.test/incidents/INC0010234)
+
+**3 apps, one incident:**
+
+| App | Errors | Since | Team rep |
+| --- | ---: | --- | --- |
+| OLB Online Banking | 842 | 19:14 UTC | @aklocko2 |
+| MBL Mobile Banking | 555 | 19:14 UTC | @mratke |
+| TLR Teller Workstation | 133 | 19:14 UTC | — |
+
+**Why one incident:** all 3 depend on CIF - Customer Information File, which logs no errors itself; their errors name CIF; errors: UpstreamContractError.
+
+**Logs** (query applied):
+- [1,530 errors in 3 affected apps since 19:12 UTC](http://logs.test/logs?query=f1)
+- [Top signature (555): UpstreamContractError](http://logs.test/logs?query=f2)
+
+**Likely cause (82%):** [CHG0030081](http://sn.test/change_requests/CHG0030081) → [keybank/CIF00/customer-profile-api!9](http://gl.test/mr/9) "Adopt naming standard" by @jdoe
+KBR promoted it to production at 19:12 UTC. CHG0030081 promoted CIF 1m 30s before the errors started; every failing app depends on CIF.
+Also looked at: ATH [CHG0030083](http://sn.test/change_requests/CHG0030083) (55%).
+_Confirming in the background._
+
+**What happens next:** I am preparing a fix merge request. When it is ready I will ask the owners to review it and click **Merge** in GitLab; I will then raise the emergency change and watch the recovery.
+If one of these apps looks unrelated, say so here and I'll split it out.
+Not invited yet (ask and I'll add them): dgreen (backup on-call for CIF)."
+`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 1`] = `
+"**Fix ready for review:** [keybank/CIF00/customer-profile-api!10](http://gl.test/mr/10) "Revert snake_case (INC0010234)"
+Strategy: revert (the change is self-contained)
+@jdoe @kstreich please review and click **Merge** in GitLab. Merging deploys to QV; I'll raise the emergency change to production right after."
+`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 2`] = `"**Merged.** Emergency change [CHG0030090](http://sn.test/change_requests/CHG0030090) raised to promote [keybank/CIF00/customer-profile-api!10](http://gl.test/mr/10) to production now. KBR will pick it up within seconds."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 3`] = `"**KBR promoted [CHG0030090](http://sn.test/change_requests/CHG0030090) to production** at 19:30 UTC. Watching the error rate to confirm recovery."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 4`] = `"**Recovered.** Errors on the affected apps went from 120.5/min to 0.3/min after the deploy and stayed there ([logs](http://logs.test/after))."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 5`] = `"**Not recovered yet:** still 40.0 errors/min after the deploy. Re-checking the root cause."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 6`] = `"**Resolution drafted** on [INC0010234](http://sn.test/incidents/INC0010234). Please review the close notes and resolve it."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 7`] = `"**Resolved** [INC0010234](http://sn.test/incidents/INC0010234) with the drafted resolution; the grouped calls were resolved with it. Time to restore: 17m 0s."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 8`] = `"**Grouped 2 calls** under [INC0010234](http://sn.test/incidents/INC0010234) from Akron, Cleveland: INC0010240, INC0010241. Callers will get the updates and the resolution."`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 9`] = `
+"⚠️ **Automation stopped on this incident:** triage: tool unavailable
+Please take over from here; everything I found is on [INC0010234](http://sn.test/incidents/INC0010234)."
+`;
+
+exports[`message templates (snapshots) > root cause confirmed and changed 1`] = `
+"**Root cause confirmed (90%):** [CHG0030081](http://sn.test/change_requests/CHG0030081) → [keybank/CIF00/customer-profile-api!9](http://gl.test/mr/9) "Adopt naming standard"
+Profile JSON switched to snake_case, so callers no longer find customerId.
+
+- [CHG0030081 put CIF into production at 19:12 UTC](http://sn.test/change_requests/CHG0030081)
+
+Ruled out: CHG0030083 ATH: bump jose (the diff has nothing to do with the errors)."
+`;
+
+exports[`message templates (snapshots) > root cause confirmed and changed 2`] = `
+"**Root cause changed:** it's CIF, not ATH (CHG0030083).
+[CHG0030081](http://sn.test/change_requests/CHG0030081) → [keybank/CIF00/customer-profile-api!9](http://gl.test/mr/9) "Adopt naming standard"
+Profile JSON switched to snake_case, so callers no longer find customerId.
+
+- [CHG0030081 put CIF into production at 19:12 UTC](http://sn.test/change_requests/CHG0030081)
+
+Ruled out: CHG0030083 ATH: bump jose (the diff has nothing to do with the errors)."
+`;

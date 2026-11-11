@@ -10,10 +10,12 @@ import type { Correlator } from '../correlate/correlator';
 import type { DependencyGraph } from '../correlate/graph';
 import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
+import { appsJoined, briefing, failure, rootCauseUpdate } from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
-import { assembleChannel, syncMembers, upstreamSuspect } from './assemble';
-import { declareIncident, linkAlerts, syncIncidentApp } from './incident';
+import { flush, postNow, queue, wasAnnounced } from './announce';
+import { assembleChannel, notInvited, syncMembers, upstreamSuspect } from './assemble';
+import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
 import { triage } from './triage';
@@ -168,6 +170,11 @@ export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
   );
   if (fresh) await linkAlerts(deps, c);
   await syncIncidentApp(deps, c);
+  // #20: status updates for what changed since the briefing.
+  if (wasAnnounced(c, 'briefing')) {
+    announceChanges(deps, c);
+    await flush(deps, c);
+  }
   // #19: late joiners (a new failing app, a new upstream suspect, the change author, the service
   // desk once callers are grouped). Only recomputed when one of those inputs changes.
   if (c.channel) {
@@ -191,6 +198,72 @@ function membershipKey(deps: FlowDeps, c: Case): string {
   ].join('|');
 }
 
+/** Queues updates for what changed: the root cause, apps that joined (#20). */
+export function announceChanges(deps: FlowDeps, c: Case): void {
+  const graph = deps.graph();
+  const rc = c.root_cause;
+  if (rc) {
+    const key = `root_cause:${rc.culprit_tla}:${rc.change_request?.number ?? ''}`;
+    const prev = c.milestones.rc_announced;
+    if (prev !== key) {
+      const [, tla, number] = (prev ?? '').split(':');
+      const previous = tla
+        ? { tla, number }
+        : c.suspects[0]
+          ? { tla: c.suspects[0].tla, number: c.suspects[0].change_request?.number }
+          : null;
+      if (queue(deps, c, key, rootCauseUpdate(c, rc, previous))) c.milestones.rc_announced = key;
+    }
+  }
+  const known = new Set((c.milestones.announced_apps ?? '').split(',').filter(Boolean));
+  const fresh = c.apps.filter((a) => !known.has(a));
+  if (fresh.length && c.milestones.announced_apps !== undefined) {
+    queue(deps, c, `apps:${[...fresh].sort().join(',')}`, appsJoined(c, graph, fresh));
+  }
+  if (fresh.length || c.milestones.announced_apps === undefined) {
+    c.milestones.announced_apps = c.apps.join(',');
+    deps.store.save(c);
+  }
+}
+
+/** assembled → briefed: the first message in the channel (#20). */
+export function assembled(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    const pending = await notInvited(deps, c);
+    await postNow(
+      deps,
+      c,
+      'briefing',
+      briefing(c, deps.graph(), {
+        notInvited: pending.map((i) => ({ user: i.user, reason: i.reason })),
+      }),
+      `Briefing posted in Teams #${c.channel?.name}: ${c.channel?.web_url}`,
+    );
+    c.milestones.announced_apps = c.apps.join(',');
+    if (c.root_cause)
+      c.milestones.rc_announced = `root_cause:${c.root_cause.culprit_tla}:${c.root_cause.change_request?.number ?? ''}`;
+    deps.store.save(c);
+    return { next: 'briefed', why: 'briefing posted' };
+  };
+}
+
+/** briefed → investigating: deep RCA and the fix run in the background; upkeep announces. */
+export function briefed(deps: FlowDeps): StepFn {
+  return async (c, ctx) => {
+    startDeepRca(deps, ctx, c);
+    return { next: 'investigating' };
+  };
+}
+
+/** investigating: keep everyone posted until the fix is ready (#22 takes it from here). */
+export function investigating(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    return { wait: Math.max(2_000, 10_000 / deps.config.speed) };
+  };
+}
+
 /** declared → assembled: the incident channel with the right people (#19). */
 export function declared(deps: FlowDeps): StepFn {
   return async (c) => {
@@ -206,10 +279,22 @@ export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
     detected: detected(deps),
     triaged: triaged(deps),
     declared: declared(deps),
+    assembled: assembled(deps),
+    briefed: briefed(deps),
+    investigating: investigating(deps),
   };
 }
 
 /** Posts the failure where people will see it (the channel, when there is one). */
 export async function reportFailure(deps: FlowDeps, c: Case, reason: string): Promise<void> {
   deps.log.error(`${c.id} failed: ${reason}`);
+  if (c.channel)
+    await postNow(
+      deps,
+      c,
+      `failure:${c.failure?.at ?? ''}`,
+      failure(c, reason),
+      `Automation stopped: ${reason}`,
+    );
+  else await workNote(deps, c, `Automation stopped: ${reason}`);
 }
