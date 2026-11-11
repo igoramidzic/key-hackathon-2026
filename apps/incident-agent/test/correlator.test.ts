@@ -274,14 +274,16 @@ describe('settle window, late arrivals, weak, alerts, humans, cooldown', () => {
 
   it('weak signals and alerts never open a case, but attach to a related one', async () => {
     const { correlator, store } = setup(tinyGraph());
+    // Buffers keep the last 15 minutes of wall-clock time, so use current timestamps.
+    const now = new Date().toISOString();
     const weak = await correlator.ingest(
-      logSignal('XAA', { strength: 'weak', reason: 'warning_spike' }),
+      logSignal('XAA', { strength: 'weak', reason: 'warning_spike', at: now, first_seen: now }),
     );
     expect(weak.action).toBe('buffer');
     const alert: Signal = {
       source: 'alert',
       id: 'a1',
-      at: '2026-11-11T19:14:00Z',
+      at: now,
       alert_id: 1,
       app_tla: 'YBB',
       service: 'y',
