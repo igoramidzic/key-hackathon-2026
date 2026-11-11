@@ -1,5 +1,10 @@
 import type { Page } from '@sim/contracts';
-import type { Incident, IncidentSummary } from '@sim/contracts/servicenow';
+import type {
+  ChangeRequest,
+  ChangeRequestSummary,
+  Incident,
+  IncidentSummary,
+} from '@sim/contracts/servicenow';
 import { priorityFor } from '@sim/contracts/servicenow';
 import { HERO_TLAS, PAST_MAJOR_INCIDENTS } from '@sim/world';
 import { describe, expect, it } from 'vitest';
@@ -219,5 +224,140 @@ describe('parent and child incidents', () => {
     expect(
       (await api.patch(`/api/incidents/${d.number}`, { parent_incident: parent.number })).status,
     ).toBe(409);
+  });
+});
+
+describe('change requests', () => {
+  const MR = 'keybank/CIF00/customer-profile-api!7';
+  const mrRecord = (iid: number) => ({
+    project: 'keybank/CIF00/customer-profile-api',
+    iid,
+    reference: `keybank/CIF00/customer-profile-api!${iid}`,
+    web_url: `http://localhost:3003/keybank/CIF00/customer-profile-api/-/merge_requests/${iid}`,
+    title: 'Fix',
+    state: 'merged',
+    merge_commit_sha: 'abcdef1234567890abcdef1234567890abcdef12',
+  });
+
+  it('creates a scheduled change, lists it as due work and walks the KBR lifecycle', async () => {
+    const { app } = buildApp();
+    const created = await app.request(
+      '/api/change_requests',
+      json({
+        short_description: 'Restore pool size',
+        app_tla: 'cif',
+        merge_requests: [
+          MR,
+          'http://localhost:3003/keybank/CIF00/customer-profile-api/-/merge_requests/8',
+        ],
+        planned_start: 'now',
+        type: 'Emergency',
+        requested_by: 'dwhitfield',
+        related_incidents: ['INC0010001'],
+      }),
+    );
+    expect(created.status).toBe(201);
+    const chg = (await created.json()) as ChangeRequest;
+    expect(chg.number).toBe('CHG0030001');
+    expect(chg.state).toBe('scheduled');
+    expect(chg.type).toBe('emergency');
+    expect(chg.merge_requests.map((m) => m.iid)).toEqual([7, 8]);
+    expect(chg.web_url).toBe('http://localhost:3002/change_requests/CHG0030001');
+
+    const due = (await (
+      await app.request(
+        `/api/change_requests?state=scheduled&planned_before=${new Date(Date.now() + 1000).toISOString()}`,
+      )
+    ).json()) as Page<ChangeRequestSummary>;
+    expect(due.items.map((c) => c.number)).toEqual(['CHG0030001']);
+    const byMr = (await (
+      await app.request(`/api/change_requests?merge_request=${encodeURIComponent(MR)}`)
+    ).json()) as Page<ChangeRequestSummary>;
+    expect(byMr.items).toHaveLength(1);
+
+    const release = (status: string, extra = {}) =>
+      app.request(`/admin/change_requests/CHG0030001/release`, json({ status, ...extra }));
+    expect((await release('running', { release_id: 'KBR-1' })).status).toBe(200);
+    expect((await release('running')).status).toBe(409);
+    const done = (await (
+      await release('succeeded', {
+        merge_requests: [mrRecord(7), mrRecord(8)],
+        deployments: [
+          {
+            project: 'keybank/CIF00/customer-profile-api',
+            app_tla: 'CIF',
+            service: 'customer-profile-api',
+            sha: 'abcdef1234567890abcdef1234567890abcdef12',
+            short_sha: 'abcdef1',
+            version: '2.3.4-abcdef1',
+            tag: 'kbr-CHG0030001',
+            deployed_at: new Date().toISOString(),
+          },
+        ],
+      })
+    ).json()) as ChangeRequest;
+    expect(done.state).toBe('closed');
+    expect(done.close_code).toBe('successful');
+    expect(done.implemented_at).not.toBeNull();
+    expect(done.journal.some((j) => j.author.username === 'svc_kbr')).toBe(true);
+
+    const inc = (await (await app.request('/api/incidents/INC0010001')).json()) as Incident;
+    expect(inc.journal.some((j) => j.text.includes('CHG0030001 implemented by KBR'))).toBe(true);
+
+    const locked = await app.request('/api/change_requests/CHG0030001', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ planned_start: '+1h' }),
+    });
+    expect(locked.status).toBe(409);
+  });
+
+  it('rejects MRs from another app and drafts without a planned start', async () => {
+    const { app } = buildApp();
+    const wrong = await app.request(
+      '/api/change_requests',
+      json({
+        short_description: 'x',
+        app_tla: 'PAY',
+        merge_requests: [MR],
+        planned_start: 'now',
+      }),
+    );
+    expect(wrong.status).toBe(400);
+    expect(await wrong.text()).toContain("not in PAY's GitLab group");
+
+    const draft = (await (
+      await app.request(
+        '/api/change_requests',
+        json({ short_description: 'x', app_tla: 'CIF', merge_requests: [MR] }),
+      )
+    ).json()) as ChangeRequest;
+    expect(draft.state).toBe('new');
+    const scheduled = (await (
+      await app.request(`/api/change_requests/${draft.number}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ planned_start: '+30m' }),
+      })
+    ).json()) as ChangeRequest;
+    expect(scheduled.state).toBe('scheduled');
+    expect(Date.parse(scheduled.planned_start!)).toBeGreaterThan(Date.now() + 29 * 60_000);
+  });
+
+  it('a failed release sends the change back to New', async () => {
+    const { app } = buildApp();
+    await app.request(
+      '/api/change_requests',
+      json({ short_description: 'x', app_tla: 'CIF', merge_requests: [MR], planned_start: 'now' }),
+    );
+    await app.request('/admin/change_requests/CHG0030001/release', json({ status: 'running' }));
+    const failed = (await (
+      await app.request(
+        '/admin/change_requests/CHG0030001/release',
+        json({ status: 'failed', note: '!7 is opened, not merged' }),
+      )
+    ).json()) as ChangeRequest;
+    expect(failed.state).toBe('new');
+    expect(failed.release.status).toBe('failed');
   });
 });

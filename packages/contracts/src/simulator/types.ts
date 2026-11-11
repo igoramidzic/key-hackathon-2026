@@ -66,9 +66,9 @@ export interface ScenarioDetail extends ScenarioSummary {
 }
 
 /**
- * - `pending`: bad MR merged, rollout in progress (before fault onset)
+ * - `pending`: bad MR merged and promoted by KBR, rollout in progress (before fault onset)
  * - `degrading`: fault active
- * - `recovering`: fix detected on main, errors ramping down
+ * - `recovering`: KBR promoted a change containing the fix to production, errors ramping down
  * - `recovered`: errors gone, alerts resolved
  * - `stopped`: stopped by an operator (`POST /api/stop`, `--force`, reset)
  * - `failed`: the bad MR could not be merged (e.g. systems not reset since the last run)
@@ -83,6 +83,7 @@ export function isRunActive(phase: RunPhase): boolean {
 
 export type RunEventKind =
   | 'merge'
+  | 'change'
   | 'deploy'
   | 'fault'
   | 'alert'
@@ -121,6 +122,12 @@ export interface RunStatus {
   error: string | null;
   bad_mr: { web_url: string; sha: string; short_sha: string; iid: number } | null;
   fix_mr: { web_url: string; sha: string | null } | null;
+  /** Change request KBR used to promote the bad MR to production. */
+  bad_change: { number: string; web_url: string } | null;
+  /** Change request whose promotion put the fix in production. */
+  fix_change: { number: string; web_url: string } | null;
+  /** When the fix was first seen on main (QV), before any promotion. */
+  fix_on_main_at: string | null;
   helpdesk: { number: string; web_url: string; at: string }[];
   alerts: {
     id: number;
@@ -150,6 +157,8 @@ export interface TrafficStatus {
   last_flush_at: string | null;
   ingest_errors: number;
   noise_merges: number;
+  /** Change requests KBR promoted to production since the last reset. */
+  kbr_releases: number;
   background_alerts: number;
 }
 

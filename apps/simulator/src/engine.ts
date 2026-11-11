@@ -15,6 +15,7 @@ import type {
 import type { ScenarioDefinition } from '@sim/scenarios';
 import type { App } from '@sim/world';
 import { Estate } from './estate';
+import { backfillChangeHistory, Kbr } from './kbr';
 import { DEFAULT_NOISE_TIMING, NoiseScheduler, type NoiseTiming } from './noise';
 import { type RunDeps, ScenarioRun } from './run';
 import { checkHealth, type HealthChecker, type SimulatorConfig, type Systems } from './systems';
@@ -32,6 +33,8 @@ export interface EngineOptions {
   tickMs?: number;
   fixCheckMs?: number;
   healthEveryMs?: number;
+  /** How often KBR looks for scheduled changes that are due (default 3s). */
+  kbrPollMs?: number;
 }
 
 const INGEST_BATCH = 2000;
@@ -51,6 +54,7 @@ export class Engine {
   private estate: Estate;
   private traffic: TrafficGenerator;
   private noise: NoiseScheduler;
+  private kbr: Kbr;
   private run: ScenarioRun | null = null;
   private buffer: LogEntryInput[] = [];
   private delayed: LogEntryInput[] = [];
@@ -76,6 +80,7 @@ export class Engine {
     this.estate = new Estate();
     this.traffic = new TrafficGenerator(this.estate, this.profiles);
     this.noise = this.createNoise();
+    this.kbr = this.createKbr();
     this.lastTickMs = this.now();
   }
 
@@ -98,6 +103,7 @@ export class Engine {
     } else {
       await this.backfill();
     }
+    await this.backfillChanges();
     this.startLive();
   }
 
@@ -106,7 +112,6 @@ export class Engine {
       {
         systems: this.opts.systems,
         estate: this.estate,
-        deploy: (app, service, sha, sec) => this.deploy(app, service, sha, sec),
         now: this.now,
         log: this.log,
       },
@@ -114,12 +119,39 @@ export class Engine {
     );
   }
 
+  private createKbr(): Kbr {
+    return new Kbr({
+      systems: this.opts.systems,
+      estate: this.estate,
+      deploy: (app, service, sha, sec, meta) => this.deploy(app, service, sha, sec, meta),
+      now: this.now,
+      log: this.log,
+      onPromoted: (p) => this.run?.onPromoted(p),
+    });
+  }
+
+  /** Change request history from GitLab's merged MRs (only when ServiceNow has none). */
+  private async backfillChanges(): Promise<number> {
+    try {
+      return await backfillChangeHistory(this.opts.systems, this.now(), this.log);
+    } catch (err) {
+      this.log(`Change history backfill failed: ${errorMessage(err)}`);
+      return 0;
+    }
+  }
+
+  /** KBR: promote scheduled change requests whose planned start has passed. */
+  async pollKbr(): Promise<void> {
+    if (this.phase !== 'running') return;
+    await this.kbr.poll();
+  }
+
   private runDeps(): RunDeps {
     return {
       systems: this.opts.systems,
       estate: this.estate,
       emit: (entries) => this.emit(entries),
-      deploy: (app, service, sha, sec) => this.deploy(app, service, sha, sec),
+      kbr: this.kbr,
       logsWebUrl: this.opts.config.systems.logs.web,
       now: this.now,
       log: this.log,
@@ -248,6 +280,7 @@ export class Engine {
     this.noise.init();
     this.timers.push(setInterval(() => this.tick(), this.opts.tickMs ?? 1000));
     this.timers.push(setInterval(() => void this.checkFix(), this.opts.fixCheckMs ?? 5000));
+    this.timers.push(setInterval(() => void this.pollKbr(), this.opts.kbrPollMs ?? 3000));
     this.log(
       `Live traffic started (~${this.traffic.baselineRate.toFixed(1)} lines/sec across ${this.profiles.length} apps)`,
     );
@@ -281,9 +314,15 @@ export class Engine {
     }
   }
 
-  deploy(app: App, service: string, sha: string, durationSec: number): void {
+  deploy(
+    app: App,
+    service: string,
+    sha: string,
+    durationSec: number,
+    meta?: Record<string, string>,
+  ): void {
     const { before, after } = this.estate.deploy(app, service, sha);
-    this.emit(this.estate.rolloutLines(before, after, sha, this.now(), durationSec));
+    this.emit(this.estate.rolloutLines(before, after, sha, this.now(), durationSec, meta));
   }
 
   /** Sends everything due to the Logs API. Concurrent calls share the in-flight flush. */
@@ -356,6 +395,7 @@ export class Engine {
       last_flush_at: this.lastFlushAt,
       ingest_errors: this.ingestErrors,
       noise_merges: this.noise.changes,
+      kbr_releases: this.kbr.releases,
       background_alerts: this.noise.alerts,
     };
   }
@@ -422,7 +462,12 @@ export class Engine {
     this.log('Reset: stopping run and resetting all systems');
     this.run?.stop('Stopped: systems reset');
     // Let in-flight writes land before the systems are wiped.
-    await Promise.allSettled([this.flushing, this.noiseTask, this.run?.settle()]);
+    await Promise.allSettled([
+      this.flushing,
+      this.noiseTask,
+      this.run?.settle(),
+      this.kbr.settle(),
+    ]);
     const systems = await Promise.all(
       SYSTEMS.map(async (name: SystemName) => {
         try {
@@ -444,9 +489,11 @@ export class Engine {
     this.estate = new Estate();
     this.traffic = new TrafficGenerator(this.estate, this.profiles);
     this.noise = this.createNoise();
+    this.kbr = this.createKbr();
     let backfilled = 0;
     try {
       backfilled = await this.backfill();
+      await this.backfillChanges();
     } finally {
       this.phase = 'running';
       this.message = null;

@@ -1,6 +1,19 @@
-import type { AdminMergeResult, CommitRef, FileEdit } from '@sim/contracts/gitlab';
+import type {
+  AdminMergeResult,
+  CommitRef,
+  FileEdit,
+  MergeRequest,
+  MergeRequestDetail,
+} from '@sim/contracts/gitlab';
 import type { Alert, AlertInput, AlertUpdate, LogEntryInput } from '@sim/contracts/logs';
-import type { IncidentCreateInput, IncidentRef } from '@sim/contracts/servicenow';
+import {
+  type ChangeMergeRequest,
+  type ChangeRequest,
+  changeNumber,
+  type IncidentCreateInput,
+  type IncidentRef,
+  parseMergeRequestRef,
+} from '@sim/contracts/servicenow';
 import type { ScenarioDefinition } from '@sim/scenarios';
 import { getApp, shaFor } from '@sim/world';
 import type { SimulatorConfig, Systems } from './systems';
@@ -22,6 +35,71 @@ export function fakeSystems(seedFiles: Record<string, string> = {}) {
   let nextInc = 10_042;
   let ingestFails = 0;
   let lastMain: { title: string; sha: string; web_url: string } | null = null;
+  const mrs = new Map<string, MergeRequestDetail>();
+  const changes: ChangeRequest[] = [];
+  const tags: { project: string; tag: string; ref: string }[] = [];
+  const notes: { project: string; iid: number; body: string }[] = [];
+  let nextChange = 30_001;
+
+  const recordMr = (
+    project: string,
+    iid: number,
+    title: string,
+    author: string,
+    sha: string | null,
+  ) => {
+    const web_url = `http://localhost:3003/${project}/-/merge_requests/${iid}`;
+    const mr = {
+      iid,
+      project_path: project,
+      title,
+      state: sha ? 'merged' : 'opened',
+      merged_at: sha ? new Date().toISOString() : null,
+      created_at: new Date().toISOString(),
+      merge_commit_sha: sha,
+      author: { username: author },
+      labels: [],
+      references: { short: `!${iid}`, full: `${project}!${iid}` },
+      web_url,
+    } as unknown as MergeRequestDetail;
+    mrs.set(`${project}!${iid}`, mr);
+    return mr;
+  };
+  const changeMr = (project: string, iid: number): ChangeMergeRequest => ({
+    project,
+    iid,
+    reference: `${project}!${iid}`,
+    web_url: `http://localhost:3003/${project}/-/merge_requests/${iid}`,
+    title: null,
+    state: null,
+    merge_commit_sha: null,
+  });
+  const newChange = (
+    fields: Pick<ChangeRequest, 'short_description' | 'merge_requests' | 'state'> & {
+      app_tla: string;
+      planned_start: string | null;
+    },
+  ): ChangeRequest => {
+    const number = changeNumber(nextChange++);
+    const change = {
+      number,
+      short_description: fields.short_description,
+      state: fields.state,
+      app: { tla: fields.app_tla },
+      planned_start: fields.planned_start,
+      merge_requests: fields.merge_requests,
+      deployments: [],
+      release: { id: null, status: 'waiting', started_at: null, finished_at: null },
+      web_url: `http://localhost:3002/change_requests/${number}`,
+    } as unknown as ChangeRequest;
+    changes.push(change);
+    return change;
+  };
+  const findChange = (number: string) => {
+    const c = changes.find((x) => x.number === number);
+    if (!c) throw new Error(`404: ${number}`);
+    return c;
+  };
 
   const applyEdits = (project: string, edits: FileEdit[]) => {
     for (const e of edits) {
@@ -85,6 +163,63 @@ export function fakeSystems(seedFiles: Record<string, string> = {}) {
           web_url: `http://localhost:3002/incidents/${number}`,
         };
       },
+      listChanges: async (query = {}) => {
+        const before = query.planned_before ? Date.parse(query.planned_before) : Infinity;
+        const items = changes.filter(
+          (c) =>
+            (!query.state || query.state.includes(c.state)) &&
+            (!query.planned_before ||
+              (c.planned_start !== null && Date.parse(c.planned_start) <= before)),
+        );
+        return { items: items.slice(0, query.limit ?? 25), next_cursor: null };
+      },
+      createChange: async (input) => {
+        const planned =
+          input.planned_start === undefined
+            ? null
+            : input.planned_start === 'now'
+              ? new Date(0).toISOString() // always due, whatever the test clock says
+              : /^\+(\d+)m$/.test(input.planned_start)
+                ? new Date(
+                    Date.now() + Number(input.planned_start.slice(1, -1)) * 60_000,
+                  ).toISOString()
+                : input.planned_start;
+        return newChange({
+          short_description: input.short_description,
+          app_tla: input.app_tla,
+          planned_start: planned,
+          state: planned ? 'scheduled' : 'new',
+          merge_requests: input.merge_requests.map((m) => {
+            const ref = parseMergeRequestRef(m)!;
+            return changeMr(ref.project, ref.iid);
+          }),
+        });
+      },
+      importChange: async (input) =>
+        newChange({
+          short_description: input.short_description,
+          app_tla: input.app_tla,
+          planned_start: input.planned_start,
+          state: input.state,
+          merge_requests: input.merge_requests,
+        }),
+      recordRelease: async (number, input) => {
+        const c = findChange(number);
+        if (input.status === 'running') {
+          if (c.state !== 'scheduled') throw new Error(`409: ${number} is ${c.state}`);
+          c.state = 'implement';
+          c.release = { ...c.release, id: input.release_id ?? null, status: 'running' };
+        } else if (input.status === 'succeeded') {
+          c.state = 'closed';
+          c.release = { ...c.release, status: 'succeeded' };
+          c.deployments = input.deployments ?? [];
+        } else {
+          c.state = 'new';
+          c.release = { ...c.release, status: 'failed' };
+        }
+        if (input.merge_requests) c.merge_requests = input.merge_requests;
+        return c;
+      },
       reset: async () => {
         resets.push('servicenow');
         return { ok: true, service: 'servicenow-api', reset_at: new Date().toISOString() };
@@ -98,6 +233,7 @@ export function fakeSystems(seedFiles: Record<string, string> = {}) {
         const web_url = `http://localhost:3003/${input.project}/-/merge_requests/${iid}`;
         merges.push({ project: input.project, title: input.title, edits: input.edits, sha });
         lastMain = { title: input.title, sha, web_url };
+        recordMr(input.project, iid, input.title, input.author, sha);
         return {
           project: input.project,
           iid,
@@ -115,6 +251,23 @@ export function fakeSystems(seedFiles: Record<string, string> = {}) {
       },
       getRawFile: async (project, path) => files.get(`${project}:${path}`) ?? null,
       latestMainChange: async () => lastMain,
+      getMergeRequest: async (project, iid) => {
+        const mr = mrs.get(`${project}!${iid}`);
+        if (!mr) throw new Error(`404: ${project}!${iid}`);
+        return mr;
+      },
+      listMergeRequests: async () => ({
+        items: [...mrs.values()] as MergeRequest[],
+        next_cursor: null,
+      }),
+      createTag: async (project, body) => {
+        tags.push({ project: String(project), tag: body.tag_name, ref: body.ref });
+        return { name: body.tag_name } as never;
+      },
+      addNote: async (project, iid, body) => {
+        notes.push({ project: String(project), iid, body: body.body });
+        return { id: notes.length } as never;
+      },
       reset: async () => {
         resets.push('gitlab');
         return { ok: true, service: 'gitlab-api', reset_at: new Date().toISOString() };
@@ -138,6 +291,13 @@ export function fakeSystems(seedFiles: Record<string, string> = {}) {
     updates,
     incidents,
     resets,
+    changes,
+    mrs,
+    tags,
+    notes,
+    /** An MR that is open (not merged), e.g. to test KBR refusing it. */
+    openMr: (project: string, title: string) =>
+      recordMr(project, nextIid++, title, 'dwhitfield', null),
     applyEdits,
     failNextIngests: (n: number) => {
       ingestFails = n;

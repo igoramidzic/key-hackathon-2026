@@ -9,7 +9,7 @@ plus a simulator that runs background traffic and triggers incident scenarios.
 
 ```
                       ┌────────────────────────────── simulator (4000) ─────────────────────────────┐
-                      │ traffic generator · scenario engine · fix detector · noise commits · CLI    │
+                      │ traffic generator · scenario engine · KBR releases · noise commits · CLI   │
                       └───────┬──────────────────┬──────────────────┬──────────────────┬────────────┘
                               │ ingest/alerts    │ incidents         │ admin merges     │ reset
                               ▼                  ▼                   ▼                  ▼
@@ -74,6 +74,17 @@ API port because they can't import TS packages.
 Anything random must be deterministic: use `new Rng('<stable key>')` from `@sim/world` (or faker
 seeded from a stable key). Timestamps are relative to process start / last reset.
 
+## Promotion to production (KBR)
+
+Nothing reaches production by merging. `main` is QV; ServiceNow change requests (`changes.ts` in
+servicenow-api) list merged MRs of one app and a planned start. The simulator's `Kbr`
+(`apps/simulator/src/kbr.ts`) polls every 3 s for scheduled changes that are due, validates the MRs
+against GitLab, deploys through the estate (rollout lines carry `change_number`/`release_id`), tags
+`kbr-<CHG>`, notes the MRs and closes the change through `POST /admin/change_requests/:n/release`.
+Scenario runs promote the bad MR the same way and recover only when KBR promotes a commit of the
+culprit project that passes `fix.isFixed` (`ScenarioRun.onPromoted`). Change history is imported
+from GitLab's merged MRs after every reset (`backfillChangeHistory`).
+
 ## REST conventions (all systems)
 
 - JSON keys are `snake_case` (log entries keep GCP's camelCase `LogEntry` shape).
@@ -92,6 +103,7 @@ seeded from a stable key). Timestamps are relative to process start / last reset
 | Logs       | query    | `http://localhost:3001/logs?query=<urlencoded filter>`     |
 | Logs       | alert    | `http://localhost:3001/alerts/<id>`                        |
 | ServiceNow | incident | `http://localhost:3002/incidents/<INC number>`             |
+| ServiceNow | change   | `http://localhost:3002/change_requests/<CHG number>`       |
 | ServiceNow | app      | `http://localhost:3002/apps/<TLA>`                         |
 | ServiceNow | group    | `http://localhost:3002/groups/<group id>`                  |
 | ServiceNow | user     | `http://localhost:3002/users/<username>`                   |

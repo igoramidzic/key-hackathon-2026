@@ -39,6 +39,26 @@ export const EXAMPLES: Record<string, { args: Record<string, unknown>; note?: st
   add_incident_note: {
     args: { number: 'INC0010203', type: 'work_note', text: 'Checked recent merges.' },
   },
+  list_change_requests: { args: { implemented_after: '2d', sort: '-implemented_at', limit: 5 } },
+  get_change_request: {
+    args: { number: 'CHG0030001' },
+    note: 'Change numbers depend on the history backfill: copy one from list_change_requests.',
+  },
+  create_change_request: {
+    args: {
+      short_description: 'CIF - restore snake_case JSON naming (INC0010205)',
+      app_tla: 'CIF',
+      merge_requests: ['keybank/CIF00/customer-profile-api!<iid>'],
+      planned_start: 'now',
+      type: 'emergency',
+      related_incidents: ['<INC>'],
+    },
+    note: 'Use a fix MR a human has merged; KBR aborts the change if any MR is not merged.',
+  },
+  update_change_request: {
+    args: { number: '<CHG>', planned_start: 'now', work_note: 'MR merged, rescheduling.' },
+    note: 'Use a change you created (new or scheduled).',
+  },
   search_apps: { args: { query: 'payments', limit: 5 } },
   get_app: { args: { tla: 'CIF' } },
   get_app_dependencies: { args: { tla: 'OLB', direction: 'up', depth: 2 } },

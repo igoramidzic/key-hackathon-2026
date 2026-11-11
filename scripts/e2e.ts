@@ -470,6 +470,25 @@ async function headline(detail: ScenarioDetail) {
       project: commits.items[0].project ?? project,
       sha,
     });
+  const prodChanges = await step(
+    `changes KBR promoted for ${culprit} since onset`,
+    'servicenow',
+    'list_change_requests',
+    { app_tla: culprit, implemented_after: since, sort: '-implemented_at' },
+    (o) => (o.items.length > 0 ? true : 'no production change found'),
+  );
+  if (prodChanges?.items[0]) {
+    await step(
+      'bad change request',
+      'servicenow',
+      'get_change_request',
+      {
+        number: prodChanges.items[0].number,
+      },
+      (o) =>
+        o.merge_requests.length > 0 && o.deployments.length > 0 ? true : 'no MRs/deployments',
+    );
+  }
   await step('compare since yesterday', 'gitlab', 'compare_refs', {
     project,
     from: 'HEAD~1',
@@ -693,13 +712,51 @@ async function headline(detail: ScenarioDetail) {
       note: `Tracked in ${number}`,
     });
 
-  // --- Human merges, simulator recovers
+  // --- Human merges (QV only), a change request promotes it through KBR, simulator recovers
   if (fixMr) {
     await humanMerge(project, fixMr.iid).then(
       () => check('human merges the fix MR (GitLab UI action)', true),
       (err) => check('human merges the fix MR (GitLab UI action)', false, String(err)),
     );
+    await sleep(8_000);
+    const qv = await runStatus();
+    check(
+      'merged fix is only in QV: production still broken',
+      qv?.phase === 'degrading' && qv.fix_on_main_at !== null,
+      `${qv?.phase} / fix_on_main_at ${qv?.fix_on_main_at}`,
+    );
+    const chg = await step(
+      'raise the change request (scheduled for later)',
+      'servicenow',
+      'create_change_request',
+      {
+        short_description: `${culprit} - ${detail.fix.title} (${number})`.slice(0, 160),
+        app_tla: culprit,
+        merge_requests: [`${project}!${fixMr.iid}`],
+        planned_start: '+1h',
+        type: 'emergency',
+        description: `Fix for ${number}.`,
+        related_incidents: number ? [number] : undefined,
+      },
+      (o) => (o.state === 'scheduled' ? true : `state ${o.state}`),
+    );
+    if (chg) {
+      await step('pull it in: planned start now', 'servicenow', 'update_change_request', {
+        number: chg.number,
+        planned_start: 'now',
+        work_note: 'Incident fix: promote now.',
+      });
+    }
     const recovered = await waitForRecovery(detail.id);
+    if (chg) {
+      await step(
+        'KBR implemented the change',
+        'servicenow',
+        'get_change_request',
+        { number: chg.number },
+        (o) => (o.state === 'closed' && o.deployments.length > 0 ? true : `state ${o.state}`),
+      );
+    }
     if (recovered) {
       await step('tag the hotfix release', 'gitlab', 'create_tag', {
         project,
@@ -844,6 +901,16 @@ async function otherScenario(detail: ScenarioDetail) {
   if (fixMr) {
     check('fix MR opens via MCP', true, fixMr.web_url);
     await humanMerge(detail.culprit_project, fixMr.iid);
+    await tool('servicenow', 'create_change_request', {
+      short_description: detail.fix.title.slice(0, 160),
+      app_tla: culprit,
+      merge_requests: [`${detail.culprit_project}!${fixMr.iid}`],
+      planned_start: 'now',
+      type: 'emergency',
+    }).then(
+      (c) => check('fix change request raised', c.state === 'scheduled', c.number),
+      (err) => check('fix change request raised', false, String(err)),
+    );
     await waitForRecovery(detail.id);
   }
 }

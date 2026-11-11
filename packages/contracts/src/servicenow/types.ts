@@ -434,3 +434,207 @@ export interface UserListQuery {
   limit?: number;
   cursor?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Change requests (CHG) and KBR (KeyBank Release)
+// ---------------------------------------------------------------------------
+
+/**
+ * Nothing reaches production by merging. Merging to `main` deploys to QV; a change request
+ * promotes merged MRs from QV to production. KBR picks up every `scheduled` change once its
+ * planned start passes, deploys the merge commits and closes the change.
+ *
+ * - `new`: draft, no planned start yet (or a KBR run aborted and it needs rescheduling)
+ * - `scheduled`: approved and waiting for its planned start
+ * - `implement`: KBR is promoting it right now
+ * - `closed`: done (see `close_code`)
+ * - `canceled`: withdrawn before KBR ran
+ */
+export type ChangeState = 'new' | 'scheduled' | 'implement' | 'closed' | 'canceled';
+
+/** `normal` goes through CAB, `standard` is pre-approved, `emergency` fixes a live incident. */
+export type ChangeType = 'normal' | 'standard' | 'emergency';
+
+export type ChangeRisk = 'low' | 'moderate' | 'high';
+
+export type ChangeCloseCode = 'successful' | 'successful_with_issues' | 'unsuccessful';
+
+export type ReleaseStatus = 'waiting' | 'running' | 'succeeded' | 'failed';
+
+/**
+ * A merge request on a change: `keybank/CIF00/customer-profile-api!42`, its GitLab web URL, or
+ * `{ project, iid }`.
+ */
+export type ChangeMergeRequestInput = string | { project: string; iid: number };
+
+export interface ChangeMergeRequest {
+  project: string;
+  iid: number;
+  /** `keybank/CIF00/customer-profile-api!42` */
+  reference: string;
+  web_url: string;
+  /** Filled in by KBR when it validates the change. */
+  title: string | null;
+  /** GitLab state when KBR last looked (`merged` is required to promote). */
+  state: string | null;
+  merge_commit_sha: string | null;
+}
+
+/** What KBR rolled out to production for one GitLab project. */
+export interface ChangeDeployment {
+  project: string;
+  app_tla: string;
+  /** k8s deployment (service) that was rolled; null for repos that are not deployed (web, infra). */
+  service: string | null;
+  sha: string;
+  short_sha: string;
+  /** Running version after the rollout, e.g. `2.14.8-3f9c2ab`. */
+  version: string | null;
+  /** GitLab tag KBR created at the promoted commit. */
+  tag: string | null;
+  deployed_at: string;
+}
+
+export interface ChangeRelease {
+  /** KBR release id, e.g. `KBR-20261111-0042`. */
+  id: string | null;
+  status: ReleaseStatus;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface ChangeRequestSummary {
+  sys_id: string;
+  number: string;
+  short_description: string;
+  type: ChangeType;
+  state: ChangeState;
+  risk: ChangeRisk;
+  /** Configuration item: the application being changed. */
+  app: AppRef;
+  /** GitLab projects touched (from the merge requests). */
+  projects: string[];
+  merge_request_count: number;
+  requested_by: UserRef;
+  assignment_group: GroupRef | null;
+  /** When KBR promotes it. */
+  planned_start: string | null;
+  implemented_at: string | null;
+  close_code: ChangeCloseCode | null;
+  release: ChangeRelease;
+  /** Incidents this change fixes or relates to. */
+  related_incidents: string[];
+  opened_at: string;
+  updated_at: string;
+  web_url: string;
+}
+
+/** Full change request (`GET /api/change_requests/:number`). */
+export interface ChangeRequest extends ChangeRequestSummary {
+  description: string;
+  justification: string;
+  backout_plan: string;
+  merge_requests: ChangeMergeRequest[];
+  deployments: ChangeDeployment[];
+  close_notes: string | null;
+  opened_by: UserRef;
+  updated_by: UserRef;
+  /** Activity stream, oldest first. */
+  journal: JournalEntry[];
+}
+
+/** Body for `POST /api/change_requests`. */
+export interface ChangeCreateInput {
+  short_description: string;
+  /** Application TLA (the project's group, keybank/<TLA>00). */
+  app_tla: string;
+  /** Merge requests to promote together. Each must be in the app's GitLab group. */
+  merge_requests: ChangeMergeRequestInput[];
+  /**
+   * When KBR promotes it: ISO time, `now`, or a relative offset like `+30m`, `in 2h`. Omit to
+   * leave the change in `new` (draft).
+   */
+  planned_start?: string;
+  type?: ChangeType;
+  risk?: ChangeRisk;
+  description?: string;
+  justification?: string;
+  backout_plan?: string;
+  requested_by?: string;
+  assignment_group?: string;
+  related_incidents?: string[];
+}
+
+export interface ChangeUpdateInput {
+  /** `scheduled` needs a planned start; `canceled` withdraws it. `implement`/`closed` are KBR's. */
+  state?: 'new' | 'scheduled' | 'canceled';
+  planned_start?: string;
+  short_description?: string;
+  description?: string;
+  type?: ChangeType;
+  risk?: ChangeRisk;
+  add_merge_requests?: ChangeMergeRequestInput[];
+  related_incidents?: string[];
+  work_note?: string;
+  updated_by?: string;
+}
+
+export type ChangeSort =
+  | 'planned_start'
+  | '-planned_start'
+  | 'opened_at'
+  | '-opened_at'
+  | 'implemented_at'
+  | '-implemented_at'
+  | 'number'
+  | '-number';
+
+export interface ChangeListQuery {
+  state?: ChangeState[];
+  type?: ChangeType[];
+  /** true = new/scheduled/implement. */
+  active?: boolean;
+  app_tla?: string;
+  /** GitLab project path; matches changes that include an MR from it. */
+  project?: string;
+  /** An MR reference or URL; matches changes that include it. */
+  merge_request?: string;
+  requested_by?: string;
+  related_incident?: string;
+  q?: string;
+  /** ISO or relative ("6h"). */
+  implemented_after?: string;
+  implemented_before?: string;
+  planned_after?: string;
+  planned_before?: string;
+  sort?: ChangeSort;
+  limit?: number;
+  cursor?: string;
+}
+
+/** `POST /admin/change_requests/:number/release` (the simulator's KBR only). */
+export interface ChangeReleaseInput {
+  status: 'running' | 'succeeded' | 'failed';
+  release_id?: string;
+  /** Resolved MR details (title, state, merge commit). */
+  merge_requests?: ChangeMergeRequest[];
+  deployments?: ChangeDeployment[];
+  note?: string;
+}
+
+/** `POST /admin/change_requests` (the simulator's history backfill and scenario setup). */
+export interface ChangeImportInput {
+  short_description: string;
+  app_tla: string;
+  merge_requests: ChangeMergeRequest[];
+  type?: ChangeType;
+  risk?: ChangeRisk;
+  state: 'scheduled' | 'closed';
+  description?: string;
+  requested_by: string;
+  opened_at: string;
+  planned_start: string;
+  /** For closed changes. */
+  release_id?: string;
+  deployments?: ChangeDeployment[];
+}

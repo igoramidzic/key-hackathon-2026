@@ -113,13 +113,14 @@ calls, so read it for exact argument shapes.
 | Detect | Notice something is wrong | `list_alerts` (Moogsoft), `summarize_errors`, or your own rules on the SSE stream. For the help-desk scenario the trigger is a new phone incident: poll `list_incidents` with `active: true` and `opened_after`, and look for `contact_type: "phone"`. |
 | Scope | Which apps fail, since when | `summarize_errors`, `get_log_histogram`, `search_logs`, `get_log_entry` (stack traces), `list_log_services` |
 | Trace | Find the shared upstream cause | `get_app` and `get_app_dependencies` (direction `upstream`) for the failing TLAs; look for a common upstream app |
-| Find the change | Which merge broke it | `list_merge_requests` (`tla`, `state: "merged"`, `merged_after`), `get_merge_request` (diff, pipeline), `list_recent_commits`, `compare_refs`, `get_file` |
+| Find the change | What reached production and broke it | `list_change_requests` (`app_tla`, `implemented_after`) shows what KBR promoted and when; `get_change_request` lists its MRs and deployed versions. Then `list_merge_requests` (`tla`, `state: "merged"`, `merged_after`), `get_merge_request` (diff, pipeline, KBR's promotion note), `list_recent_commits`, `compare_refs`, `get_file` |
 | Open incident | Record it | `create_incident` (`app_tla` = culprit, impact/urgency, `assignment_group` = the app's support group, `contact_type: "monitoring"`) |
 | Group duplicates | One parent for one problem | `list_incidents` (`active`, `contact_type: ["phone","email","chat"]`, `relationship: "standalone"`, `opened_after`), then `link_child_incidents` (or `create_incident` with `child_incidents`). Comments on the parent reach every caller; resolving it resolves them |
 | Assemble people | Right people, with reasons | `get_support_group` for on-call primary/secondary, then `create_channel` named `inc<number>-<slug>` with `members: [{user, reason}]`, `add_channel_members`, `post_message` |
 | Fix | Propose the change | `create_merge_request` (branch + commit + MR in one call; `changes` take full content or find/replace edits), `add_merge_request_note` |
 | Link up | Cross-reference everything | `update_incident` (`add_links`, `work_note`, `state`), `update_alert` (`incident_number`, `status: "acknowledged"`) |
-| Verify and close | Confirm recovery after a human merges | `tail_logs` / `summarize_errors` until errors stop, then `update_incident` with `state: "resolved"` (this also resolves the grouped calls) |
+| Ship | Get the fix to production | After a human merges the MR (QV only), `create_change_request` (`type: "emergency"`, `planned_start: "now"`, `related_incidents`). KBR promotes it within seconds; if the MR isn't merged yet, KBR aborts and the change goes back to `new`: merge, then `update_change_request` with `planned_start: "now"` |
+| Verify and close | Confirm recovery once KBR promotes the fix | `get_change_request` (state `closed`, deployments), `tail_logs` / `summarize_errors` until errors stop, then `update_incident` with `state: "resolved"` (this also resolves the grouped calls) |
 
 Things that make it hard on purpose:
 
@@ -133,8 +134,13 @@ Things that make it hard on purpose:
 - **Bankers call during the headline cascade too.** Branch staff report Teller Workstation lookup
   failures while monitoring fires; group them under the agent's incident instead of working them
   one by one.
-- **No merge tool.** The agent opens the MR; a human clicks **Merge** in the GitLab UI. The
-  simulator notices within about 5 s, logs a deploy and ramps errors down.
+- **Merged is not deployed.** Merging to `main` only deploys to QV. Production changes go out
+  through ServiceNow change requests (CHG) that KBR (KeyBank Release, `svc_kbr`) promotes at their
+  planned start: it rolls out the merge commits, tags them `kbr-<CHG>`, notes each MR and closes
+  the change. A merge that never got a change request never reached production.
+- **No merge tool.** The agent opens the MR; a human clicks **Merge** in the GitLab UI. Then a
+  change request (raised by the agent or in the ServiceNow UI) promotes it. KBR polls every few
+  seconds, logs a deploy and the errors ramp down.
 
 Identity: every write defaults to `svc_incident_auto` ("Incident Automation"). Usernames are the
 same in ServiceNow, GitLab and Teams. Fixed personas worth inviting: `dwhitfield` (NOC shift lead,
@@ -155,7 +161,8 @@ pnpm sim status
 ```
 
 Then run your agent. A run is a success when `pnpm sim status` (or `GET :4000/api/status`) shows
-`phase: "recovered"` after you merge the agent's MR in the GitLab UI. Reset between runs so each
+`phase: "recovered"` after you merge the agent's MR in the GitLab UI and a change request
+promotes it through KBR. Reset between runs so each
 one starts from the seeded baseline.
 
 Scenarios, from easiest to hardest to diagnose: `crd-pool-exhaustion` (single app, the failing
@@ -204,4 +211,4 @@ resource.labels.container_name="payments-api" httpRequest.status>=500 -"client d
 | Tools return empty lists right after start | The world is still backfilling; wait for the control panel to say running |
 | `pnpm sim trigger` refuses | Another scenario is active: `pnpm sim stop` or pass `--force` |
 | `create_channel` conflict | Channel exists from an earlier run: `add_channel_members`, or `pnpm sim reset` |
-| Run stays in `degrading` after the MR | It has not been merged into `main` yet, or the fix is wrong |
+| Run stays in `degrading` after the MR | Not merged yet, merged but no change request promoted it (merged = QV only), the change is still scheduled for later or KBR aborted it (see its work notes), or the fix is wrong |

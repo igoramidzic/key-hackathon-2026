@@ -92,10 +92,10 @@ function steps(run: RunStatus): Step[] {
   const helpdesk = run.kind === 'helpdesk';
   return [
     {
-      label: 'Bad change merged',
+      label: 'Bad change promoted',
       tone: 'warning',
-      done: run.bad_mr !== null,
-      at: firstOffset(run.events, ['merge']),
+      done: run.bad_change !== null,
+      at: firstOffset(run.events, ['deploy']),
     },
     {
       label: 'Errors spreading',
@@ -117,7 +117,12 @@ function steps(run: RunStatus): Step[] {
           at: firstOffset(run.events, ['alert']),
         },
     {
-      label: run.fixed_at !== null ? 'Fix merged' : 'Waiting for a fix',
+      label:
+        run.fixed_at !== null
+          ? 'Fix promoted (KBR)'
+          : run.fix_on_main_at !== null
+            ? 'Fix in QV: needs a change request'
+            : 'Waiting for a fix',
       tone: 'info',
       done: run.fixed_at !== null,
       at: firstOffset(run.events, ['fix']),
@@ -186,15 +191,17 @@ function sentence(run: RunStatus): string {
   const apps = run.affected_tlas.length;
   switch (run.phase) {
     case 'pending':
-      return 'A change just merged and is rolling out. Nothing looks wrong yet.';
+      return 'A change request just went out through KBR and is rolling out to production. Nothing looks wrong yet.';
     case 'degrading':
+      if (run.fix_on_main_at !== null)
+        return 'The fix is merged to main, so it is only in QV. Raise a change request in ServiceNow (planned start: now) and KBR will promote it to production.';
       if (run.kind === 'helpdesk' && run.helpdesk.length > 0)
         return 'A branch manager called the help desk and an incident is open. Monitoring stays quiet, so the agent has to work from the ticket.';
       if (run.alerts.length > 0)
         return `Errors are spreading across ${apps} app${apps === 1 ? '' : 's'} and monitoring is alerting. Now the agent takes over: find the cause, open an incident, bring in the right people and propose a fix.`;
       return 'Errors are starting to show up in the logs.';
     case 'recovering':
-      return 'A fix was merged. Errors are dying down.';
+      return 'KBR promoted the fix to production. Errors are dying down.';
     case 'recovered':
       return 'Everything is back to normal. Reset to start fresh, or run another scenario.';
     case 'stopped':
@@ -237,6 +244,16 @@ function AnswerKey({ run }: { run: RunStatus }) {
             className="underline-offset-4 hover:underline"
           >
             The bad change in GitLab ↗
+          </a>
+        )}
+        {run.bad_change && (
+          <a
+            href={run.bad_change.web_url}
+            target="_blank"
+            rel="noreferrer"
+            className="underline-offset-4 hover:underline"
+          >
+            {run.bad_change.number} in ServiceNow ↗
           </a>
         )}
         <span className="text-muted-foreground">Known fix: {detail.data?.fix.title}</span>

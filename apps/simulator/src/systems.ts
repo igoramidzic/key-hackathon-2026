@@ -57,8 +57,21 @@ export interface MainChange {
 /** The slice of each system's client the engine drives (fakeable in tests). */
 export interface Systems {
   logs: Pick<LogsClient, 'ingest' | 'raiseAlert' | 'updateAlert' | 'reset'>;
-  servicenow: Pick<ServiceNowClient, 'createIncident' | 'reset'>;
-  gitlab: Pick<GitlabClient, 'adminMerge' | 'adminCommit' | 'getRawFile' | 'reset'> & {
+  servicenow: Pick<
+    ServiceNowClient,
+    'createIncident' | 'reset' | 'listChanges' | 'importChange' | 'recordRelease' | 'createChange'
+  >;
+  gitlab: Pick<
+    GitlabClient,
+    | 'adminMerge'
+    | 'adminCommit'
+    | 'getRawFile'
+    | 'reset'
+    | 'getMergeRequest'
+    | 'listMergeRequests'
+    | 'createTag'
+    | 'addNote'
+  > & {
     /** Best effort: the latest merge (or commit) on main, excluding `excludeSha`. */
     latestMainChange?(project: string, excludeSha?: string): Promise<MainChange | null>;
   };
@@ -75,6 +88,10 @@ export function createSystems(config: SimulatorConfig): Systems {
       adminCommit: gitlab.adminCommit,
       getRawFile: gitlab.getRawFile,
       reset: gitlab.reset,
+      getMergeRequest: gitlab.getMergeRequest,
+      listMergeRequests: gitlab.listMergeRequests,
+      createTag: gitlab.createTag,
+      addNote: gitlab.addNote,
       latestMainChange: (project, excludeSha) => latestMainChange(gitlab, project, excludeSha),
     },
     teams: createTeamsClient(config.systems.teams.api),

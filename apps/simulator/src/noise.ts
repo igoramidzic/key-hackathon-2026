@@ -6,7 +6,6 @@ import type { Systems } from './systems';
 export interface NoiseDeps {
   systems: Systems;
   estate: Estate;
-  deploy(app: App, service: string, sha: string, durationSec: number): void;
   now(): number;
   log(message: string): void;
 }
@@ -119,6 +118,11 @@ export class NoiseScheduler {
   private counter = 0;
   changes = 0;
   alerts = 0;
+  /** Merged MRs per app that are in QV but not on a change request yet. */
+  private pendingPromotion = new Map<
+    string,
+    { project: string; iid: number; title: string; author: string }[]
+  >();
 
   constructor(
     private readonly deps: NoiseDeps,
@@ -135,6 +139,7 @@ export class NoiseScheduler {
     this.counter = 0;
     this.changes = 0;
     this.alerts = 0;
+    this.pendingPromotion = new Map();
     this.nextChangeAt = now + between(this.rng, this.timing.changeEverySec);
     this.nextAlertAt =
       now + between(this.rng, [this.timing.alertEverySec[0] / 3, this.timing.alertEverySec[0] / 2]);
@@ -207,11 +212,10 @@ export class NoiseScheduler {
 
     if (kind === 'changelog') {
       const existing = await gitlab.getRawFile(repo.path, 'CHANGELOG.md', 'main');
-      const rt = this.deps.estate.get(app, app.runtime.service);
       const current = existing?.match(/##\s*\[?(\d+)\.(\d+)\.(\d+)/);
       const [maj, min, pat] = current
         ? [Number(current[1]), Number(current[2]), Number(current[3])]
-        : rt.semver;
+        : this.deps.estate.get(app, app.runtime.service).semver;
       const version = `${maj}.${min}.${pat + 1}`;
       const items = rng.pickN(CHANGELOG_ITEMS, rng.int(1, 3));
       const date = new Date(this.deps.now()).toISOString().slice(0, 10);
@@ -291,11 +295,9 @@ export class NoiseScheduler {
 
     const edits = [{ path, content }];
     const asCommit = kind === 'changelog' ? rng.chance(0.4) : rng.chance(0.15);
-    let sha: string;
     let url: string;
     if (asCommit) {
       const res = await gitlab.adminCommit({ project: repo.path, message: title, author, edits });
-      sha = res.id;
       url = res.web_url;
     } else {
       const res = await gitlab.adminMerge({
@@ -309,14 +311,40 @@ export class NoiseScheduler {
         edits,
         opened_minutes_ago: rng.int(30, 60 * 24 * 3),
       });
-      sha = res.merge_commit.id;
       url = res.web_url;
+      const pending = this.pendingPromotion.get(app.tla) ?? [];
+      pending.push({ project: repo.path, iid: res.iid, title, author });
+      this.pendingPromotion.set(app.tla, pending);
     }
     this.changes++;
     this.deps.log(`[noise] ${asCommit ? 'commit' : 'merge'} ${repo.path}: ${title} (${url})`);
-    if (app.emitsLogs && repo.kind === 'service' && repo.name === app.runtime.service) {
-      this.deps.deploy(app, repo.name, sha, 20);
-    }
+    // Merges sit in QV until someone raises a change request; sometimes several ride together.
+    if (!asCommit && rng.chance(0.6)) await this.raiseChange(app);
+  }
+
+  /** Change request for everything of `app` waiting in QV, scheduled a few minutes out. */
+  private async raiseChange(app: App): Promise<void> {
+    const pending = this.pendingPromotion.get(app.tla) ?? [];
+    if (pending.length === 0) return;
+    this.pendingPromotion.delete(app.tla);
+    const last = pending.at(-1)!;
+    const repo = last.project.split('/').at(-1)!;
+    const change = await this.deps.systems.servicenow.createChange({
+      short_description: (pending.length === 1
+        ? `${repo}: ${last.title}`
+        : `${app.tla}: promote ${pending.length} changes to production`
+      ).slice(0, 160),
+      description: pending.map((p) => `- ${p.project}!${p.iid} ${p.title}`).join('\n'),
+      app_tla: app.tla,
+      merge_requests: pending.map((p) => `${p.project}!${p.iid}`),
+      planned_start: `+${this.rng.int(2, 12)}m`,
+      type: 'standard',
+      risk: 'low',
+      requested_by: last.author,
+    });
+    this.deps.log(
+      `[noise] ${change.number} scheduled for ${change.planned_start} (${pending.length} MR${pending.length === 1 ? '' : 's'} of ${app.tla})`,
+    );
   }
 
   private async raiseAlert(): Promise<void> {

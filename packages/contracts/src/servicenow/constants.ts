@@ -1,5 +1,9 @@
 import { URLS } from '../config';
 import type {
+  ChangeCloseCode,
+  ChangeRisk,
+  ChangeState,
+  ChangeType,
   CloseCode,
   ContactType,
   GroupType,
@@ -9,6 +13,7 @@ import type {
   IncidentState,
   LinkType,
   Priority,
+  ReleaseStatus,
 } from './types';
 
 export const INCIDENT_STATES: IncidentState[] = [
@@ -139,4 +144,77 @@ export const serviceNowWebUrl = {
   app: (tla: string, base = URLS.servicenow.web) => `${base}/apps/${tla.toUpperCase()}`,
   group: (id: string, base = URLS.servicenow.web) => `${base}/groups/${id}`,
   user: (username: string, base = URLS.servicenow.web) => `${base}/users/${username}`,
+  change: (number: string, base = URLS.servicenow.web) => `${base}/change_requests/${number}`,
 };
+
+// ---------------------------------------------------------------------------
+// Change requests
+// ---------------------------------------------------------------------------
+
+export const CHANGE_STATES: ChangeState[] = ['new', 'scheduled', 'implement', 'closed', 'canceled'];
+
+export const ACTIVE_CHANGE_STATES: ChangeState[] = ['new', 'scheduled', 'implement'];
+
+export const CHANGE_STATE_LABELS: Record<ChangeState, string> = {
+  new: 'New',
+  scheduled: 'Scheduled',
+  implement: 'Implement',
+  closed: 'Closed',
+  canceled: 'Canceled',
+};
+
+export const CHANGE_TYPES: ChangeType[] = ['normal', 'standard', 'emergency'];
+
+export const CHANGE_TYPE_LABELS: Record<ChangeType, string> = {
+  normal: 'Normal',
+  standard: 'Standard',
+  emergency: 'Emergency',
+};
+
+export const CHANGE_RISKS: ChangeRisk[] = ['low', 'moderate', 'high'];
+
+export const CHANGE_RISK_LABELS: Record<ChangeRisk, string> = {
+  low: 'Low',
+  moderate: 'Moderate',
+  high: 'High',
+};
+
+export const CHANGE_CLOSE_CODE_LABELS: Record<ChangeCloseCode, string> = {
+  successful: 'Successful',
+  successful_with_issues: 'Successful with issues',
+  unsuccessful: 'Unsuccessful',
+};
+
+export const RELEASE_STATUS_LABELS: Record<ReleaseStatus, string> = {
+  waiting: 'Waiting',
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+};
+
+export function isActiveChangeState(state: ChangeState): boolean {
+  return ACTIVE_CHANGE_STATES.includes(state);
+}
+
+export const changeNumber = (n: number) => `CHG${String(n).padStart(7, '0')}`;
+
+/**
+ * Parses an MR reference: `keybank/PAY00/payments-api!12`, a GitLab MR web URL, or
+ * `{ project, iid }`. Returns null when it is not recognisable.
+ */
+export function parseMergeRequestRef(
+  input: string | { project: string; iid: number },
+): { project: string; iid: number } | null {
+  if (typeof input !== 'string') {
+    const project = input.project?.trim().replace(/^\/+|\/+$/g, '');
+    return project && Number.isInteger(input.iid) && input.iid > 0
+      ? { project, iid: input.iid }
+      : null;
+  }
+  const s = input.trim();
+  const url = s.match(/([\w.-]+\/[\w.-]+\/[\w.-]+)\/-\/merge_requests\/(\d+)/);
+  if (url) return { project: url[1]!, iid: Number(url[2]) };
+  const ref = s.match(/^([\w.-]+\/[\w.-]+\/[\w.-]+)!(\d+)$/);
+  if (ref) return { project: ref[1]!, iid: Number(ref[2]) };
+  return null;
+}

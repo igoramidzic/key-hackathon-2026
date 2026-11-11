@@ -48,6 +48,8 @@ export const SHARED_GROUP_IDS = {
 /** Fixed people that scenarios and demos refer to by username. */
 export const PERSONAS = {
   incidentBot: 'svc_incident_auto',
+  /** KBR (KeyBank Release): promotes change requests from QV to production. */
+  releaseBot: 'svc_kbr',
   nocLead: 'dwhitfield',
   nocAnalyst: 'mbell',
   serviceDeskAnalyst: 'pnatarajan',

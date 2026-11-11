@@ -1,5 +1,8 @@
 import {
   type AppListQuery,
+  type ChangeCreateInput,
+  type ChangeListQuery,
+  type ChangeUpdateInput,
   createServiceNowClient,
   type GroupListQuery,
   type IncidentCreateInput,
@@ -121,5 +124,42 @@ export function useCreateIncident() {
   return useMutation({
     mutationFn: (body: IncidentCreateInput) => sn.openIncident(body),
     onSuccess: () => void client.invalidateQueries({ queryKey: ['incidents'] }),
+  });
+}
+
+export function useChanges(query: ChangeListQuery, live = true) {
+  return useQuery({
+    queryKey: ['changes', query],
+    queryFn: () => sn.listChanges(query),
+    refetchInterval: live ? LIVE : false,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useChange(number: string) {
+  return useQuery({
+    queryKey: ['change', number],
+    queryFn: () => sn.getChange(number),
+    refetchInterval: 3_000,
+  });
+}
+
+export function useCreateChange() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangeCreateInput) => sn.createChange(body),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ['changes'] }),
+  });
+}
+
+export function useUpdateChange(number: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangeUpdateInput) =>
+      sn.updateChange(number, { updated_by: CURRENT_USER, ...body }),
+    onSuccess: (change) => {
+      client.setQueryData(['change', number], change);
+      void client.invalidateQueries({ queryKey: ['changes'] });
+    },
   });
 }

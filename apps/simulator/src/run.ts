@@ -7,8 +7,9 @@ import {
   type RunStatus,
 } from '@sim/contracts/simulator';
 import type { LogTemplate, ScenarioDefinition } from '@sim/scenarios';
-import { type App, getWorld, Rng, shaFor, slugify } from '@sim/world';
+import { type App, getWorld, Rng, slugify } from '@sim/world';
 import { type Estate, lineFromRendered } from './estate';
+import type { Kbr, Promotion } from './kbr';
 import type { Systems } from './systems';
 import { makeLogContext } from './values';
 
@@ -20,8 +21,8 @@ export interface RunDeps {
   estate: Estate;
   /** Queue entries for ingest (future timestamps are held until due). */
   emit(entries: LogEntryInput[]): void;
-  /** Roll out `sha` for a service: bumps version, rolls pods, emits rollout lines. */
-  deploy(app: App, service: string, sha: string, durationSec: number): void;
+  /** KBR: promotes a scheduled change request to production right away. */
+  kbr: Pick<Kbr, 'implement'>;
   logsWebUrl: string;
   now(): number;
   log(message: string): void;
@@ -112,6 +113,9 @@ export class ScenarioRun {
   private readonly culprit: { app: App; service: string };
   private badMr: RunStatus['bad_mr'] = null;
   private fixMr: RunStatus['fix_mr'] = null;
+  private badChange: RunStatus['bad_change'] = null;
+  private fixChange: RunStatus['fix_change'] = null;
+  private fixOnMainAt: number | null = null;
   private fixedAtSec: number | null = null;
   private fixedAtMs: number | null = null;
   private faultOnsetAtMs: number | null = null;
@@ -228,7 +232,10 @@ export class ScenarioRun {
     }));
   }
 
-  /** t=0: merge the bad MR and roll it out. Throws (and marks the run failed) on error. */
+  /**
+   * t=0: merge the bad MR to main (QV), raise the change request that promotes it and let KBR roll
+   * it out to production. Throws (and marks the run failed) on error.
+   */
   async start(): Promise<void> {
     const mr = this.scenario.badMr;
     try {
@@ -253,19 +260,91 @@ export class ScenarioRun {
       };
       this.addEvent(
         'merge',
-        `Bad MR !${res.iid} merged: "${mr.title}" (${mr.project}, ${this.badMr.short_sha})`,
+        `Bad MR !${res.iid} merged to main (QV): "${mr.title}" (${mr.project}, ${this.badMr.short_sha})`,
         res.web_url,
       );
       const rolloutSec = Math.max(2, Math.min(20, this.scenario.faultOnsetSec / this.speed));
-      this.deps.deploy(this.culprit.app, this.culprit.service, sha, rolloutSec);
-      this.addEvent('deploy', `Rolling out ${this.culprit.service} ${this.badMr.short_sha}`);
+      const promoted = await this.promote(
+        {
+          project: mr.project,
+          iid: res.iid,
+          web_url: res.web_url,
+          title: mr.title,
+          sha,
+          author: mr.author,
+          openedMinutesAgo: Math.max(5, Math.round((mr.openedMinutesAgo ?? 90) / 2)),
+        },
+        rolloutSec,
+      );
+      this.badChange = promoted;
     } catch (err) {
       this.phase = 'failed';
-      this.error = `Bad MR merge failed: ${errorMessage(err)}`;
+      this.error = this.badMr
+        ? `Promoting the bad MR to production failed: ${errorMessage(err)}`
+        : `Bad MR merge failed: ${errorMessage(err)}`;
       this.endedAtMs = this.deps.now();
       this.addEvent('error', this.error);
       throw err;
     }
+  }
+
+  /**
+   * Raises a change request (already approved, planned start now) for a merged MR and has KBR
+   * promote it. Returns the change. Throws when KBR could not promote it.
+   */
+  private async promote(
+    mr: {
+      project: string;
+      iid: number;
+      web_url: string;
+      title: string;
+      sha: string;
+      author: string;
+      openedMinutesAgo: number;
+    },
+    rolloutSec: number,
+  ): Promise<{ number: string; web_url: string }> {
+    const now = this.deps.now();
+    const target = serviceForProject(mr.project);
+    if (!target) throw new Error(`No application owns ${mr.project}`);
+    const reference = `${mr.project}!${mr.iid}`;
+    const repo = mr.project.split('/').at(-1)!;
+    const change = await this.deps.systems.servicenow.importChange({
+      short_description: `${repo}: ${mr.title}`.slice(0, 160),
+      description: `Promote ${reference} from QV to production.\n\n- ${reference} ${mr.title}`,
+      app_tla: target.app.tla,
+      merge_requests: [
+        {
+          project: mr.project,
+          iid: mr.iid,
+          reference,
+          web_url: mr.web_url,
+          title: mr.title,
+          state: 'merged',
+          merge_commit_sha: mr.sha,
+        },
+      ],
+      type: 'normal',
+      risk: 'low',
+      state: 'scheduled',
+      requested_by: mr.author,
+      opened_at: new Date(now - mr.openedMinutesAgo * 60_000).toISOString(),
+      planned_start: new Date(now).toISOString(),
+    });
+    this.addEvent(
+      'change',
+      `${change.number} scheduled by ${mr.author}: KBR promotes ${reference} to production`,
+      change.web_url,
+    );
+    const result = await this.deps.kbr.implement(change.number, { rolloutSec });
+    if (!result.ok) throw new Error(`KBR could not promote ${change.number}: ${result.reason}`);
+    const d = result.deployments.find((x) => x.project === mr.project);
+    this.addEvent(
+      'deploy',
+      `KBR ${result.release_id} rolling out ${d?.service ?? repo} ${d?.version ?? mr.sha.slice(0, 7)} (${change.number})`,
+      change.web_url,
+    );
+    return { number: change.number, web_url: change.web_url };
   }
 
   /** Advances the run to `nowMs`; returns symptom log lines for the last `dtSec` seconds. */
@@ -419,63 +498,80 @@ export class ScenarioRun {
   private async landHerring(index: number): Promise<void> {
     const h = this.scenario.redHerrings![index]!;
     try {
-      let url: string;
-      let sha: string;
-      if (h.kind === 'merge') {
-        const target = serviceForProject(h.project);
-        const mergedBy =
-          h.mergedBy ?? target?.app.developerUsernames.find((u) => u !== h.author) ?? h.author;
-        const res = await this.deps.systems.gitlab.adminMerge({
-          project: h.project,
-          title: h.title,
-          description: h.description ?? '',
-          author: h.author,
-          merged_by: mergedBy,
-          source_branch: h.sourceBranch ?? `feature/${slugify(h.title).slice(0, 40)}`,
-          labels: h.labels,
-          edits: h.edits,
-        });
-        url = res.web_url;
-        sha = res.merge_commit.id;
-      } else {
+      if (h.kind === 'commit') {
+        // A direct commit lands in QV only; nothing promotes it.
         const res = await this.deps.systems.gitlab.adminCommit({
           project: h.project,
           message: h.title,
           author: h.author,
           edits: h.edits,
         });
-        url = res.web_url;
-        sha = res.id;
+        this.addEvent(
+          'red_herring',
+          `Red herring commit on main (QV): "${h.title}" (${h.project})`,
+          res.web_url,
+        );
+        return;
       }
-      this.addEvent('red_herring', `Red herring ${h.kind}: "${h.title}" (${h.project})`, url);
       const target = serviceForProject(h.project);
+      const mergedBy =
+        h.mergedBy ?? target?.app.developerUsernames.find((u) => u !== h.author) ?? h.author;
+      const res = await this.deps.systems.gitlab.adminMerge({
+        project: h.project,
+        title: h.title,
+        description: h.description ?? '',
+        author: h.author,
+        merged_by: mergedBy,
+        source_branch: h.sourceBranch ?? `feature/${slugify(h.title).slice(0, 40)}`,
+        labels: h.labels,
+        edits: h.edits,
+      });
+      this.addEvent('red_herring', `Red herring merge: "${h.title}" (${h.project})`, res.web_url);
+      // Like any merge, it reaches production through its own change request.
       if (target?.deployable && target.app.emitsLogs) {
-        this.deps.deploy(target.app, target.service, sha, 20);
+        await this.promote(
+          {
+            project: h.project,
+            iid: res.iid,
+            web_url: res.web_url,
+            title: h.title,
+            sha: res.merge_commit.id,
+            author: h.author,
+            openedMinutesAgo: 60,
+          },
+          20,
+        );
       }
     } catch (err) {
       this.addEvent('error', `Red herring "${h.title}" failed: ${errorMessage(err)}`);
     }
   }
 
-  /** Reads `fix.files` from main and evaluates `fix.isFixed`. Returns true when the fix landed. */
+  /**
+   * Polls `main` (QV) for the fix, only to tell the operator it is merged but not yet in
+   * production. Recovery waits for KBR to promote it (`onPromoted`).
+   */
   async checkFix(): Promise<boolean> {
     if (
       !(this.phase === 'pending' || this.phase === 'degrading') ||
       this.checkingFix ||
-      !this.badMr
+      !this.badMr ||
+      this.fixOnMainAt !== null
     ) {
       return false;
     }
     this.checkingFix = true;
-    const { fix, badMr } = this.scenario;
     try {
-      const files: Record<string, string | null> = {};
-      for (const path of fix.files) {
-        files[path] = await this.deps.systems.gitlab.getRawFile(badMr.project, path, 'main');
-      }
-      if (!(this.phase === 'pending' || this.phase === 'degrading')) return false;
-      if (!fix.isFixed(files)) return false;
-      await this.markFixed();
+      if (!(await this.fixedAt('main'))) return false;
+      if (this.fixOnMainAt !== null) return false;
+      this.fixOnMainAt = this.deps.now();
+      const change = await this.latestChange();
+      if (change) this.fixMr = { web_url: change.web_url, sha: change.sha };
+      this.addEvent(
+        'fix',
+        `Fix merged to main (QV)${change ? `: "${change.title}"` : ''}. Not in production until a change request promotes it through KBR.`,
+        change?.web_url,
+      );
       return true;
     } catch (err) {
       if (this.fixCheckErrors++ === 0)
@@ -486,36 +582,69 @@ export class ScenarioRun {
     }
   }
 
-  private async markFixed(): Promise<void> {
+  /** KBR promoted something: if it is the culprit project and contains the fix, recover. */
+  onPromoted(p: Promotion): Promise<void> {
+    const task = this.handlePromotion(p);
+    this.track(task);
+    return task;
+  }
+
+  private async handlePromotion(p: Promotion): Promise<void> {
+    if (!(this.phase === 'pending' || this.phase === 'degrading') || !this.badMr) return;
+    if (p.project !== this.scenario.badMr.project || p.sha === this.badMr.sha) return;
+    try {
+      if (!(await this.fixedAt(p.sha))) {
+        this.addEvent(
+          'info',
+          `${p.change} promoted ${p.project}@${p.sha.slice(0, 7)} to production, but it does not contain the fix`,
+          p.change_url,
+        );
+        return;
+      }
+    } catch (err) {
+      this.addEvent('error', `Fix check at ${p.sha.slice(0, 7)} failed: ${errorMessage(err)}`);
+      return;
+    }
+    if (!(this.phase === 'pending' || this.phase === 'degrading')) return;
     const now = this.deps.now();
     this.phase = 'recovering';
     this.fixedAtSec = this.scenarioSec(now);
     this.fixedAtMs = now;
-    const project = this.scenario.badMr.project;
-    let change: Awaited<ReturnType<NonNullable<Systems['gitlab']['latestMainChange']>>> = null;
-    try {
-      change =
-        (await this.deps.systems.gitlab.latestMainChange?.(project, this.badMr?.sha)) ?? null;
-    } catch {
-      change = null;
+    this.fixChange = { number: p.change, web_url: p.change_url };
+    if (!this.fixMr) {
+      const change = await this.latestChange().catch(() => null);
+      this.fixMr = change
+        ? { web_url: change.web_url, sha: change.sha }
+        : { web_url: p.change_url, sha: p.sha };
     }
-    if (change) this.fixMr = { web_url: change.web_url, sha: change.sha };
     this.addEvent(
       'fix',
-      change ? `Fix detected on main: "${change.title}"` : `Fix detected on main of ${project}`,
-      change?.web_url,
+      `Fix live in production: ${p.change} (${p.release_id}) rolled out ${p.service ?? p.project} ${p.sha.slice(0, 7)}; errors ramping down`,
+      p.change_url,
     );
-    const sha = change?.sha ?? shaFor(`fix:${this.id}:${now}`);
-    this.deps.deploy(
-      this.culprit.app,
-      this.culprit.service,
-      sha,
-      Math.max(2, RAMP_SEC / this.speed),
-    );
-    this.addEvent(
-      'deploy',
-      `Rolling out ${this.culprit.service} ${sha.slice(0, 7)}; errors ramping down`,
-    );
+  }
+
+  /** True when `fix.isFixed` holds for the culprit project's files at `ref`. */
+  private async fixedAt(ref: string): Promise<boolean> {
+    const { fix, badMr } = this.scenario;
+    const files: Record<string, string | null> = {};
+    for (const path of fix.files) {
+      files[path] = await this.deps.systems.gitlab.getRawFile(badMr.project, path, ref);
+    }
+    return fix.isFixed(files);
+  }
+
+  private async latestChange() {
+    try {
+      return (
+        (await this.deps.systems.gitlab.latestMainChange?.(
+          this.scenario.badMr.project,
+          this.badMr?.sha,
+        )) ?? null
+      );
+    } catch {
+      return null;
+    }
   }
 
   private async resolveAlerts(announce = true): Promise<void> {
@@ -591,6 +720,9 @@ export class ScenarioRun {
       error: this.error,
       bad_mr: this.badMr,
       fix_mr: this.fixMr,
+      bad_change: this.badChange,
+      fix_change: this.fixChange,
+      fix_on_main_at: iso(this.fixOnMainAt),
       helpdesk: [...this.helpdesk],
       alerts: [...this.alerts.values()].map((a) => ({ ...a })),
       culprit_tla: answerKey.culpritTla,

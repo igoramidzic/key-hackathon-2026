@@ -10,6 +10,12 @@ import {
 } from '@sim/api-kit';
 import type { ResetResult } from '@sim/contracts';
 import {
+  CHANGE_RISKS,
+  CHANGE_STATES,
+  CHANGE_TYPES,
+  type ChangeRisk,
+  type ChangeState,
+  type ChangeType,
   CLOSE_CODES,
   type CloseCode,
   CONTACT_TYPES,
@@ -23,6 +29,7 @@ import {
   type Priority,
 } from '@sim/contracts/servicenow';
 import { z } from 'zod';
+import { ChangeStore } from './changes';
 import { Directory, matchesQuery } from './directory';
 import { IncidentStore } from './incidents';
 
@@ -178,12 +185,147 @@ function csvEnum<T extends string>(
 }
 
 // ---------------------------------------------------------------------------
+// Change requests
+// ---------------------------------------------------------------------------
+
+const lowerKey = (v: unknown) =>
+  typeof v === 'string'
+    ? v
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    : v;
+const changeType = z.preprocess(lowerKey, enumOfValues<ChangeType>(CHANGE_TYPES, 'type'));
+const changeRisk = z.preprocess(lowerKey, enumOfValues<ChangeRisk>(CHANGE_RISKS, 'risk'));
+
+function enumOfValues<T extends string>(values: readonly T[], field: string) {
+  return z.enum(values as unknown as [T, ...T[]], {
+    error: () => `${field} must be one of: ${values.join(', ')}`,
+  });
+}
+
+const mrInput = z.union([
+  z.string().trim().min(1),
+  z.object({ project: z.string().trim().min(1), iid: z.coerce.number().int().positive() }),
+]);
+
+const changeCreateSchema = z.object({
+  short_description: text.max(160),
+  app_tla: text,
+  merge_requests: z.array(mrInput).min(1, 'merge_requests needs at least one MR').max(50),
+  planned_start: text.optional(),
+  type: changeType.optional(),
+  risk: changeRisk.optional(),
+  description: z.string().optional(),
+  justification: z.string().optional(),
+  backout_plan: z.string().optional(),
+  requested_by: text.optional(),
+  assignment_group: text.optional(),
+  related_incidents: z.array(text).max(20).optional(),
+});
+
+const changeUpdateSchema = z.object({
+  state: z
+    .preprocess(
+      lowerKey,
+      z.enum(['new', 'scheduled', 'canceled'], {
+        error: () =>
+          'state can be set to new, scheduled or canceled (KBR moves it to implement and closed)',
+      }),
+    )
+    .optional(),
+  planned_start: text.optional(),
+  short_description: text.max(160).optional(),
+  description: z.string().optional(),
+  type: changeType.optional(),
+  risk: changeRisk.optional(),
+  add_merge_requests: z.array(mrInput).max(50).optional(),
+  related_incidents: z.array(text).max(20).optional(),
+  work_note: z.string().optional(),
+  updated_by: text.optional(),
+});
+
+const changeSorts = [
+  'planned_start',
+  '-planned_start',
+  'opened_at',
+  '-opened_at',
+  'implemented_at',
+  '-implemented_at',
+  'number',
+  '-number',
+] as const;
+
+const changeListSchema = z.object({
+  ...pageQuery,
+  state: csv,
+  type: csv,
+  active: z.enum(['true', 'false']).optional(),
+  app_tla: z.string().optional(),
+  project: z.string().optional(),
+  merge_request: z.string().optional(),
+  requested_by: z.string().optional(),
+  related_incident: z.string().optional(),
+  q: z.string().optional(),
+  implemented_after: z.string().optional(),
+  implemented_before: z.string().optional(),
+  planned_after: z.string().optional(),
+  planned_before: z.string().optional(),
+  sort: z.enum(changeSorts).optional(),
+});
+
+const changeMrRecord = z.object({
+  project: text,
+  iid: z.number().int().positive(),
+  reference: text,
+  web_url: z.string(),
+  title: z.string().nullable(),
+  state: z.string().nullable(),
+  merge_commit_sha: z.string().nullable(),
+});
+
+const deploymentRecord = z.object({
+  project: text,
+  app_tla: text,
+  service: z.string().nullable(),
+  sha: text,
+  short_sha: text,
+  version: z.string().nullable(),
+  tag: z.string().nullable(),
+  deployed_at: z.string(),
+});
+
+const releaseSchema = z.object({
+  status: z.enum(['running', 'succeeded', 'failed']),
+  release_id: text.optional(),
+  merge_requests: z.array(changeMrRecord).optional(),
+  deployments: z.array(deploymentRecord).optional(),
+  note: z.string().optional(),
+});
+
+const importSchema = z.object({
+  short_description: text.max(160),
+  app_tla: text,
+  merge_requests: z.array(changeMrRecord).min(1),
+  type: changeType.optional(),
+  risk: changeRisk.optional(),
+  state: z.enum(['scheduled', 'closed']),
+  description: z.string().optional(),
+  requested_by: text,
+  opened_at: text,
+  planned_start: text,
+  release_id: text.optional(),
+  deployments: z.array(deploymentRecord).optional(),
+});
+
+// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
 export function buildApp() {
   const dir = new Directory();
   const store = new IncidentStore(dir);
+  const changes = new ChangeStore(dir, store);
 
   const app = createApi({
     service: SERVICE,
@@ -193,11 +335,14 @@ export function buildApp() {
       apps: dir.world.apps.length,
       users: dir.world.people.length,
       groups: dir.world.groups.length,
+      change_requests: changes.records.length,
+      scheduled_changes: changes.records.filter((r) => r.state === 'scheduled').length,
     }),
   });
 
   app.post('/admin/reset', (c) => {
     store.reset();
+    changes.reset();
     return c.json<ResetResult>({ ok: true, service: SERVICE, reset_at: new Date().toISOString() });
   });
 
@@ -269,6 +414,60 @@ export function buildApp() {
   app.post('/api/incidents/:number/children', async (c) => {
     const body = await parseBody(c, linkChildrenSchema);
     return c.json(store.full(store.linkChildren(c.req.param('number'), body)));
+  });
+
+  // ----- Change requests (QV → production through KBR) -----
+
+  app.get('/api/change_requests', (c) => {
+    const query = parseQuery(c, changeListSchema);
+    const records = changes.list({
+      state: csvEnum<ChangeState>(query.state, CHANGE_STATES, 'state'),
+      type: csvEnum<ChangeType>(query.type, CHANGE_TYPES, 'type'),
+      active: query.active === undefined ? undefined : query.active === 'true',
+      app_tla: query.app_tla,
+      project: query.project,
+      merge_request: query.merge_request,
+      requested_by: query.requested_by,
+      related_incident: query.related_incident,
+      q: query.q,
+      implemented_after: query.implemented_after,
+      implemented_before: query.implemented_before,
+      planned_after: query.planned_after,
+      planned_before: query.planned_before,
+      sort: query.sort,
+    });
+    const page = paginate(records, query);
+    return c.json({ ...page, items: page.items.map((r) => changes.summary(r)) });
+  });
+
+  app.get('/api/change_requests/:number', (c) =>
+    c.json(changes.full(changes.require(c.req.param('number')))),
+  );
+
+  app.post('/api/change_requests', async (c) => {
+    const body = await parseBody(c, changeCreateSchema);
+    return c.json(changes.full(changes.create(body)), 201);
+  });
+
+  app.patch('/api/change_requests/:number', async (c) => {
+    const body = await parseBody(c, changeUpdateSchema);
+    return c.json(changes.full(changes.update(c.req.param('number'), body)));
+  });
+
+  app.post('/api/change_requests/:number/journal', async (c) => {
+    const body = await parseBody(c, journalSchema);
+    return c.json(changes.addJournal(c.req.param('number'), body), 201);
+  });
+
+  // Simulator only: KBR progress and imports with explicit timestamps.
+  app.post('/admin/change_requests', async (c) => {
+    const body = await parseBody(c, importSchema);
+    return c.json(changes.full(changes.import(body)), 201);
+  });
+
+  app.post('/admin/change_requests/:number/release', async (c) => {
+    const body = await parseBody(c, releaseSchema);
+    return c.json(changes.full(changes.recordRelease(c.req.param('number'), body)));
   });
 
   // ----- CMDB: applications -----
@@ -406,5 +605,5 @@ export function buildApp() {
     );
   });
 
-  return { app, store, dir };
+  return { app, store, changes, dir };
 }

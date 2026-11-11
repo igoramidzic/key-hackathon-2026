@@ -50,7 +50,8 @@ and seeded from a fixed seed, so every run starts from the same data. Restarting
 
 ## Scenarios
 
-Each scenario merges a real bad MR into a hero app, then plays out the consequences: errors in the
+Each scenario merges a real bad MR into a hero app and promotes it to production through a
+ServiceNow change request, then plays out the consequences: errors in the
 logs of the affected apps, Moogsoft alerts and, in two scenarios, branch staff calling the help desk
 about the same problem (one incident per call, to be grouped under a parent). Two
 unrelated red-herring merges land nearby. Background traffic and unrelated commits keep flowing
@@ -68,9 +69,24 @@ In the cascades the culprit service stays green: it keeps returning 200s and its
 pipeline. The agent has to work back from the failing apps through the dependency graph
 (ServiceNow) to the upstream app's recent MRs (GitLab).
 
-When a fix lands on the culprit's `main` branch (an agent's MR merged by a human in the GitLab
-UI, or any equivalent change), the simulator detects it within about 5 seconds. It then logs a
-deploy, ramps the errors down and resolves the scenario's alerts. Every scenario ships with a
+### How changes reach production (KBR)
+
+Merging to `main` deploys to **QV**, not production. To promote, someone raises a **change request**
+in ServiceNow (`/change_requests/new`, or `create_change_request` over MCP): they pick the
+application and project, list the merged MRs that should go up together, and set the planned start.
+When that time passes, **KBR** (KeyBank Release, user `svc_kbr`) launches on its own: it checks every
+MR is merged (otherwise it aborts and sends the change back to New with a note), rolls the merge
+commits out to production (rollout log lines carry `change_number` and `release_id`), tags each
+project `kbr-<CHG>`, notes each MR and closes the change. Related incidents get a work note when the
+change is live.
+
+The simulator keeps that calendar busy: change history is backfilled from GitLab's merged MRs on
+every reset, a few changes wait for tonight's 22:00 window, and background merges are bundled into
+standard changes a few minutes out. Scenario red-herring merges get their own changes too.
+
+When a change containing the fix is promoted (the agent's MR merged by a human, then a change
+request; a revert works too), the scenario recovers: errors ramp down and the alerts resolve. A fix
+that is only merged shows up on the control panel as "in QV, needs a change request". Every scenario ships with a
 known-correct fix, so you can check an agent's MR against it.
 
 <details>
@@ -200,11 +216,12 @@ Hosted model APIs whose MCP connector calls the server from the provider's cloud
 | Server | Tools |
 | --- | --- |
 | **logs** | `search_logs`, `get_log_entry`, `tail_logs` (long-poll with a cursor), `summarize_errors` (error fingerprints per app with counts and first and last seen), `get_log_histogram`, `list_log_services`, `list_alerts`, `get_alert`, `update_alert` |
-| **servicenow** | `list_incidents` (also by contact type, parent and relationship), `get_incident`, `create_incident` (optionally as the parent of existing incidents), `update_incident` (fields, work note, links and resolve in one call; resolving a parent resolves its children), `add_incident_note`, `link_child_incidents` (group incidents that are the same problem), `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
+| **servicenow** | `list_incidents` (also by contact type, parent and relationship), `get_incident`, `create_incident` (optionally as the parent of existing incidents), `update_incident` (fields, work note, links and resolve in one call; resolving a parent resolves its children), `add_incident_note`, `link_child_incidents` (group incidents that are the same problem), `list_change_requests` (what KBR promoted, by app, MR or time), `get_change_request` (MRs, deployed versions, KBR notes), `create_change_request` (promote merged MRs at a planned start), `update_change_request` (reschedule, cancel, add MRs), `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
 | **gitlab** | `search_projects`, `get_project`, `list_recent_commits` (by project or a whole TLA), `get_commit`, `compare_refs` (accepts `main~2`, `HEAD^`), `list_merge_requests`, `get_merge_request` (diffs, pipeline, approvals), `get_file_tree`, `get_file`, `fetch_repository` (every file plus a tarball URL, i.e. "clone"), `create_merge_request` (branch, commit and MR in one call; full-content or find/replace edits), `update_merge_request` (labels), `add_merge_request_note`, `create_tag` |
 | **teams** | `list_teams`, `list_channels`, `get_channel`, `create_channel` (with initial members and reasons), `add_channel_members`, `remove_channel_member`, `post_message`, `read_messages`, `list_notifications` |
 
-There is deliberately no merge tool: a human merges the fix MR in the GitLab UI. The REST call is
+There is deliberately no merge tool: a human merges the fix MR in the GitLab UI, and a change
+request promotes it to production. The REST call is
 `PUT :4003/api/v4/projects/:id/merge_requests/:iid/merge` if you want to automate it.
 
 Adding someone to a channel with a reason sends them an Activity notification like: *"You've been
@@ -333,9 +350,9 @@ pnpm e2e
 
 This runs against the live stack (`pnpm dev` first). It checks that every service answers and
 that every MCP tool has a well-formed contract. It then drives the headline scenario the way an
-agent would, calling all 45 tools: it traces the cascade to CIF, opens an incident, groups the
-bankers' calls under it, opens a Teams channel, and opens a fix MR. A human-style merge follows, the
-run must recover, and resolving the incident must resolve the calls. Finally it runs
+agent would, calling all 49 tools: it traces the cascade to CIF, opens an incident, groups the
+bankers' calls under it, opens a Teams channel, and opens a fix MR. A human-style merge follows; the run
+must stay broken until a change request promotes it through KBR, then recover, and resolving the incident must resolve the calls. Finally it runs
 every other scenario, checking symptoms, a green culprit, alerts or the help-desk incident, and
 recovery. Options:
 

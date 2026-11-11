@@ -72,7 +72,9 @@ function printRun(run: RunStatus): void {
   if (run.error) console.log(`         ${c.red(run.error)}`);
   if (run.bad_mr)
     console.log(`         bad MR   ${run.bad_mr.web_url} ${c.dim(`(${run.bad_mr.short_sha})`)}`);
+  if (run.bad_change) console.log(`         bad CHG  ${run.bad_change.web_url}`);
   if (run.fix_mr) console.log(`         fix      ${run.fix_mr.web_url}`);
+  if (run.fix_change) console.log(`         fix CHG  ${run.fix_change.web_url}`);
   for (const inc of run.helpdesk) console.log(`         ${inc.number.padEnd(8)} ${inc.web_url}`);
   const open = run.alerts.filter((a) => !a.resolved).length;
   if (run.alerts.length > 0) {
@@ -97,7 +99,7 @@ function printStatus(s: SimulatorStatus): void {
     `${c.bold('Engine')}   ${engine}${s.engine.message ? c.dim(` (${s.engine.message})`) : ''}  ` +
       `${t.paused ? c.yellow('traffic paused') : `${t.lines_per_sec} lines/s`}` +
       `${t.rate_multiplier !== 1 ? ` x${t.rate_multiplier}` : ''}  ${t.total_lines.toLocaleString('en-US')} lines` +
-      `  noise: ${t.noise_merges} changes, ${t.background_alerts} alerts` +
+      `  noise: ${t.noise_merges} changes, ${t.background_alerts} alerts, ${t.kbr_releases} KBR releases` +
       (t.ingest_errors > 0 ? c.red(`  ingest errors: ${t.ingest_errors}`) : '') +
       (t.buffered > 50 ? c.yellow(`  buffered: ${t.buffered}`) : ''),
   );

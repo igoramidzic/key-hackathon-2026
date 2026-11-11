@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { scenarioDetail, scenarioSummary } from './api';
 import { Engine } from './engine';
 import { Estate } from './estate';
+import { Kbr } from './kbr';
 import { NoiseScheduler } from './noise';
 import { fanoutTargets, logsExplorerUrl, RAMP_SEC, type RunDeps, ScenarioRun } from './run';
 import {
@@ -36,15 +37,23 @@ function runHarness(speed = 1, scenario = testScenario()) {
   const estate = new Estate();
   const emitted: LogEntryInput[] = [];
   const deploys: { tla: string; service: string; sha: string }[] = [];
+  const kbr = new Kbr({
+    systems: fake.systems,
+    estate,
+    deploy: (app, service, sha, sec, meta) => {
+      deploys.push({ tla: app.tla, service, sha });
+      const { before, after } = estate.deploy(app, service, sha);
+      emitted.push(...estate.rolloutLines(before, after, sha, time.now(), sec, meta));
+    },
+    now: time.now,
+    log: () => {},
+    onPromoted: (p) => run.onPromoted(p),
+  });
   const deps: RunDeps = {
     systems: fake.systems,
     estate,
     emit: (e) => emitted.push(...e),
-    deploy: (app, service, sha, sec) => {
-      deploys.push({ tla: app.tla, service, sha });
-      const { before, after } = estate.deploy(app, service, sha);
-      emitted.push(...estate.rolloutLines(before, after, sha, time.now(), sec));
-    },
+    kbr,
     logsWebUrl: 'http://localhost:3001',
     now: time.now,
     log: () => {},
@@ -56,7 +65,7 @@ function runHarness(speed = 1, scenario = testScenario()) {
     for (let i = 0; i < seconds; i++) lines.push(...run.tick(time.advance(1000), 1));
     return lines;
   };
-  return { fake, time, estate, emitted, deploys, run, step };
+  return { fake, time, estate, emitted, deploys, run, step, kbr };
 }
 
 const byTla = (lines: LogEntryInput[], tla: string) =>
@@ -125,7 +134,7 @@ describe('baseline traffic', () => {
 });
 
 describe('ScenarioRun', () => {
-  it('merges the bad MR at t=0 and rolls out the culprit', async () => {
+  it('merges the bad MR at t=0 and promotes it to production through a change request', async () => {
     const h = runHarness();
     const versionBefore = h.estate.get(getApp('CIF')).version;
     await h.run.start();
@@ -134,8 +143,24 @@ describe('ScenarioRun', () => {
     const status = h.run.status();
     expect(status.phase).toBe('pending');
     expect(status.bad_mr?.web_url).toContain('/merge_requests/1');
-    expect(status.events[0]!.kind).toBe('merge');
+    expect(status.events.map((e) => e.kind).slice(0, 3)).toEqual(['merge', 'change', 'deploy']);
     expect(h.deploys[0]).toMatchObject({ tla: 'CIF', service: 'customer-profile-api' });
+    const change = h.fake.changes[0]!;
+    expect(status.bad_change).toEqual({ number: change.number, web_url: change.web_url });
+    expect(change.state).toBe('closed');
+    expect(change.merge_requests[0]!.reference).toBe(`${CIF_PROJECT}!1`);
+    expect(change.deployments[0]).toMatchObject({
+      project: CIF_PROJECT,
+      service: 'customer-profile-api',
+    });
+    expect(h.fake.tags).toEqual([
+      { project: CIF_PROJECT, tag: `kbr-${change.number}`, ref: status.bad_mr!.sha },
+    ]);
+    expect(h.fake.notes[0]!.body).toContain(change.number);
+    const started = h.emitted.find((e) =>
+      e.jsonPayload?.message.startsWith('Rolling update started'),
+    );
+    expect(started?.jsonPayload?.change_number).toBe(change.number);
     expect(h.estate.get(getApp('CIF')).version).not.toBe(versionBefore);
     const complete = h.emitted.find((e) =>
       e.jsonPayload?.message.startsWith('Rolling update complete'),
@@ -230,6 +255,7 @@ describe('ScenarioRun', () => {
     await h.run.settle();
     expect(h.fake.merges).toHaveLength(2);
     expect(h.deploys.map((d) => d.tla)).toEqual(['CIF', 'PAY']);
+    expect(h.fake.changes.map((c) => c.app.tla)).toEqual(['CIF', 'PAY']);
     h.step(80);
     await h.run.settle();
     const status = h.run.status();
@@ -245,7 +271,7 @@ describe('ScenarioRun', () => {
     );
   });
 
-  it('detects the fix on main, ramps down, resolves alerts and recovers', async () => {
+  it('waits for KBR to promote the fix, then ramps down, resolves alerts and recovers', async () => {
     const h = runHarness();
     const scenario = testScenario();
     await h.run.start();
@@ -262,11 +288,29 @@ describe('ScenarioRun', () => {
       source_branch: 'fix/pool',
       edits: scenario.fix.edits,
     });
+    // Merged to main is only QV: still broken in production.
     expect(await h.run.checkFix()).toBe(true);
     let status = h.run.status();
+    expect(status.phase).toBe('degrading');
+    expect(status.fix_on_main_at).not.toBeNull();
+    expect(status.fix_mr?.web_url).toContain('/merge_requests/3');
+    h.step(10);
+    expect(h.run.status().phase).toBe('degrading');
+
+    // Someone raises the change request; KBR promotes it at its planned start.
+    const change = await h.fake.systems.servicenow.createChange({
+      short_description: 'Restore Hikari pool size',
+      app_tla: 'CIF',
+      merge_requests: [`${CIF_PROJECT}!3`],
+      planned_start: 'now',
+      type: 'emergency',
+    });
+    await h.kbr.poll();
+    await h.run.settle();
+    status = h.run.status();
     expect(status.phase).toBe('recovering');
     expect(status.fixed_at).not.toBeNull();
-    expect(status.fix_mr?.web_url).toContain('/merge_requests/3');
+    expect(status.fix_change?.number).toBe(change.number);
     expect(h.deploys.at(-1)).toMatchObject({ tla: 'CIF' });
 
     const during = byTla(h.step(10), 'PAY').length;
@@ -288,13 +332,42 @@ describe('ScenarioRun', () => {
     expect(h.step(30)).toHaveLength(0);
   });
 
-  it('treats a revert as a fix', async () => {
+  it('treats a promoted revert as a fix', async () => {
     const h = runHarness();
     await h.run.start();
     h.fake.applyEdits(CIF_PROJECT, [
       { path: CONFIG_PATH, find: 'maximum-pool-size: 2\n', replace: 'maximum-pool-size: 20\n' },
     ]);
     expect(await h.run.checkFix()).toBe(true);
+    await h.run.onPromoted({
+      change: 'CHG0030099',
+      change_url: 'http://localhost:3002/change_requests/CHG0030099',
+      release_id: 'KBR-1',
+      project: CIF_PROJECT,
+      app: getApp('CIF'),
+      service: 'customer-profile-api',
+      sha: 'feedface00000000000000000000000000000000',
+      titles: ['Revert'],
+    });
+    expect(h.run.status().phase).toBe('recovering');
+  });
+
+  it('KBR refuses a change whose MR is not merged and sends it back to New', async () => {
+    const h = runHarness();
+    await h.run.start();
+    const deploys = h.deploys.length;
+    const mr = h.fake.openMr(CIF_PROJECT, 'Restore pool size');
+    const change = await h.fake.systems.servicenow.createChange({
+      short_description: 'Restore pool size',
+      app_tla: 'CIF',
+      merge_requests: [mr.references.full],
+      planned_start: 'now',
+    });
+    await h.kbr.poll();
+    expect(change.state).toBe('new');
+    expect(change.release.status).toBe('failed');
+    expect(h.deploys).toHaveLength(deploys);
+    expect(h.run.status().phase).toBe('pending');
   });
 
   it('stops emitting when stopped', async () => {
@@ -325,12 +398,10 @@ describe('NoiseScheduler', () => {
   it('lands unrelated changes on non-hero repos and cycles background alerts', async () => {
     const fake = fakeSystems();
     const time = clock();
-    const deploys: string[] = [];
     const noise = new NoiseScheduler(
       {
         systems: fake.systems,
         estate: new Estate(),
-        deploy: (app) => deploys.push(app.tla),
         now: time.now,
         log: () => {},
       },

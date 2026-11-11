@@ -4,6 +4,13 @@ import type {
   AppDetail,
   AppListQuery,
   AppSummary,
+  ChangeCreateInput,
+  ChangeImportInput,
+  ChangeListQuery,
+  ChangeReleaseInput,
+  ChangeRequest,
+  ChangeRequestSummary,
+  ChangeUpdateInput,
   DependencyDirection,
   DependencyGraph,
   GroupDetail,
@@ -54,6 +61,25 @@ export function createServiceNowClient(baseUrl: string) {
     /** Attaches incidents as children of `parent`; returns the parent. */
     linkChildren: (parent: string, body: LinkChildrenInput) =>
       http.post<Incident>(`/api/incidents/${seg(parent)}/children`, body),
+
+    // Change requests (promotion from QV to production through KBR)
+    listChanges: (query: ChangeListQuery = {}) =>
+      http.get<Page<ChangeRequestSummary>>('/api/change_requests', q(query)),
+    /** By CHG number or sys_id. */
+    getChange: (numberOrSysId: string) =>
+      http.get<ChangeRequest>(`/api/change_requests/${seg(numberOrSysId)}`),
+    createChange: (body: ChangeCreateInput) =>
+      http.post<ChangeRequest>('/api/change_requests', body),
+    updateChange: (numberOrSysId: string, body: ChangeUpdateInput) =>
+      http.patch<ChangeRequest>(`/api/change_requests/${seg(numberOrSysId)}`, body),
+    addChangeJournal: (numberOrSysId: string, body: JournalInput) =>
+      http.post<JournalEntry>(`/api/change_requests/${seg(numberOrSysId)}/journal`, body),
+    /** Simulator only: imports a change with explicit timestamps (history, scenario setup). */
+    importChange: (body: ChangeImportInput) =>
+      http.post<ChangeRequest>('/admin/change_requests', body),
+    /** Simulator only (KBR): records a release starting, succeeding or failing. */
+    recordRelease: (numberOrSysId: string, body: ChangeReleaseInput) =>
+      http.post<ChangeRequest>(`/admin/change_requests/${seg(numberOrSysId)}/release`, body),
 
     // CMDB
     listApps: (query: AppListQuery = {}) => http.get<Page<AppSummary>>('/api/apps', q(query)),

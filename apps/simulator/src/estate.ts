@@ -194,6 +194,7 @@ export class Estate {
     sha: string,
     startMs: number,
     durationSec = 20,
+    meta: Record<string, string> = {},
   ): LogEntryInput[] {
     const rng = new Rng(`${this.seed}:rollout:${after.service}:${sha}`);
     const { app } = after;
@@ -206,14 +207,18 @@ export class Estate {
       image,
       commit_sha: sha,
       deployment: after.service,
+      ...meta,
     };
+    const via = meta.release_id
+      ? ` (${meta.release_id}${meta.change_number ? `, ${meta.change_number}` : ''})`
+      : '';
     const deployLogger = 'k8s.rollout';
     out.push(
       this.entry(
         after,
         {
           severity: 'INFO',
-          message: `Rolling update started: ${after.service} ${before.revision} -> ${after.revision}`,
+          message: `Rolling update started: ${after.service} ${before.revision} -> ${after.revision}${via}`,
           logger: deployLogger,
           thread: undefined,
           fields: deployFields,

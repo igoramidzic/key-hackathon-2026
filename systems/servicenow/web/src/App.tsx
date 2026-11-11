@@ -2,6 +2,7 @@ import { EmptyState } from '@sim/ui';
 import { Navigate, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { AppDetail, AppList } from './pages/Apps';
+import { ChangeCreate, ChangeDetail, ChangeList } from './pages/Changes';
 import { GroupDetail, GroupList } from './pages/Groups';
 import { IncidentCreate } from './pages/IncidentCreate';
 import { IncidentDetail } from './pages/IncidentDetail';
@@ -17,6 +18,9 @@ export function App() {
         <Route path="/incidents" element={<IncidentList />} />
         <Route path="/incidents/new" element={<IncidentCreate />} />
         <Route path="/incidents/:number" element={<IncidentDetail />} />
+        <Route path="/change_requests" element={<ChangeList />} />
+        <Route path="/change_requests/new" element={<ChangeCreate />} />
+        <Route path="/change_requests/:number" element={<ChangeDetail />} />
         <Route path="/apps" element={<AppList />} />
         <Route path="/apps/:tla" element={<AppDetail />} />
         <Route path="/groups" element={<GroupList />} />

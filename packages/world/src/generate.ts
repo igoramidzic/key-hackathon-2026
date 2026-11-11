@@ -137,6 +137,17 @@ const PERSONA_SPECS: PersonaSpec[] = [
   },
 ];
 
+const RELEASE_BOT_SPEC: PersonaSpec = {
+  username: PERSONAS.releaseBot,
+  firstName: 'KeyBank',
+  lastName: 'Release',
+  title: 'Service Account (KBR release automation)',
+  role: 'bot',
+  department: 'Technology Operations',
+  location: 'Cleveland, OH',
+  email: `kbr-release@${ORG.emailDomain}`,
+};
+
 const AREA_CODES: Record<string, string> = {
   OH: '216',
   NY: '716',
@@ -181,7 +192,7 @@ function buildPeople(rng: Rng): Person[] {
   const taken = new Set<string>();
   let counter = 0;
 
-  const add = (spec: PersonaSpec) => {
+  const add = (spec: PersonaSpec, phone?: string) => {
     counter++;
     const state = stateOf(spec.location);
     const person: Person = {
@@ -197,7 +208,9 @@ function buildPeople(rng: Rng): Person[] {
       title: spec.title,
       department: spec.department,
       location: spec.location,
-      phone: `(${AREA_CODES[state] ?? '216'}) 555-${String(rng.int(100, 9999)).padStart(4, '0')}`,
+      phone:
+        phone ??
+        `(${AREA_CODES[state] ?? '216'}) 555-${String(rng.int(100, 9999)).padStart(4, '0')}`,
       role: spec.role,
       managerUsername: null,
       timezone: timezoneOf(spec.location),
@@ -242,6 +255,9 @@ function buildPeople(rng: Rng): Person[] {
       add(spec);
     }
   }
+
+  // Added after the generated people (fixed phone, no draw) so nobody else's id or phone shifts.
+  add(RELEASE_BOT_SPEC, '(216) 555-0100');
 
   // Reporting lines.
   const byRole = (role: PersonRole) => people.filter((p) => p.role === role);

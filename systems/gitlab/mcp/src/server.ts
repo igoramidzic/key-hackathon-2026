@@ -530,9 +530,9 @@ Layout: one group per application, keybank/<TLA>00, holding that app's repos (e.
 
 Suggested root-cause workflow when an app is failing:
 1. Identify the failing app's upstream dependencies (get_project shows upstream_tlas; ServiceNow has the same graph).
-2. For each upstream TLA (and the app itself), look for recent change: list_merge_requests(tla, state="merged", merged_after="6h") and list_recent_commits(tla, since="6h"). A change that lands shortly before symptoms start is the prime suspect; beware unrelated changes landing at the same time.
+2. For each upstream TLA (and the app itself), look for recent change: list_merge_requests(tla, state="merged", merged_after="6h") and list_recent_commits(tla, since="6h"). Merging to main only deploys to QV: production changes go out through ServiceNow change requests that KBR (svc_kbr) promotes, so confirm what actually reached production with ServiceNow list_change_requests (app_tla, implemented_after) or the kbr-<CHG> tags and KBR notes on MRs. A change promoted shortly before symptoms start is the prime suspect; beware unrelated changes landing at the same time.
 3. Read the suspect: get_merge_request (diff, author, approvals) or get_commit. Confirm the mechanism with get_file / fetch_repository (e.g. a timeout, URL, feature flag or validation rule).
-4. Fix it: create_merge_request with real code changes against main (find/replace edits on the exact lines, or full file content), a clear title, and a description with the root cause, the evidence, and the incident number. Add labels such as "incident". A human reviews and merges in the GitLab UI.
+4. Fix it: create_merge_request with real code changes against main (find/replace edits on the exact lines, or full file content), a clear title, and a description with the root cause, the evidence, and the incident number. Add labels such as "incident". A human reviews and merges in the GitLab UI; merged, it is in QV only. To reach production it needs a ServiceNow change request (create_change_request, type emergency, planned_start "now") that KBR then promotes.
 5. Optionally add_merge_request_note on the culprit MR linking your fix.`;
 
 export const spec: McpServerSpec = {

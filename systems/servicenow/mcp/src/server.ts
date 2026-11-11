@@ -1,6 +1,10 @@
 import { URLS } from '@sim/contracts';
 import {
   type AppTier,
+  CHANGE_STATES,
+  CHANGE_TYPES,
+  type ChangeState,
+  type ChangeType,
   CLOSE_CODES,
   type CloseCode,
   CONTACT_TYPES,
@@ -20,6 +24,8 @@ import { z } from 'zod';
 import {
   appFull,
   appRow,
+  changeFull,
+  changeRow,
   dependencyGraph,
   groupFull,
   groupRow,
@@ -43,7 +49,9 @@ Data model
 - Incidents are numbered INC0010001, INC0010002, ... Impact and urgency are 1 (High), 2 (Medium), 3 (Low); priority is derived and cannot be set: P1 = 1/1; P2 = 1/2 or 2/1; P3 = 1/3, 2/2 or 3/1; P4 = 2/3 or 3/2; P5 = 3/3. States: new → in_progress → on_hold (optional) → resolved → closed, or canceled. Resolving needs close_code + close_notes. Closed and canceled incidents are read-only except for notes.
 - The journal holds work notes (internal), comments (visible to the caller) and system entries that record field changes.
 - Parent and child incidents: when several incidents are really the same problem (several bankers calling about one outage, duplicates from monitoring), make one the parent and attach the rest as children: create_incident with child_incidents, or link_child_incidents later. One level only: a parent cannot be a child and a child cannot have children. Caller-visible comments on the parent are copied to its open children, and resolving or closing the parent resolves or closes its children with the same resolution. To find candidates: list_incidents with active, opened_after, contact_type ["phone","email","chat"] and relationship "standalone".
-- Writes act as svc_incident_auto (Incident Automation) unless you pass opened_by / updated_by / author.
+- Change requests (CHG0030001, ...) are how code reaches production. Merging an MR to main only deploys it to QV. A change request lists merged MRs of one application (keybank/<TLA>00 projects) and a planned_start; KBR (KeyBank Release, user svc_kbr) promotes every scheduled change once its planned start passes: it rolls the merge commits out to production, tags them kbr-<CHG>, notes each MR and closes the change (or sends it back to new with a note if an MR is not merged). States: new (draft) → scheduled → implement → closed, or canceled.
+- For root cause, list_change_requests with app_tla and implemented_after shows what actually went to production and when; recent changes on the failing app or its upstream apps are prime suspects. To ship a fix: after a human merges the fix MR, create_change_request (type emergency, planned_start "now", related_incidents) so KBR promotes it.
+- Writes act as svc_incident_auto (Incident Automation) unless you pass opened_by / updated_by / author / requested_by.
 - Every record has a web_url you can paste into Teams or elsewhere.`;
 
 const stateEnum = z.enum(INCIDENT_STATES as [IncidentState, ...IncidentState[]]);
@@ -367,6 +375,171 @@ export const spec: McpServerSpec = {
         incidentFull(
           await api.linkChildren(parent, { ...body, updated_by: body.updated_by ?? BOT }),
         ),
+    });
+
+    // ---------------------------------------------------------------------
+    // Change requests (QV → production through KBR)
+    // ---------------------------------------------------------------------
+
+    const changeNumberShape = z
+      .string()
+      .min(1)
+      .describe('Change request number, e.g. "CHG0030042" (a sys_id also works).');
+    const mrRefs = z
+      .array(z.string().min(1))
+      .describe(
+        'Merge requests to promote, each "keybank/<TLA>00/<repo>!<iid>" (e.g. "keybank/CIF00/customer-profile-api!42") or the MR web_url. All must be in the application\'s GitLab group.',
+      );
+    const plannedStartShape = z
+      .string()
+      .min(1)
+      .describe(
+        'When KBR promotes it to production: "now", an offset like "+30m" or "in 2h", or an ISO time such as "2026-11-11T22:00:00Z".',
+      );
+
+    defineTool(server, 'list_change_requests', {
+      title: 'List change requests',
+      description:
+        'Search change requests: what was (or will be) promoted from QV to production by KBR. Use it during root-cause analysis to see what actually reached production on an app and its upstream apps (app_tla + implemented_after "6h"), to find which change shipped a given MR (merge_request), or to see what is scheduled next (state ["scheduled"], sort "planned_start"). Returns compact rows (number, state, type, short_description, app_tla, projects, requested_by, planned_start, implemented_at, release, related_incidents, web_url) plus total and next_cursor; newest first by default. get_change_request has the MRs, deployed versions and journal.',
+      input: {
+        state: z
+          .array(z.enum(CHANGE_STATES as [ChangeState, ...ChangeState[]]))
+          .optional()
+          .describe('Only these states: new, scheduled, implement, closed, canceled.'),
+        type: z
+          .array(z.enum(CHANGE_TYPES as [ChangeType, ...ChangeType[]]))
+          .optional()
+          .describe('Only these types: normal, standard, emergency.'),
+        active: z
+          .boolean()
+          .optional()
+          .describe('true = new, scheduled or implement; false = closed or canceled.'),
+        app_tla: tlaShape.optional(),
+        project: z
+          .string()
+          .optional()
+          .describe('GitLab project path, e.g. "keybank/CIF00/customer-profile-api".'),
+        merge_request: z
+          .string()
+          .optional()
+          .describe(
+            'Changes containing this MR: "keybank/CIF00/customer-profile-api!42" or its URL.',
+          ),
+        requested_by: userKey('Requester').optional(),
+        related_incident: z.string().optional().describe('Changes linked to this incident number.'),
+        query: z.string().optional().describe('Free text over number, description and MR titles.'),
+        implemented_after: z
+          .string()
+          .optional()
+          .describe('Promoted to production at or after this time: ISO or relative ("6h", "2d").'),
+        implemented_before: z.string().optional().describe('ISO or relative ("1h").'),
+        planned_after: z
+          .string()
+          .optional()
+          .describe('Planned start at or after (ISO or relative).'),
+        planned_before: z
+          .string()
+          .optional()
+          .describe('Planned start at or before (ISO or relative).'),
+        sort: z
+          .enum([
+            '-opened_at',
+            'opened_at',
+            '-implemented_at',
+            'implemented_at',
+            'planned_start',
+            '-planned_start',
+            'number',
+            '-number',
+          ])
+          .default('-opened_at')
+          .describe(
+            '"-opened_at" (default) newest first; "-implemented_at" most recently promoted first; "planned_start" next KBR run first.',
+          ),
+        ...paginationShape,
+      },
+      annotations: READ_ONLY,
+      run: async ({ query, ...args }) => {
+        const page = await api.listChanges({ ...args, q: query });
+        return {
+          total: page.total,
+          next_cursor: page.next_cursor,
+          items: page.items.map(changeRow),
+        };
+      },
+    });
+
+    defineTool(server, 'get_change_request', {
+      title: 'Get change request',
+      description:
+        "Full change request: application, merge requests (reference, title, state, merge commit), what KBR deployed (project, service, sha, version, GitLab tag, time), the KBR release id and status, related incidents, planned start, close notes and the journal (including KBR's notes when it aborts, e.g. an MR that was not merged).",
+      input: { number: changeNumberShape },
+      annotations: READ_ONLY,
+      run: async ({ number }) => changeFull(await api.getChange(number)),
+    });
+
+    defineTool(server, 'create_change_request', {
+      title: 'Create change request',
+      description:
+        'Raise a change request to promote merged MRs of one application from QV to production. With planned_start it is scheduled right away and KBR runs it once that time passes (within seconds for "now"); without it the change stays a draft (state new). KBR only promotes MRs that are merged to main: if one is not, it aborts and puts the change back to new with a note, so merge first (a human does that in the GitLab UI). For an incident fix use type "emergency", planned_start "now" and related_incidents; KBR then adds a work note to each incident when the fix is live. Returns the full change with number and web_url.',
+      input: {
+        short_description: z
+          .string()
+          .min(1)
+          .max(160)
+          .describe('One line, e.g. "CIF - revert naming strategy change (INC0010205)".'),
+        app_tla: tlaShape.describe(
+          'Application being changed, e.g. "CIF" (its GitLab group keybank/CIF00).',
+        ),
+        merge_requests: mrRefs.min(1).max(50),
+        planned_start: plannedStartShape.optional(),
+        type: z
+          .enum(CHANGE_TYPES as [ChangeType, ...ChangeType[]])
+          .default('normal')
+          .describe('normal (CAB), standard (pre-approved) or emergency (fixes a live incident).'),
+        risk: z
+          .enum(['low', 'moderate', 'high'])
+          .optional()
+          .describe('Default moderate (high for emergency).'),
+        description: z.string().optional().describe('What changes and why; evidence for a fix.'),
+        justification: z.string().optional().describe('Business reason, e.g. the incident impact.'),
+        backout_plan: z
+          .string()
+          .optional()
+          .describe('How to roll back (default: KBR rollback release).'),
+        related_incidents: incidentList('Incidents this change fixes').max(20).optional(),
+        requested_by: userKey('Requester (default svc_incident_auto)').optional(),
+        assignment_group: groupKey(
+          'Implementing group (default: the app support group)',
+        ).optional(),
+      },
+      annotations: WRITE,
+      run: async (args) =>
+        changeFull(await api.createChange({ ...args, requested_by: args.requested_by ?? BOT })),
+    });
+
+    defineTool(server, 'update_change_request', {
+      title: 'Update change request',
+      description:
+        'Edit a draft or scheduled change: reschedule (planned_start; on a draft this also schedules it), add merge requests, cancel (state "canceled"), link incidents, or add a work note. Use it to retry after KBR aborted a change (merge the MR, then set planned_start "now"). Once KBR has implemented or closed it only work notes and related incidents can be added; raise a new change instead. Returns the full change.',
+      input: {
+        number: changeNumberShape,
+        state: z
+          .enum(['new', 'scheduled', 'canceled'])
+          .optional()
+          .describe('scheduled (needs a planned_start), new (back to draft) or canceled.'),
+        planned_start: plannedStartShape.optional(),
+        add_merge_requests: mrRefs.max(50).optional(),
+        related_incidents: incidentList('Incidents to link').max(20).optional(),
+        short_description: z.string().min(1).max(160).optional(),
+        description: z.string().optional(),
+        type: z.enum(CHANGE_TYPES as [ChangeType, ...ChangeType[]]).optional(),
+        work_note: z.string().optional().describe('Internal work note to add.'),
+        updated_by: userKey('Who makes the change (default svc_incident_auto)').optional(),
+      },
+      annotations: WRITE,
+      run: async ({ number, ...body }) =>
+        changeFull(await api.updateChange(number, { ...body, updated_by: body.updated_by ?? BOT })),
     });
 
     // ---------------------------------------------------------------------

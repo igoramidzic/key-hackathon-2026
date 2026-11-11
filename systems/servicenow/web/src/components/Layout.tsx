@@ -19,6 +19,7 @@ import {
   ChevronDown,
   CircleHelp,
   Clock,
+  GitPullRequestArrow,
   Inbox,
   type LucideIcon,
   Plus,
@@ -61,6 +62,10 @@ function fallbackTitle(pathname: string, search: string): string {
     if (id === 'new') return 'Incident - Create';
     return id ? `Incident - ${id}` : 'Incidents';
   }
+  if (table === 'change_requests') {
+    if (id === 'new') return 'Change Request - Create';
+    return id ? `Change Request - ${id}` : 'Change Requests';
+  }
   if (table === 'apps') return id ? `Business Application - ${id}` : 'Business Applications';
   if (table === 'groups') return id ? `Group - ${id}` : 'Groups';
   if (table === 'users') return id ? `User - ${id}` : 'Users';
@@ -89,6 +94,19 @@ const ALL_MENU: { heading: string; items: MenuLink[] }[] = [
     ],
   },
   {
+    heading: 'Change',
+    items: [
+      { label: 'Create New', to: '/change_requests/new', icon: Plus },
+      { label: 'Open', to: '/change_requests', icon: GitPullRequestArrow },
+      {
+        label: 'Implemented (KBR)',
+        to: '/change_requests?view=implemented',
+        icon: GitPullRequestArrow,
+      },
+      { label: 'All', to: '/change_requests?view=all', icon: GitPullRequestArrow },
+    ],
+  },
+  {
     heading: 'Configuration',
     items: [{ label: 'Business Applications', to: '/apps', icon: AppWindow }],
   },
@@ -105,11 +123,13 @@ const FAVORITES: MenuLink[] = [
   { label: 'Incidents - Open', to: '/incidents', icon: Star },
   { label: 'Incidents - Assigned to me', to: '/incidents?view=mine', icon: Star },
   { label: 'Incident - Create New', to: '/incidents/new', icon: Star },
+  { label: 'Change Requests - Open', to: '/change_requests', icon: Star },
   { label: 'My profile', to: `/users/${CURRENT_USER}`, icon: Star },
 ];
 
 const WORKSPACES: MenuLink[] = [
   { label: 'Incidents', to: '/incidents', icon: Inbox },
+  { label: 'Change Requests', to: '/change_requests', icon: GitPullRequestArrow },
   { label: 'Business Applications', to: '/apps', icon: AppWindow },
   { label: 'Groups', to: '/groups', icon: UsersRound },
   { label: 'People', to: '/users', icon: UserRound },

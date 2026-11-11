@@ -2,6 +2,8 @@ import type {
   AppDetail,
   AppRef,
   AppSummary,
+  ChangeRequest,
+  ChangeRequestSummary,
   Contact,
   DependencyGraph,
   GroupDetail,
@@ -224,5 +226,57 @@ export function userFull(u: UserDetail) {
     supported_apps: u.supported_apps.map((a) => a.tla),
     owned_apps: u.owned_apps.map((a) => a.tla),
     open_assigned_incident_count: u.open_assigned_incident_count,
+  };
+}
+
+export function changeRow(c: ChangeRequestSummary) {
+  return {
+    number: c.number,
+    state: c.state,
+    type: c.type,
+    short_description: c.short_description,
+    app_tla: c.app.tla,
+    projects: c.projects,
+    merge_request_count: c.merge_request_count,
+    requested_by: user(c.requested_by),
+    planned_start: c.planned_start,
+    implemented_at: c.implemented_at,
+    release: c.release.id ? `${c.release.id} (${c.release.status})` : c.release.status,
+    related_incidents: c.related_incidents,
+    web_url: c.web_url,
+  };
+}
+
+export function changeFull(c: ChangeRequest) {
+  return {
+    number: c.number,
+    sys_id: c.sys_id,
+    web_url: c.web_url,
+    short_description: c.short_description,
+    description: c.description,
+    state: c.state,
+    type: c.type,
+    risk: c.risk,
+    app: app(c.app),
+    requested_by: user(c.requested_by),
+    assignment_group: group(c.assignment_group),
+    planned_start: c.planned_start,
+    implemented_at: c.implemented_at,
+    close_code: c.close_code,
+    close_notes: c.close_notes,
+    release: c.release,
+    merge_requests: c.merge_requests.map((m) => ({
+      reference: m.reference,
+      title: m.title,
+      state: m.state,
+      merge_commit_sha: m.merge_commit_sha,
+      web_url: m.web_url,
+    })),
+    deployments: c.deployments,
+    related_incidents: c.related_incidents,
+    backout_plan: c.backout_plan,
+    opened_at: c.opened_at,
+    updated_at: c.updated_at,
+    journal: c.journal.map(journalRow),
   };
 }
