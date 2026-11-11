@@ -2,11 +2,10 @@
  * Startup connectivity check: tools/list on all four MCP servers, plus one request each to the
  * live log stream and the ServiceNow activity feed. Used by `pnpm agent --check` and on start.
  */
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { AgentConfig, ServerName } from './config';
 import { SERVERS } from './config';
 import { color } from './log';
+import { httpClientFactory } from './mcp/gateway';
 
 export interface CheckItem {
   name: string;
@@ -26,12 +25,10 @@ async function timed(name: string, fn: () => Promise<string>): Promise<CheckItem
   }
 }
 
-async function listTools(url: string): Promise<string[]> {
-  const client = new Client({ name: 'incident-agent-check', version: '0.1.0' });
-  await client.connect(new StreamableHTTPClientTransport(new URL(url)));
+async function listTools(server: ServerName, url: string): Promise<string[]> {
+  const client = await httpClientFactory(server, url);
   try {
-    const { tools } = await client.listTools();
-    return tools.map((t) => t.name);
+    return await client.listTools();
   } finally {
     await client.close();
   }
@@ -44,9 +41,9 @@ async function getJson(url: string): Promise<Record<string, unknown>> {
 }
 
 export async function runChecks(config: AgentConfig): Promise<CheckItem[]> {
-  const mcp = SERVERS.map((server: ServerName) =>
+  const mcp = SERVERS.map((server) =>
     timed(`mcp ${server}`, async () => {
-      const tools = await listTools(config.mcp[server]);
+      const tools = await listTools(server, config.mcp[server]);
       return `${tools.length} tools at ${config.mcp[server]}`;
     }),
   );
