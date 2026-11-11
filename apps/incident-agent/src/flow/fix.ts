@@ -243,15 +243,22 @@ of files on main (each find must occur exactly once; include surrounding lines t
 full file content. Touch only files related to the culprit change. Never invent URLs: the description
 may only use links given in the prompt.`;
 
-/** Proposal: LLM (validated, one retry) when available, else the deterministic revert. */
+/** Proposal: the AI (validated, one retry) by default; the mechanical revert with AGENT_LLM=off or as a fallback. */
 export async function proposeFix(
   deps: FlowDeps,
   c: Case,
 ): Promise<{ fix: FixProposal | null; source: 'llm' | 'heuristic'; problems: string[] }> {
-  const draft = await revertProposal(deps, c);
-  if (!deps.runner || !culpritMr(c))
+  const ref = culpritMr(c);
+  if (!deps.runner || !ref) {
+    const draft = await revertProposal(deps, c);
     return { fix: draft.fix, source: 'heuristic', problems: draft.problems };
-  const ref = culpritMr(c)!;
+  }
+  const culprit = await deps.mcp.call<MrDetail>(
+    'get_merge_request',
+    { project: ref.project, iid: ref.iid },
+    { caseId: c.id },
+  );
+  const allowed = (culprit.changes ?? []).map((ch) => ch.path);
   let feedback = '';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const out = await deps.runner.run({
@@ -261,29 +268,34 @@ export async function proposeFix(
       prompt: [
         `Incident ${c.incident?.number ?? ''} (${c.incident?.web_url ?? ''}): ${c.scope?.summary ?? ''}`,
         `Root cause: ${JSON.stringify(c.root_cause ?? c.suspects[0], null, 2)}`,
-        `Culprit MR: ${ref.project}!${ref.iid} (${ref.web_url})`,
-        draft.fix
-          ? `A mechanical revert that validates against main:\n${JSON.stringify(draft.fix, null, 2)}`
-          : `A mechanical revert is not possible: ${draft.problems.join('; ')}`,
+        `Culprit MR: ${ref.project}!${ref.iid} (${ref.web_url}), files: ${allowed.join(', ')}`,
+        `Evidence links you may use in the description: ${[...(c.root_cause?.evidence ?? []).map((e) => e.web_url), ...(c.scope?.log_links ?? []).map((l) => l.logs_url)].join(' ')}`,
         feedback,
-        'Return the FixProposal JSON (project, strategy, justification, changes, title, description). Put the incident number in the title.',
-      ].join('\n\n'),
+        'Read the culprit diff and the current files on main, then return the FixProposal JSON (project, strategy, justification, changes, title, description). Put the incident number in the title; the description needs the root cause, the evidence, the incident link, the risk and how to verify.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
       tools: FIX_TOOLS,
       schema: FixSchema,
       model: deps.runner.models.deep,
       maxTurns: 25,
       timeoutMs: 5 * 60_000,
     });
-    if (!out.ok) break;
-    const problems = await validateFix(deps, c, out.value, draft.allowed);
+    if (!out.ok) {
+      deps.store.event(c, 'llm', `AI fix phase failed (${out.error})`);
+      break;
+    }
+    const problems = await validateFix(deps, c, out.value, allowed);
     if (problems.length === 0) return { fix: out.value, source: 'llm', problems: [] };
     feedback = `Your previous proposal failed validation:\n- ${problems.join('\n- ')}\nFix these and answer again.`;
     deps.store.event(
       c,
       'llm',
-      `fix proposal rejected (attempt ${attempt}): ${problems.join('; ')}`,
+      `AI fix proposal rejected (attempt ${attempt}): ${problems.join('; ')}`,
     );
   }
+  deps.store.event(c, 'llm', 'Falling back to a mechanical revert of the culprit MR');
+  const draft = await revertProposal(deps, c);
   return { fix: draft.fix, source: 'heuristic', problems: draft.problems };
 }
 

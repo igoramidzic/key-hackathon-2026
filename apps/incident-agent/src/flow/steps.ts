@@ -31,7 +31,7 @@ import { groupCallers } from './callers';
 import { chatHooks, pollChat } from './chat';
 import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
-import { deepRca, quickRca } from './rca';
+import { deepRca, quickRcaPhase } from './rca';
 import { autoRegroup, humanRegroup, splitOff } from './regroup';
 import { checkMerge, followChange, raiseChange } from './ship';
 import { triage } from './triage';
@@ -121,7 +121,7 @@ export function startDeepRca(
     deps.store.event(
       current,
       'decision',
-      `Root cause (${source}, ${Math.round(rootCause.confidence * 100)}%, ${Math.round((Date.now() - started) / 1000)}s): ` +
+      `Root cause (${source === 'llm' ? 'AI' : 'deterministic'}, ${Math.round(rootCause.confidence * 100)}%, ${Math.round((Date.now() - started) / 1000)}s): ` +
         `${rootCause.culprit_tla} ${rootCause.change_request?.number ?? ''} ${rootCause.merge_request ? `${rootCause.merge_request.project}!${rootCause.merge_request.iid}` : ''}: ${rootCause.mechanism}` +
         (top && top.tla !== rootCause.culprit_tla
           ? ` (disagrees with the quick pass, which suspected ${top.tla})`
@@ -147,13 +147,14 @@ export function triaged(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     if (c.suspects.length === 0 && !c.milestones.quick_rca) {
       const started = Date.now();
-      c.suspects = await quickRca(deps, c);
+      const quick = await quickRcaPhase(deps, c);
+      c.suspects = quick.suspects;
       c.milestones.quick_rca = new Date().toISOString();
       deps.store.event(
         c,
         'decision',
         c.suspects.length
-          ? `Quick RCA (${Math.round((Date.now() - started) / 1000)}s): ${c.suspects
+          ? `Quick RCA (${quick.source === 'llm' ? 'AI' : 'deterministic'}, ${Math.round((Date.now() - started) / 1000)}s): ${c.suspects
               .map(
                 (s) =>
                   `${s.tla} ${s.change_request?.number ?? ''} ${Math.round(s.confidence * 100)}%`,
@@ -216,7 +217,12 @@ export async function upkeep(deps: FlowDeps, c: Case, ctx?: StepContext): Promis
           chatHooks(
             deps,
             ctx,
-            (cc, hint) => startDeepRca(deps, ctx, cc, { force: true, hint }),
+            (cc, hint) => {
+              // A human correction may change the culprit: allow a fresh fix once RCA is done.
+              if (!cc.fix_mr && cc.background.fix)
+                cc.background.fix = { ...cc.background.fix, state: 'failed' };
+              startDeepRca(deps, ctx, cc, { force: true, hint });
+            },
             humanRegroup(deps, ctx),
           ),
         );
@@ -361,6 +367,7 @@ export function investigating(deps: FlowDeps): StepFn {
     await upkeep(deps, c, ctx);
     if (isTerminal(c.phase)) return undefined;
     if (c.fix_mr) return { next: 'fix_proposed', why: `${c.fix_mr.project}!${c.fix_mr.iid}` };
+    if (ctx.isRunning(c, 'deep_rca')) return { wait: Math.max(2_000, 10_000 / deps.config.speed) };
     if (fixReadyToStart(deps, c)) startFix(deps, ctx, c);
     else startDeepRca(deps, ctx, c);
     return { wait: Math.max(2_000, 10_000 / deps.config.speed) };

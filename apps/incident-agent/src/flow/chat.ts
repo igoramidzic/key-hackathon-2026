@@ -170,9 +170,11 @@ async function answerQuestion(
   msg: ChatMessage,
   cls: Classified,
 ): Promise<string> {
-  if (cls.tla && /\b(change|changed|deploy|deployed|merged|release|promot)/i.test(msg.body))
-    return whatChanged(deps, c, cls.tla, cls.hours ?? 6);
-  if (!deps.runner) return statusAnswer(c);
+  const deterministic = () =>
+    cls.tla && /\b(change|changed|deploy|deployed|merged|release|promot)/i.test(msg.body)
+      ? whatChanged(deps, c, cls.tla, cls.hours ?? 6)
+      : Promise.resolve(statusAnswer(c));
+  if (!deps.runner) return deterministic();
   const out = await deps.runner.run({
     name: 'chat',
     caseId: c.id,
@@ -194,7 +196,7 @@ async function answerQuestion(
     maxTurns: 10,
     timeoutMs: 60_000,
   });
-  if (!out.ok) return statusAnswer(c);
+  if (!out.ok) return deterministic();
   const bases = Object.values(deps.config.web);
   const links = out.value.links.filter((l) => bases.some((b) => l.url.startsWith(b)));
   return [out.value.answer, ...links.map((l) => `- ${md(l.label, l.url)}`)].join('\n');
@@ -221,14 +223,57 @@ async function reply(deps: FlowDeps, c: Case, to: ChatMessage, body: string): Pr
 }
 
 /** Handles one human message. Returns the intent (for the timeline and tests). */
+const Classification = z.object({
+  intent: z.enum([
+    'question',
+    'correction',
+    'ownership',
+    'merged',
+    'regroup',
+    'destructive',
+    'other',
+  ]),
+  tla: z.string().nullable().default(null),
+  incident: z.string().nullable().default(null),
+  regroup: z.enum(['split', 'merge']).nullable().default(null),
+  hours: z.number().nullable().default(null),
+});
+
+/** The AI classifies (small call, no tools); the regex classifier is the fallback. */
+async function classifyMessage(deps: FlowDeps, c: Case, msg: ChatMessage): Promise<Classified> {
+  const known = new Set(deps.graph().nodes.keys());
+  const fallback = classify(msg.body, known);
+  if (!deps.runner) return fallback;
+  const out = await deps.runner.run({
+    name: 'chat_classify',
+    caseId: c.id,
+    system:
+      'Classify one message an engineer wrote in an incident channel. intent: question (wants information), correction (pushes back on the root cause or hints at another cause), ownership (takes or acknowledges ownership), merged (says the fix MR was merged or approved), regroup (says an app is unrelated -> regroup "split" with tla, or that this is the same as another incident -> regroup "merge" with incident), destructive (asks the agent to merge, delete, close or roll back something itself), other. tla is a 3-letter application code if the message is about one; incident an INC number if mentioned; hours a time window if asked. Answer with JSON only.',
+    prompt: `Apps in this incident: ${c.apps.slice(0, 20).join(', ')}.\nMessage from @${msg.author}: ${msg.body}`,
+    tools: [],
+    schema: Classification,
+    maxTurns: 2,
+    timeoutMs: 30_000,
+  });
+  if (!out.ok) return fallback;
+  const v = out.value;
+  const tla = v.tla?.toUpperCase();
+  return {
+    intent: v.intent,
+    tla: tla && known.has(tla) ? tla : fallback.tla,
+    incident: v.incident ?? fallback.incident,
+    regroup: v.regroup ?? fallback.regroup,
+    hours: v.hours ?? fallback.hours,
+  };
+}
+
 export async function handleMessage(
   deps: FlowDeps,
   c: Case,
   msg: ChatMessage,
   hooks: ChatHooks,
 ): Promise<Intent> {
-  const known = new Set(deps.graph().nodes.keys());
-  const cls = classify(msg.body, known);
+  const cls = await classifyMessage(deps, c, msg);
   deps.store.event(
     c,
     'note',

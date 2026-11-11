@@ -15,8 +15,10 @@
  *
  * Prompts and scoring are generic: no TLA, MR title or fix is known in advance.
  */
+
+import { z } from 'zod';
 import type { Case, LogSignal, MrRef, RootCause, Suspect } from '../cases/types';
-import { RootCause as RootCauseSchema } from '../cases/types';
+import { RootCause as RootCauseSchema, Suspect as SuspectSchema } from '../cases/types';
 import type { DependencyGraph } from '../correlate/graph';
 import { duration, errorMessage, hhmm, uniq } from '../util';
 import type { FlowDeps } from './steps';
@@ -277,6 +279,126 @@ export async function quickRca(deps: FlowDeps, c: Case): Promise<Suspect[]> {
   }));
 }
 
+const QUICK_TOOLS = [
+  'list_change_requests',
+  'get_change_request',
+  'list_merge_requests',
+  'get_merge_request',
+  'get_app',
+  'get_app_dependencies',
+  'summarize_errors',
+  'search_logs',
+];
+
+const QUICK_SYSTEM = `You are the quick root-cause pass of a bank's incident-response agent. You are
+read-only: investigate with the tools and answer with JSON, fast (under two minutes). Name up to
+three production changes that most likely caused the errors, best first. Rules:
+- Merged is not deployed: only changes KBR promoted through a change request reached production.
+  Use list_change_requests (app_tla, implemented_after) for the failing apps and their upstreams.
+- The culprit of a cascade often looks healthy: it returns 200s and only downstream apps error.
+  Walk upstream from the failing apps; an app every failing app depends on is the first suspect.
+- Unrelated changes land at the same time on purpose: prefer the change whose diff touches what
+  the errors talk about.
+- Copy change_request and merge_request references exactly from tool results.`;
+
+const QuickSchema = z.object({ suspects: z.array(SuspectSchema).max(3) });
+
+/** Checks a suspect's change and MR exist and takes their links and times from the tools. */
+async function verifySuspect(deps: FlowDeps, c: Case, s: Suspect): Promise<Suspect | null> {
+  try {
+    let promoted_at = s.promoted_at;
+    let change_request = s.change_request;
+    let merge_request = s.merge_request;
+    let author = s.author;
+    if (change_request) {
+      const ch = await deps.mcp.call<ChangeDetail>(
+        'get_change_request',
+        { number: change_request.number },
+        { caseId: c.id },
+      );
+      change_request = { number: ch.number, web_url: ch.web_url };
+      promoted_at = ch.implemented_at ?? promoted_at;
+      if (!merge_request && ch.merge_requests?.[0]) {
+        const ref = parseMrReference(ch.merge_requests[0].reference);
+        if (ref)
+          merge_request = {
+            ...ref,
+            title: ch.merge_requests[0].title ?? '',
+            web_url: ch.merge_requests[0].web_url,
+          };
+      }
+    }
+    if (merge_request) {
+      const mr = await deps.mcp.call<MrDetail>(
+        'get_merge_request',
+        { project: merge_request.project, iid: merge_request.iid },
+        { caseId: c.id },
+      );
+      merge_request = mrRef(mr);
+      author = username(mr.author) ?? author;
+    }
+    if (!change_request && !merge_request) return null;
+    return { ...s, change_request, merge_request, promoted_at, author };
+  } catch (err) {
+    deps.log.debug(
+      `suspect ${s.tla} ${s.change_request?.number ?? ''} dropped: ${errorMessage(err)}`,
+    );
+    return null;
+  }
+}
+
+/** Quick pass: the AI by default, the deterministic ranking with AGENT_LLM=off or as a fallback. */
+export async function quickRcaPhase(
+  deps: FlowDeps,
+  c: Case,
+): Promise<{ suspects: Suspect[]; source: 'llm' | 'heuristic' }> {
+  if (!deps.runner) return { suspects: await quickRca(deps, c), source: 'heuristic' };
+  const failing = failingApps(c);
+  const out = await deps.runner.run({
+    name: 'quick_rca',
+    caseId: c.id,
+    system: QUICK_SYSTEM,
+    prompt: [
+      `Case ${c.id}: ${c.scope?.summary ?? ''}. Errors started ${c.scope?.onset ?? c.onset_at}.`,
+      `Failing apps (${failing.length}): ${failing.join(', ')}.`,
+      `Apps every failing app depends on (from the CMDB): ${c.upstream_candidates.map((u) => `${u.tla} (${u.covers}/${u.of}${u.failing ? ', failing' : ', no errors'})`).join(', ') || 'none'}.`,
+      `Error signatures:\n${(c.scope?.signatures ?? []).map((s) => `- ${s.app_tla} ${s.error_type}: ${s.message}`).join('\n')}`,
+      'Return {"suspects": [...]} with up to three Suspect objects, best first, each with a reason and a confidence between 0 and 1.',
+    ].join('\n\n'),
+    tools: QUICK_TOOLS,
+    schema: QuickSchema,
+    maxTurns: 16,
+    timeoutMs: 120_000,
+  });
+  if (!out.ok) {
+    deps.store.event(
+      c,
+      'llm',
+      `AI quick RCA failed (${out.error}); falling back to the deterministic ranking`,
+    );
+    return { suspects: await quickRca(deps, c), source: 'heuristic' };
+  }
+  deps.store.event(
+    c,
+    'llm',
+    `AI quick RCA: ${out.usage.turns} turns, $${out.usage.costUsd.toFixed(3)}`,
+  );
+  const verified: Suspect[] = [];
+  for (const s of out.value.suspects) {
+    const v = await verifySuspect(deps, c, s);
+    if (v) verified.push(v);
+  }
+  if (!verified.length) {
+    deps.store.event(
+      c,
+      'llm',
+      'AI quick RCA named no change that exists; falling back to the deterministic ranking',
+    );
+    return { suspects: await quickRca(deps, c), source: 'heuristic' };
+  }
+  return { suspects: verified, source: 'llm' };
+}
+
 // ---------------------------------------------------------------------------
 // Deep pass
 // ---------------------------------------------------------------------------
@@ -461,27 +583,27 @@ function referencesAreReal(deps: FlowDeps, rc: RootCause): string | null {
   return null;
 }
 
-/** Deep pass: LLM on top of the deterministic draft when available; references verified. */
+/** Deep pass: the AI by default (references verified); deterministic with AGENT_LLM=off or as a fallback. */
 export async function deepRca(
   deps: FlowDeps,
   c: Case,
   hint?: string,
 ): Promise<{ rootCause: RootCause | null; source: 'llm' | 'heuristic' }> {
-  const draft = await heuristicDeepRca(deps, c);
-  if (!deps.runner) return { rootCause: draft, source: 'heuristic' };
+  if (!deps.runner) return { rootCause: await heuristicDeepRca(deps, c), source: 'heuristic' };
   const failing = failingApps(c);
   const prompt = [
     `Case ${c.id}: ${c.scope?.summary ?? ''}. Errors started ${c.scope?.onset ?? c.onset_at}.`,
     `Failing apps (${failing.length}): ${failing.join(', ')}.`,
-    `Shared upstream candidates: ${c.upstream_candidates.map((u) => `${u.tla} (${u.covers}/${u.of}${u.failing ? ', failing' : ', no errors'})`).join(', ')}.`,
+    `Apps every failing app depends on (from the CMDB): ${c.upstream_candidates.map((u) => `${u.tla} (${u.covers}/${u.of}${u.failing ? ', failing' : ', no errors'})`).join(', ') || 'none'}.`,
     `Error signatures:\n${(c.scope?.signatures ?? []).map((s) => `- ${s.app_tla} ${s.error_type}: ${s.message}`).join('\n')}`,
-    `Quick-pass suspects:\n${c.suspects.map((s) => `- ${s.tla} ${s.change_request?.number} ${s.merge_request?.web_url ?? ''}: ${s.reason}`).join('\n')}`,
-    draft
-      ? `Deterministic draft:\n${JSON.stringify(draft, null, 2)}`
-      : 'No draft: no promoted changes were found near the onset.',
+    c.suspects.length
+      ? `Quick-pass suspects (unconfirmed):\n${c.suspects.map((s) => `- ${s.tla} ${s.change_request?.number ?? ''} ${s.merge_request?.web_url ?? ''}: ${s.reason}`).join('\n')}`
+      : '',
     hint ? `A human in the incident channel says: "${hint}". Take it seriously and check it.` : '',
-    'Verify or correct the draft by reading the change requests, merge request diffs and code. Return RootCause JSON.',
-  ].join('\n\n');
+    'Confirm or correct the cause by reading the change requests, the merge request diffs and the code. Return RootCause JSON.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   const out = await deps.runner.run({
     name: 'rca',
     caseId: c.id,
@@ -497,12 +619,11 @@ export async function deepRca(
     deps.store.event(
       c,
       'llm',
-      `deep RCA phase failed (${out.error}); using the deterministic analysis`,
+      `AI deep RCA failed (${out.error}); falling back to the deterministic analysis`,
     );
-    return { rootCause: draft, source: 'heuristic' };
+    return { rootCause: await heuristicDeepRca(deps, c), source: 'heuristic' };
   }
   const rc = out.value;
-  const problem = referencesAreReal(deps, rc);
   // Verify the change and MR exist and take their links from the tools, not the model.
   try {
     if (rc.change_request) {
@@ -525,18 +646,26 @@ export async function deepRca(
     deps.store.event(
       c,
       'llm',
-      `deep RCA named records that don't exist (${errorMessage(err)}); using the deterministic analysis`,
+      `AI deep RCA named records that don't exist (${errorMessage(err)}); falling back to the deterministic analysis`,
     );
-    return { rootCause: draft, source: 'heuristic' };
+    return { rootCause: await heuristicDeepRca(deps, c), source: 'heuristic' };
   }
-  if (problem)
+  if (!deps.graph().nodes.has(rc.culprit_tla)) {
+    deps.store.event(
+      c,
+      'llm',
+      `AI deep RCA named an unknown app ${rc.culprit_tla}; falling back to the deterministic analysis`,
+    );
+    return { rootCause: await heuristicDeepRca(deps, c), source: 'heuristic' };
+  }
+  if (referencesAreReal(deps, rc))
     rc.evidence = rc.evidence.filter((e) =>
       Object.values(deps.config.web).some((b) => e.web_url.startsWith(b)),
     );
   deps.store.event(
     c,
     'llm',
-    `deep RCA phase: ${out.usage.turns} turns, $${out.usage.costUsd.toFixed(3)}`,
+    `AI deep RCA: ${out.usage.turns} turns, $${out.usage.costUsd.toFixed(3)}`,
   );
   return { rootCause: rc, source: 'llm' };
 }

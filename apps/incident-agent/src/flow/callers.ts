@@ -99,16 +99,18 @@ const Verdicts = z.object({
   verdicts: z.array(z.object({ number: z.string(), related: z.boolean(), reason: z.string() })),
 });
 
-/** Classifies candidate calls (LLM when available, else heuristic). */
+/** Classifies candidate calls: the AI by default, the vocabulary heuristic with AGENT_LLM=off or as a fallback. */
 export async function classifyCalls(deps: FlowDeps, c: Case, calls: CallRow[]): Promise<Verdict[]> {
-  const vocab = caseVocabulary(deps, c);
-  const draft = calls.map((call) => heuristicVerdict(deps, c, call, vocab));
-  if (!deps.runner || calls.length === 0) return draft;
+  const heuristic = () => {
+    const vocab = caseVocabulary(deps, c);
+    return calls.map((call) => heuristicVerdict(deps, c, call, vocab));
+  };
+  if (!deps.runner || calls.length === 0) return heuristic();
   const out = await deps.runner.run({
     name: 'grouping',
     caseId: c.id,
     system:
-      'You decide which help-desk incidents (calls, emails, chats from bank staff) are symptoms of an ongoing outage. Staff describe symptoms in their own words and may blame the wrong thing (a printer, a drawer). Judge by what is actually failing, the apps involved and timing. Answer with JSON only.',
+      'You decide which help-desk incidents (calls, emails, chats from bank staff) are symptoms of an ongoing outage. Staff describe symptoms in their own words and may blame the wrong thing (a printer, a drawer). Judge by what is actually failing, the apps involved and timing; incidents opened well before the outage or about unrelated things (hardware, access, a password) are not related. Answer with JSON only.',
     prompt: [
       `Outage: ${c.scope?.summary ?? ''}. ${c.scope?.customer_impact ?? ''}`,
       `Since ${c.scope?.onset ?? c.onset_at}. Apps: ${(c.scope?.affected_apps ?? []).map((a) => `${a.tla} ${a.name}`).join(', ')}.`,
@@ -116,9 +118,8 @@ export async function classifyCalls(deps: FlowDeps, c: Case, calls: CallRow[]): 
       'Candidate incidents:',
       ...calls.map(
         (x) =>
-          `- ${x.number} opened ${x.opened_at} via ${x.contact_type} app=${x.app_tla ?? 'none'}: ${x.short_description}. ${x.description ?? ''}`,
+          `- ${x.number} opened ${x.opened_at} via ${x.contact_type} app=${x.app_tla ?? 'none'} category=${x.category ?? 'n/a'}: ${x.short_description}. ${x.description ?? ''}`,
       ),
-      `A first pass said: ${JSON.stringify(draft)}`,
       'Return {"verdicts": [{"number", "related", "reason"}]} for every candidate.',
     ]
       .filter(Boolean)
@@ -128,11 +129,19 @@ export async function classifyCalls(deps: FlowDeps, c: Case, calls: CallRow[]): 
     maxTurns: 2,
     timeoutMs: 60_000,
   });
-  if (!out.ok) return draft;
+  if (!out.ok) {
+    deps.store.event(
+      c,
+      'llm',
+      `AI caller grouping failed (${out.error}); using the vocabulary heuristic`,
+    );
+    return heuristic();
+  }
+  const fallback = heuristic();
   return calls.map(
     (call) =>
       out.value.verdicts.find((v) => v.number === call.number) ??
-      draft.find((d) => d.number === call.number)!,
+      fallback.find((d) => d.number === call.number)!,
   );
 }
 

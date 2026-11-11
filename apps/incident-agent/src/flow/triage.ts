@@ -362,11 +362,8 @@ function describeCase(c: Case): string {
   return lines.join('\n');
 }
 
-/** Runs the LLM triage phase on top of the draft. Falls back to the draft on any failure. */
-export async function triage(
-  deps: FlowDeps,
-  c: Case,
-): Promise<{ scope: ScopeReport; source: 'llm' | 'heuristic' }> {
+/** Deterministic triage (AGENT_LLM=off, or the fallback when the AI phase fails). */
+async function deterministicTriage(deps: FlowDeps, c: Case): Promise<ScopeReport> {
   if (c.kind === 'human-reported' && c.apps.length === 0) {
     const found = await discoverApps(deps, c);
     if (found.apps.length) {
@@ -385,49 +382,84 @@ export async function triage(
       );
     }
   }
-  const draft = await heuristicScope(deps, c);
-  if (!deps.runner) return { scope: draft, source: 'heuristic' };
+  return heuristicScope(deps, c);
+}
+
+/**
+ * Triage. With Claude (the default) the model investigates with read-only tools and writes the
+ * ScopeReport; its log filters are resolved through search_logs so every logs_url comes from a
+ * tool. Deterministic only with AGENT_LLM=off, or as a labelled fallback if the AI phase fails.
+ */
+export async function triage(
+  deps: FlowDeps,
+  c: Case,
+): Promise<{ scope: ScopeReport; source: 'llm' | 'heuristic' }> {
+  if (!deps.runner) return { scope: await deterministicTriage(deps, c), source: 'heuristic' };
+  const human = c.kind === 'human-reported';
   const out = await deps.runner.run({
     name: 'triage',
     caseId: c.id,
     system: SYSTEM,
-    prompt: `${describeCase(c)}\n\nA draft scope computed from the logs:\n${JSON.stringify(draft, null, 2)}\n\nCheck it with the tools and return the corrected ScopeReport JSON. Keep onset accurate to the minute.`,
+    prompt: [
+      describeCase(c),
+      human
+        ? 'This problem was reported by bank staff, not by monitoring. Find the application(s) behind what they describe: look for warnings or errors that started around the first call (it may be warnings only), and use the CMDB (search_apps, get_app) to map what they describe to apps.'
+        : 'Scope the failing apps above. Confirm each one belongs to the same problem (same error family, downstream of the same upstream, shared traces) or mark it unrelated.',
+      `Errors started around ${c.onset_at ?? c.opened_at}. Use start_time/end_time windows around that.`,
+      'For log_links give 1-3 Logs Explorer filters (query language) that show the evidence, each with a timestamp>= clause pinned just before the onset; copy logs_url from the search_logs response for exactly that filter.',
+      'Return the ScopeReport JSON.',
+    ].join('\n\n'),
     tools: TRIAGE_TOOLS,
     schema: ScopeSchema,
-    maxTurns: 14,
-    timeoutMs: 90_000,
+    maxTurns: 18,
+    timeoutMs: 120_000,
   });
   if (!out.ok) {
-    deps.store.event(c, 'llm', `triage phase failed (${out.error}); using the log-derived scope`);
-    return { scope: draft, source: 'heuristic' };
+    deps.store.event(
+      c,
+      'llm',
+      `AI triage failed (${out.error}); falling back to the deterministic scope`,
+    );
+    return { scope: await deterministicTriage(deps, c), source: 'heuristic' };
   }
   deps.store.event(
     c,
     'llm',
-    `triage phase: ${out.usage.turns} turns, ${out.usage.outputTokens} output tokens, $${out.usage.costUsd.toFixed(3)}`,
+    `AI triage: ${out.usage.turns} turns, ${out.usage.outputTokens} output tokens, $${out.usage.costUsd.toFixed(3)}`,
   );
+  const graph = deps.graph();
   const llm = out.value;
-  const draftUrls = new Set(draft.log_links.map((l) => l.logs_url));
-  // Links the model changed are re-resolved through search_logs; nothing is taken on trust.
+  // Only real apps; for staff-reported problems the AI's apps become the case's apps.
+  const affected = llm.affected_apps.filter((a) => graph.nodes.has(a.tla));
+  if (human && c.apps.length === 0 && affected.length) {
+    c.apps = affected.map((a) => a.tla);
+    c.relations = affected.map((a) => ({
+      tla: a.tla,
+      score: 1,
+      reasons: ['identified by AI triage from the calls and the logs'],
+      tentative: false,
+    }));
+    c.upstream_candidates = graph.commonUpstream(c.apps);
+    deps.store.event(c, 'decision', `Apps behind the calls (AI triage): ${c.apps.join(', ')}`);
+  }
+  // Every link is re-resolved through search_logs: nothing is taken on trust.
   const links: ScopeReport['log_links'] = [];
   for (const link of llm.log_links.slice(0, 3)) {
-    if (draftUrls.has(link.logs_url)) links.push(link);
-    else {
-      try {
-        const real = await logLink(deps.mcp, link.filter, c.id);
-        links.push({ label: link.label, filter: link.filter, logs_url: real.logs_url });
-      } catch {
-        // drop it
-      }
+    try {
+      const real = await logLink(deps.mcp, link.filter, c.id);
+      links.push({ label: link.label, filter: link.filter, logs_url: real.logs_url });
+    } catch {
+      // an invalid filter is dropped
     }
   }
-  return {
-    scope: {
-      ...llm,
-      affected_apps: llm.affected_apps.length ? llm.affected_apps : draft.affected_apps,
-      log_links: links.length ? links : draft.log_links,
-      grouping: llm.grouping.length ? llm.grouping : draft.grouping,
-    },
-    source: 'llm',
-  };
+  let scope: ScopeReport = { ...llm, affected_apps: affected };
+  if (!links.length || !affected.length) {
+    const fallback = await heuristicScope(deps, c);
+    scope = {
+      ...scope,
+      affected_apps: affected.length ? affected : fallback.affected_apps,
+      log_links: links.length ? links : fallback.log_links,
+    };
+  } else scope.log_links = links;
+  return { scope, source: 'llm' };
 }
