@@ -73,7 +73,67 @@ export interface ViewEvent {
   links: Link[];
 }
 
+/**
+ * The case's records and findings as data, for pages that place them themselves (the guided demo
+ * in the control panel). Everything here is also reachable through `links` and `timeline`.
+ */
+export interface CaseRecords {
+  incident: Case['incident'];
+  channel: Case['channel'];
+  members: Case['members'];
+  fix_mr: Case['fix_mr'];
+  change: Case['change'];
+  children: string[];
+  callers: {
+    number: string;
+    web_url: string;
+    short_description: string;
+    caller: string | null;
+    location: string | null;
+    contact_type: string;
+  }[];
+  alerts: Case['alerts'];
+  scope: {
+    summary: string;
+    customer_impact: string;
+    onset: string;
+    impact: number;
+    urgency: number;
+    severity_reason: string;
+    affected: { tla: string; name: string; tier: number; error_count: number }[];
+  } | null;
+  suspects: {
+    tla: string;
+    confidence: number;
+    reason: string;
+    change: string | null;
+    merge_request: string | null;
+  }[];
+  culprit: {
+    tla: string;
+    confidence: number;
+    change: { number: string; web_url: string } | null;
+    merge_request: { project: string; iid: number; title: string; web_url: string } | null;
+    files: string[];
+  } | null;
+  fix: { strategy: string; title: string; justification: string; files: string[] } | null;
+  verification: Case['verification'];
+  resolution: {
+    close_code: string;
+    close_notes: string;
+    drafted_at: string;
+    resolved_at: string | null;
+  } | null;
+  /** Phase and announcement times (ISO), keyed as in the case. */
+  milestones: Record<string, string>;
+  signals: { logs: number; alerts: number; callers: number };
+  /** Model spend so far, summed from the timeline's `llm` events. */
+  cost_usd: number;
+  tool_calls: number;
+}
+
 export interface CaseView extends CaseSummary {
+  records: CaseRecords;
   log_links: Link[];
   /** Record names that appear in event text (INC…, CHG…, project!iid, #channel) → URL. */
   refs: [string, string][];
@@ -323,6 +383,85 @@ function recordLinks(c: Case, web: WebBases): Link[] {
   return dedupe(links);
 }
 
+const ISO = /^\d{4}-\d{2}-\d{2}T/;
+
+function records(c: Case): CaseRecords {
+  const callers: CaseRecords['callers'] = [];
+  const count = { logs: 0, alerts: 0, callers: 0 };
+  for (const s of c.signals) {
+    if (s.source === 'logs') count.logs++;
+    else if (s.source === 'alert') count.alerts++;
+    else {
+      count.callers++;
+      callers.push({
+        number: s.incident_number,
+        web_url: s.web_url,
+        short_description: s.short_description,
+        caller: s.caller,
+        location: s.location,
+        contact_type: s.contact_type,
+      });
+    }
+  }
+  let cost = 0;
+  let tools = 0;
+  for (const e of c.timeline) {
+    if (e.kind === 'tool') tools++;
+    else if (e.kind === 'llm') cost += Number(/\$(\d+(?:\.\d+)?)/.exec(e.text)?.[1] ?? 0);
+  }
+  const rc = c.root_cause;
+  return {
+    incident: c.incident,
+    channel: c.channel,
+    members: c.members,
+    fix_mr: c.fix_mr,
+    change: c.change,
+    children: c.children,
+    callers,
+    alerts: c.alerts,
+    scope: c.scope && {
+      summary: c.scope.summary,
+      customer_impact: c.scope.customer_impact,
+      onset: c.scope.onset,
+      impact: c.scope.suggested_impact,
+      urgency: c.scope.suggested_urgency,
+      severity_reason: c.scope.severity_reason,
+      affected: c.scope.affected_apps.map((a) => ({
+        tla: a.tla,
+        name: a.name,
+        tier: a.tier,
+        error_count: a.error_count,
+      })),
+    },
+    suspects: c.suspects.map((s) => ({
+      tla: s.tla,
+      confidence: s.confidence,
+      reason: s.reason,
+      change: s.change_request?.number ?? null,
+      merge_request: s.merge_request ? mrLabel(s.merge_request) : null,
+    })),
+    culprit: rc && {
+      tla: rc.culprit_tla,
+      confidence: rc.confidence,
+      change: rc.change_request,
+      merge_request: rc.merge_request,
+      files: rc.files,
+    },
+    fix: c.fix && {
+      strategy: c.fix.strategy,
+      title: c.fix.title,
+      justification: c.fix.justification,
+      files: c.fix.changes.map((f) => f.path),
+    },
+    verification: c.verification,
+    resolution: c.resolution,
+    milestones: Object.fromEntries(Object.entries(c.milestones).filter(([, v]) => ISO.test(v))),
+    signals: count,
+    cost_usd: Math.round(cost * 1000) / 1000,
+    tool_calls: tools,
+  };
+}
+
 export function caseSummary(c: Case, web: WebBases = defaultWeb()): CaseSummary {
   const byUrl = urlNames(c, refs(c));
   const last = c.timeline.at(-1);
@@ -372,6 +511,7 @@ export function caseView(c: Case, web: WebBases = defaultWeb()): CaseView {
     logLinks.push({ label: 'Recovery check', url: c.verification.logs_url, system: 'logs' });
   return {
     ...caseSummary(c, web),
+    records: records(c),
     log_links: dedupe(logLinks),
     refs: [...named],
     timeline: c.timeline.map((e) => ({

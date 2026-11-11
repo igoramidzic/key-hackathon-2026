@@ -1,0 +1,502 @@
+/*
+ * Guided demo. Same tokens as every other UI here (packages/ui/src/theme.css): gray neutrals,
+ * square corners, near-black primary, color only for status. The page is three things stacked:
+ * where we are, the one thing to look at, and one sentence about it.
+ */
+.demo-root {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr) auto;
+  background: var(--background);
+  color: var(--foreground);
+}
+.demo-error {
+  color: var(--negative);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- top */
+.demo-top {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  font-size: 14px;
+}
+.demo-top ol {
+  display: flex;
+  flex: 1;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.demo-top li {
+  line-height: 47px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.3s ease;
+}
+.demo-top li.done {
+  color: var(--foreground);
+}
+.demo-top li.now {
+  color: var(--foreground);
+  font-weight: 600;
+  border-bottom-color: var(--foreground);
+}
+.demo-clock {
+  font-family: "Geist Mono Variable", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------- stage */
+.demo-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 20px 20px 0;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.demo-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  flex: none;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.demo-stage-head span {
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-mark {
+  width: 14px;
+  height: 14px;
+  background: var(--primary);
+}
+.demo-stage-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.demo-stage-body iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  background: #fff;
+  transform-origin: 0 0;
+  transition: opacity 0.35s ease;
+}
+.demo-stage-body iframe.is-off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    visibility 0s 0.25s;
+}
+.demo-native {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--card);
+  animation: demo-fade 0.4s ease both;
+}
+
+/* ---------------------------------------------------------------- panels */
+.demo-panel {
+  width: 100%;
+  max-width: 880px;
+  margin: auto;
+  padding: 40px;
+}
+.demo-panel.is-center {
+  text-align: center;
+}
+.demo-panel h2 {
+  margin: 16px 0 0;
+  font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.demo-lede {
+  margin: 16px 0 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+.demo-lede.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.demo-panel-note {
+  margin: 28px 0 0;
+  font-size: 16px;
+  color: var(--muted-foreground);
+}
+.demo-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+}
+.demo-badge.neg {
+  border-color: var(--negative);
+  background: var(--negative);
+  color: #fff;
+}
+.demo-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 36px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.demo-facts dt {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.demo-facts dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.demo-cast {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border);
+}
+.demo-cast > div {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 32px 16px;
+  animation: demo-fade 0.5s ease both;
+}
+.demo-cast > div + div {
+  border-left: 1px solid var(--border);
+}
+.demo-cast > div:nth-child(2) {
+  animation-delay: 0.35s;
+}
+.demo-cast > div:nth-child(3) {
+  animation-delay: 0.7s;
+}
+.demo-cast > div:nth-child(4) {
+  animation-delay: 1.05s;
+}
+.demo-cast strong {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.demo-cast span {
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+.demo-sum {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 48px;
+}
+.demo-sum > div {
+  display: grid;
+  gap: 4px;
+}
+.demo-sum b {
+  font-size: clamp(64px, 8vw, 112px);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.demo-sum b.neg {
+  color: var(--negative);
+}
+.demo-sum span {
+  font-size: 16px;
+  color: var(--muted-foreground);
+}
+.demo-sum i {
+  font-style: normal;
+  font-size: 40px;
+  line-height: clamp(64px, 8vw, 112px);
+  color: var(--muted-foreground);
+}
+.demo-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 40px;
+}
+.demo-tiles span {
+  min-width: 48px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font:
+    500 13px / 1 "Geist Mono Variable",
+    ui-monospace,
+    monospace;
+  color: var(--muted-foreground);
+  animation: demo-fade 0.4s ease both;
+}
+
+.demo-recap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 56px;
+  max-width: 980px;
+  align-items: start;
+}
+.demo-recap ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.demo-recap li {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+}
+.demo-recap time {
+  width: 48px;
+  font-family: "Geist Mono Variable", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.demo-recap li span {
+  flex: 1;
+}
+.demo-recap li.is-human {
+  font-weight: 600;
+}
+.demo-recap em {
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--positive);
+}
+.demo-recap dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px 24px;
+  margin: 0;
+}
+.demo-recap dd {
+  margin: 0;
+  font-size: 36px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.demo-recap dt {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------- caption */
+.demo-caption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  min-height: 128px;
+  margin: 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+.demo-caption.needs-you {
+  border-color: var(--positive);
+  box-shadow: inset 4px 0 0 var(--positive);
+}
+.demo-progress {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 2px;
+  background: var(--foreground);
+  transition: width 0.25s linear;
+}
+.demo-caption-text {
+  flex: 1;
+  min-width: 0;
+  animation: demo-fade 0.4s ease both;
+}
+.demo-caption h2 {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.demo-caption p {
+  margin: 6px 0 0;
+  max-width: 78ch;
+  font-size: clamp(16px, 1.2vw, 18px);
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.demo-caption .demo-meanwhile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+.demo-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------------------------------------------------------------- before it starts */
+.demo-pre {
+  display: grid;
+  grid-template-rows: 1fr;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+}
+.demo-pre-card {
+  display: grid;
+  gap: 20px;
+  width: min(520px, 100%);
+  padding: 32px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.demo-pre-card h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.demo-pre-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.demo-checks {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+}
+.demo-checks li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.demo-checks li + li {
+  border-top: 1px solid var(--border);
+}
+.demo-checks i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--warning);
+}
+.demo-checks li.ok i {
+  background: var(--positive);
+}
+.demo-checks li > span {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted-foreground);
+}
+.demo-checks strong {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.demo-field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.demo-pre-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.demo-pre-card .demo-hint {
+  font-size: 13px;
+}
+a.demo-hint {
+  color: var(--muted-foreground);
+  text-underline-offset: 4px;
+}
+a.demo-hint:hover {
+  text-decoration: underline;
+}
+
+@keyframes demo-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-native,
+  .demo-caption-text,
+  .demo-cast div,
+  .demo-tiles span {
+    animation: none;
+  }
+}
+@media (max-width: 900px) {
+  .demo-top ol li:not(.now) {
+    display: none;
+  }
+  .demo-caption {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .demo-cast,
+  .demo-facts,
+  .demo-recap {
+    grid-template-columns: 1fr 1fr;
+  }
+}

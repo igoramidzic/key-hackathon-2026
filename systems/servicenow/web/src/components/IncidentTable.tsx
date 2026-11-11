@@ -134,6 +134,8 @@ export function IncidentTable({
           return (
             <TableRow
               key={i.number}
+              data-demo="incident-row"
+              data-number={i.number}
               onClick={() => navigate(`/incidents/${i.number}`)}
               className={cn(listRowClass, 'cursor-pointer', fresh && 'bg-accent even:bg-accent')}
             >

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { installDemoBridge } from './demo-bridge';
 
 /** TanStack Query provider with demo-friendly defaults (short stale time, no retry storms). */
 export function QueryProvider({ children }: { children: ReactNode }) {
@@ -12,5 +13,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         },
       }),
   );
+  // Every UI mounts this provider, so the guided demo can drive any of them when framed.
+  useEffect(installDemoBridge, []);
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

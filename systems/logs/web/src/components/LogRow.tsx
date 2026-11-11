@@ -60,7 +60,11 @@ export const LogRow = memo(function LogRow({
   const http = entry.httpRequest;
 
   return (
-    <div className={cn('border-b border-[#e8eaed] last:border-b-0', expanded && 'bg-[#f8f9fa]')}>
+    <div
+      data-demo="log-row"
+      data-severity={entry.severity}
+      className={cn('border-b border-[#e8eaed] last:border-b-0', expanded && 'bg-[#f8f9fa]')}
+    >
       <div
         onClick={() => onToggle(entry.insertId)}
         className={cn(

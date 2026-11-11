@@ -165,6 +165,9 @@ export function TopNav() {
       <NavLink to="/docs" className={item}>
         Agent docs
       </NavLink>
+      <NavLink to="/demo" className={item}>
+        Guided demo
+      </NavLink>
     </>
   );
 }

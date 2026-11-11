@@ -220,7 +220,7 @@ function MergeWidget({
   const approved = mr.approved_by.some((u) => u.username === actor);
   const status = mr.pipeline.status;
   return (
-    <Card className="gap-0 divide-y py-0 ring-border">
+    <Card data-demo="merge-widget" className="gap-0 divide-y py-0 ring-border">
       <WidgetRow icon={<PipelineIcon status={status} className="size-5" />}>
         <span className="font-medium">
           Pipeline #{mr.pipeline.id} {PIPELINE_LABEL[status]}
@@ -285,7 +285,11 @@ function MergeWidget({
             <div className="grid gap-2.5">
               <div className="font-semibold text-gl-strong">Ready to merge!</div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button disabled={merge.isPending} onClick={() => merge.mutate()}>
+                <Button
+                  data-demo="merge-button"
+                  disabled={merge.isPending}
+                  onClick={() => merge.mutate()}
+                >
                   {merge.isPending ? <ButtonSpinner /> : <GitMerge data-icon="inline-start" />}
                   Merge
                 </Button>
@@ -545,7 +549,9 @@ export function MrPage() {
       {(m) => (
         <div className="grid gap-0">
           <div className="grid gap-2 pb-2">
-            <h1 className="font-semibold text-2xl text-gl-strong">{m.title}</h1>
+            <h1 data-demo="mr-title" className="font-semibold text-2xl text-gl-strong">
+              {m.title}
+            </h1>
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground text-xs">
               <StateBadge state={m.state} className="mr-1" />
               <UserLink user={m.author} avatar />
@@ -586,7 +592,9 @@ export function MrPage() {
           {tab === 'overview' && (
             <div className="grid lg:grid-cols-[minmax(0,1fr)_290px]">
               <div className="grid min-w-0 content-start gap-5 pt-4 lg:pr-6">
-                <Markdown source={m.description} />
+                <div data-demo="mr-description">
+                  <Markdown source={m.description} />
+                </div>
                 <MergeWidget
                   mr={m}
                   projectPath={path}

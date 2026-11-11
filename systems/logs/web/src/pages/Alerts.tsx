@@ -201,6 +201,9 @@ function AlertRow({ alert: a, onOpen }: { alert: Alert; onOpen: () => void }) {
   const muted = a.status === 'resolved' || a.status === 'closed';
   return (
     <TableRow
+      data-demo="alert-row"
+      data-id={a.id}
+      data-status={a.status}
       onClick={onOpen}
       className={cn(
         'h-[34px] cursor-pointer border-border/70 even:bg-[#f7f9fb] hover:bg-accent',

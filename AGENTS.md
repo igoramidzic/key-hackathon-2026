@@ -32,6 +32,7 @@ pnpm sim list | status | reset | stop      # drive the simulator from the CLI
 pnpm sim trigger cif-snake-case-cascade --speed 4
 pnpm agent --check                         # incident agent: connectivity check (not part of pnpm dev)
 pnpm agent                                 # run the incident agent against the world
+pnpm demo                                  # agent + the guided demo page (localhost:3000/demo)
 pnpm e2e                                   # end-to-end check against the running stack
 pnpm test && pnpm typecheck && pnpm lint   # run before committing
 ```

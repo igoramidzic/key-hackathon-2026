@@ -132,6 +132,27 @@ The control panel shows the same answer key, with diffs, behind **Reveal answer 
 
 Only one scenario runs at a time. Reset between runs so each one starts from the baseline.
 
+### Guided demo
+
+For showing the whole thing to an audience, with the world up (`pnpm dev`):
+
+```bash
+pnpm demo
+```
+
+That starts the incident agent (4x, `--speed N` to change it, `--deterministic` for no model) and
+opens <http://localhost:3000/demo>. Press **Start**: the page resets the world, triggers the
+scenario you picked and then walks through what the agent does as it happens, one thing at a time.
+It shows the real UIs, moves between them, dims the page around the part that matters, and waits
+for you at the one human step (**Merge** on the agent's fix). `→` next, `←` back, `space` pause;
+it advances by itself otherwise, never ahead of what has really happened.
+
+It follows the live run status and the agent's case stream (`:4100`, override with `?agent=<url>`),
+not a script of timings, so it works for every scenario and speed. The code is in
+`apps/control-panel/src/demo` (`story.ts` is the list of steps and what each points at); the
+spotlight inside each UI is `packages/ui/src/demo-bridge.ts`, addressed through `data-demo`
+attributes.
+
 ## Connecting the agent
 
 **Agent docs in the UI:** <http://localhost:3000/docs> (hosted:

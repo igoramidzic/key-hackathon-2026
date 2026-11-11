@@ -22,9 +22,11 @@ Put the key or token in `apps/incident-agent/.env` (gitignored; it never overrid
 are already set). `pnpm agent --check` pings the model, and the agent refuses to start in AI mode
 when the model can't be reached, rather than quietly running without it.
 
-Demo: `pnpm sim reset`, start `pnpm agent` (with `AGENT_SPEED=4` to match), then
-`pnpm sim trigger cif-snake-case-cascade --speed 4`. Watch the timeline page and the Teams channel;
-merge the fix MR in GitLab when the agent asks.
+Demo: `pnpm demo` starts the agent and opens the guided demo (<http://localhost:3000/demo>), which
+resets the world, triggers the scenario and walks through the run step by step; see the root
+README. By hand: `pnpm sim reset`, `AGENT_SPEED=4 pnpm agent`, then
+`pnpm sim trigger cif-snake-case-cascade --speed 4`, watch the timeline page and merge the fix MR
+in GitLab when the agent asks.
 
 ## How it works
 

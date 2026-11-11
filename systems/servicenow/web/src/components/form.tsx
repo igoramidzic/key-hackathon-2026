@@ -90,6 +90,7 @@ export function FormField({
 }) {
   return (
     <div
+      data-demo={`field:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
       className={cn(
         'grid gap-3',
         LABEL_COLS,

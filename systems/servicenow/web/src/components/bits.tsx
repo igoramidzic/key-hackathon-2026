@@ -124,6 +124,15 @@ export function GroupLink({ group }: { group: GroupRef | null }) {
 }
 
 /** A white form section with a ruled header, as on ServiceNow forms and related lists. */
+/** "Child Incidents (3)" → "child-incidents": the name the guided demo points at. */
+export function demoSlug(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export function Section({
   title,
   actions,
@@ -138,7 +147,10 @@ export function Section({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn('rounded-(--radius) border bg-card', className)}>
+    <section
+      data-demo={typeof title === 'string' ? `section:${demoSlug(title)}` : undefined}
+      className={cn('rounded-(--radius) border bg-card', className)}
+    >
       <header className="flex min-h-10 items-center justify-between gap-3 border-b px-4 py-2">
         <h2 className="font-semibold text-[15px] text-foreground">{title}</h2>
         {actions && <div className="flex items-center gap-2">{actions}</div>}

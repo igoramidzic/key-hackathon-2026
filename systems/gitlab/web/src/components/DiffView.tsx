@@ -34,7 +34,11 @@ function FileDiffCard({
   const renamed = diff.renamed_file && diff.old_path !== diff.new_path;
   return (
     // No overflow clipping on the frame: it would break the sticky file header.
-    <div id={`diff-${diff.new_path}`} className="scroll-mt-28 rounded-(--radius) border bg-card">
+    <div
+      id={`diff-${diff.new_path}`}
+      data-demo="diff-file"
+      className="scroll-mt-28 rounded-(--radius) border bg-card"
+    >
       <div
         className={cn(
           'sticky top-12 z-10 flex min-h-12 items-center gap-2 rounded-t-(--radius) bg-gl-subtle px-2 py-1.5',

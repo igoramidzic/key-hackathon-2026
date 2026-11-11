@@ -166,6 +166,8 @@ export function ChangeList() {
               {items.map((c) => (
                 <TableRow
                   key={c.number}
+                  data-demo="change-row"
+                  data-number={c.number}
                   onClick={() => navigate(`/change_requests/${c.number}`)}
                   className={cn(listRowClass, 'cursor-pointer')}
                 >

@@ -25,6 +25,7 @@ export * from './components/textarea';
 export * from './components/toggle';
 export * from './components/toggle-group';
 export * from './components/tooltip';
+export * from './demo-bridge';
 export * from './misc';
 export * from './patterns';
 export * from './query';

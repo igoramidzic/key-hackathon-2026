@@ -344,6 +344,8 @@ function ThreadCard({ thread, channel }: { thread: Thread; channel: Channel }) {
   const importance = root.importance !== 'normal' ? IMPORTANCE[root.importance] : null;
   return (
     <div
+      data-demo="message"
+      data-author={root.author.username}
       className={cn(
         'relative overflow-hidden rounded-[6px] bg-card shadow-fluent-2',
         // Teams marks important posts, and posts that mention you, with a bar down the left edge.
@@ -666,7 +668,7 @@ function MembersPanel({ channel, onClose }: { channel: Channel; onClose: () => v
   const owners = channel.members.filter((m) => m.role === 'owner');
   const members = channel.members.filter((m) => m.role !== 'owner');
   return (
-    <aside className="flex w-[340px] shrink-0 flex-col border-l bg-card">
+    <aside data-demo="members" className="flex w-[340px] shrink-0 flex-col border-l bg-card">
       <div className="flex h-12 shrink-0 items-center justify-between pr-2 pl-4">
         <div className="font-semibold text-[16px]">
           Members{' '}

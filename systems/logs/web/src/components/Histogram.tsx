@@ -51,7 +51,7 @@ export function Histogram({ data, loading }: { data?: LogHistogram; loading?: bo
   const present = STACK.filter((s) => buckets.some((b) => b.counts[s]));
 
   return (
-    <div className="relative">
+    <div className="relative" data-demo="histogram">
       <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted-foreground">
         <span>
           {data ? (

@@ -3,6 +3,7 @@
  * is doing and thinking, with a link to every record it touches.
  *
  *   GET /               the page: one self-contained HTML document (no build step)
+ *   GET /api/info       how the agent is running (speed, model or deterministic, auto-resolve)
  *   GET /api/cases      case summaries, open cases first
  *   GET /api/cases/:id  one full case (by id or incident number)
  *   GET /api/stream     SSE: `snapshot` (every case view), then `case` on each change,
@@ -36,6 +37,15 @@ export interface TimelineServerOptions {
   web?: WebBases;
   /** Interface to bind (default: all). */
   host?: string;
+  /** Served at /api/info, so the guided demo can match the scenario speed to the agent's. */
+  info?: TimelineInfo;
+}
+
+export interface TimelineInfo {
+  speed: number;
+  llm: string;
+  auto_resolve: boolean;
+  dry_run: boolean;
 }
 
 export interface TimelineServer {
@@ -251,6 +261,7 @@ export async function startTimelineServer(
     const path = new URL(req.url ?? '/', 'http://localhost').pathname.replace(/\/+$/, '') || '/';
     if (path === '/' || path === '/index.html')
       return send(req, res, 200, 'text/html; charset=utf-8', assets.html);
+    if (path === '/api/info') return json(req, res, 200, { ...opts.info, at: isoNow() });
     if (path === '/api/cases')
       return json(req, res, 200, {
         cases: ordered(store.all()).map((c) => caseSummary(c, web)),

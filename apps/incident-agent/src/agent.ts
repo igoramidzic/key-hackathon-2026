@@ -122,6 +122,12 @@ export class Agent {
         port: this.config.timelinePort,
         log: logger('timeline'),
         web: this.config.web,
+        info: {
+          speed: this.config.speed,
+          llm: this.config.llm.mode,
+          auto_resolve: this.config.autoResolve,
+          dry_run: this.config.dryRun,
+        },
       });
       this.log.info(`live timeline at ${timeline.url}`);
     } catch (err) {
