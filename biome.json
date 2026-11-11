@@ -57,5 +57,36 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/incident-agent/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@sim/scenarios": "Incident agent must not import @sim/scenarios (answer key)",
+                  "@sim/contracts/simulator": "Incident agent must not import @sim/contracts/simulator (answer key)"
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@sim/scenarios/*",
+                      "@sim/scenarios/**",
+                      "@sim/contracts/simulator/*",
+                      "@sim/contracts/simulator/**"
+                    ],
+                    "message": "Incident agent must not import @sim/scenarios or @sim/contracts/simulator (answer key)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

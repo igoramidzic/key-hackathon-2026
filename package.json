@@ -12,6 +12,7 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "format": "biome check --write .",
+    "agent": "pnpm --filter @sim/incident-agent start",
     "sim": "tsx apps/simulator/src/cli.ts",
     "e2e": "tsx scripts/e2e.ts",
     "worker:dev": "pnpm --filter @sim/cloudflare worker:dev",
