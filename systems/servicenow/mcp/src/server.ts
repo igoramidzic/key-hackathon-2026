@@ -531,9 +531,12 @@ export const spec: McpServerSpec = {
         planned_start: plannedStartShape.optional(),
         add_merge_requests: mrRefs.max(50).optional(),
         related_incidents: incidentList('Incidents to link').max(20).optional(),
-        short_description: z.string().min(1).max(160).optional(),
-        description: z.string().optional(),
-        type: z.enum(CHANGE_TYPES as [ChangeType, ...ChangeType[]]).optional(),
+        short_description: z.string().min(1).max(160).optional().describe('New one-line summary.'),
+        description: z.string().optional().describe('Replaces the description.'),
+        type: z
+          .enum(CHANGE_TYPES as [ChangeType, ...ChangeType[]])
+          .optional()
+          .describe('normal, standard or emergency.'),
         work_note: z.string().optional().describe('Internal work note to add.'),
         updated_by: userKey('Who makes the change (default svc_incident_auto)').optional(),
       },
