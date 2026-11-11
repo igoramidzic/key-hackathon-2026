@@ -6,6 +6,7 @@
  *   pnpm agent cases      list cases with phase and links
  *   pnpm agent case <id>  print one case's timeline
  *   pnpm agent watch      run the detectors only and print signals
+ *   pnpm agent timeline   serve the live case timeline from the cases on disk
  */
 
 import { Agent } from './agent';
@@ -15,6 +16,7 @@ import { printChecks, runChecks } from './check';
 import { ConfigError, loadConfig } from './config';
 import { logger, setLogLevel } from './log';
 import { McpGateway } from './mcp/gateway';
+import { startTimelineServer } from './timeline/server';
 import { AlertPoller } from './watchers/alerts';
 import { LogWatcher } from './watchers/logWatcher';
 import { httpTail, ServiceNowFeed } from './watchers/serviceNowFeed';
@@ -27,6 +29,7 @@ Commands:
   cases         List cases with their phase and links
   case <id>     Print a case's timeline (id prefix or incident number)
   watch         Run the detectors only and print signals (no actions)
+  timeline      Serve the live case timeline from the cases on disk (the agent also serves it)
   help          Show this help
 
 Env: SIM_PUBLIC_URL (hosted world), AGENT_LLM (auto|claude|off), ANTHROPIC_API_KEY,
@@ -56,6 +59,21 @@ async function main(argv: string[]): Promise<number> {
       return printCase(new CaseStore(config.dataDir), argv[1]) ? 0 : 1;
     case 'watch':
       return watch(config);
+    case 'timeline': {
+      const server = await startTimelineServer(new CaseStore(config.dataDir), {
+        port: config.timelinePort,
+        log: logger('timeline'),
+        fromDisk: true,
+        web: config.web,
+      });
+      logger('timeline').info(`live timeline at ${server.url} (Ctrl-C to stop)`);
+      await new Promise<void>((resolve) => {
+        process.once('SIGINT', () => resolve());
+        process.once('SIGTERM', () => resolve());
+      });
+      await server.close();
+      return 0;
+    }
     case 'run': {
       const ok = printChecks(await runChecks(config), config);
       if (!ok) return 1;

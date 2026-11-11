@@ -13,6 +13,7 @@ import { type Logger, logger } from './log';
 import { McpGateway } from './mcp/gateway';
 import { ClaudeProvider } from './phases/claude';
 import { PhaseRunner } from './phases/runner';
+import { startTimelineServer, type TimelineServer } from './timeline/server';
 import { errorMessage, short } from './util';
 import { AlertPoller } from './watchers/alerts';
 import { LogWatcher } from './watchers/logWatcher';
@@ -114,6 +115,20 @@ export class Agent {
     await this.graphs.load();
     this.graphs.startRefresh();
     this.orchestrator.start();
+    // #27: the live case timeline for the demo.
+    let timeline: TimelineServer | undefined;
+    try {
+      timeline = await startTimelineServer(this.store, {
+        port: this.config.timelinePort,
+        log: logger('timeline'),
+        web: this.config.web,
+      });
+      this.log.info(`live timeline at ${timeline.url}`);
+    } catch (err) {
+      this.log.warn(
+        `live timeline not started on :${this.config.timelinePort}: ${errorMessage(err)}`,
+      );
+    }
     if (resumed.length) this.log.info(`resumed ${resumed.length} open case(s)`);
 
     const logs = new LogWatcher(this.config, logger('logs'), {
@@ -156,6 +171,7 @@ export class Agent {
     await Promise.all(watchers);
     this.graphs.stop();
     await this.orchestrator.stop();
+    await timeline?.close();
     await this.mcp.close();
   }
 }

@@ -1,0 +1,727 @@
+/*
+ * Live case timeline (#27). Colors come from @sim/ui's theme tokens, which the server inlines
+ * ahead of this file; the rules below mirror the control panel's Tailwind classes by hand.
+ */
+:root {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --ring-card: color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  scrollbar-gutter: stable;
+  color-scheme: light;
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.43;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 4px;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+ul {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+svg.icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tones, as in @sim/ui's StatusBadge. */
+.tone-neutral {
+  --tone: var(--muted-foreground);
+}
+.tone-negative {
+  --tone: var(--negative);
+}
+.tone-warning {
+  --tone: var(--warning);
+}
+.tone-positive {
+  --tone: var(--positive);
+}
+.tone-info {
+  --tone: var(--chart-1);
+}
+.tone-accent {
+  --tone: var(--chart-4);
+}
+
+/* ---- Frame: the AppShell header and the simulator's system strip ---- */
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in oklch, var(--background) 80%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.mark {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: 600 9px var(--font-mono);
+}
+
+.status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  background: var(--tone);
+}
+
+.status[data-live] .dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--tone);
+  opacity: 0.6;
+  animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.systems {
+  display: flex;
+  gap: 4px;
+  height: 40px;
+  padding: 0 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.systems a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted-foreground);
+  font-size: 16px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.systems a:hover {
+  color: var(--foreground);
+  border-bottom-color: color-mix(in oklch, var(--foreground) 40%, transparent);
+}
+
+/* The four systems' marks, after @sim/ui's SystemLogo. */
+.sys {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+.sys-logs {
+  background: #4285f4;
+}
+.sys-servicenow {
+  border: 2px solid #62d84e;
+  border-radius: 9999px;
+}
+.sys-gitlab {
+  background: #e24329;
+}
+.sys-teams {
+  background: #5059c9;
+}
+
+main {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.intro {
+  display: grid;
+  gap: 6px;
+}
+
+.intro h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.intro p {
+  max-width: 48rem;
+  color: var(--muted-foreground);
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+}
+
+.section > h2 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* ---- Cards ---- */
+
+.card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--ring-card);
+  scroll-margin-top: 104px;
+}
+
+.card > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.card-body {
+  display: grid;
+  gap: 16px;
+}
+
+.card.closed {
+  display: block;
+}
+
+.card.closed[open] > .card-body {
+  margin-top: 16px;
+}
+
+.head {
+  display: grid;
+  gap: 6px;
+}
+
+.head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.head h2 {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.card.closed > summary:hover h2 {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.when {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: var(--tone);
+  background: color-mix(in oklch, var(--tone) 10%, transparent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge > i {
+  width: 6px;
+  height: 6px;
+  background: var(--tone);
+}
+
+.tag {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  font: 500 12px var(--font-mono);
+}
+
+/* ---- Stepper, after the control panel's ---- */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.step {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.step > b {
+  height: 4px;
+  background: var(--muted);
+}
+
+.step.done > b,
+.step.failed > b {
+  background: var(--tone);
+}
+
+.step.current > b {
+  background: color-mix(in oklch, var(--tone) 30%, transparent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.step.failed {
+  --tone: var(--negative);
+}
+
+.step > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  line-height: 1.25;
+}
+
+.step.done > span,
+.step.current > span,
+.step.failed > span {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.box {
+  display: inline-flex;
+  font-style: normal;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+
+.step.done .box,
+.step.failed .box {
+  border-color: var(--tone);
+  background: var(--tone);
+  color: #fff;
+}
+
+.step.current .box {
+  border-color: var(--tone);
+  color: var(--tone);
+}
+
+/* ---- Links ---- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  max-width: 100%;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip:hover {
+  background: var(--muted);
+}
+
+.chip .icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0.6;
+}
+
+.text a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, currentColor 40%, transparent);
+}
+
+.text a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---- Hypothesis and background work ---- */
+
+.panels {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.panels.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+}
+
+.panel h3,
+.timeline h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sub {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.hyp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hyp-head strong {
+  font: 600 18px var(--font-mono);
+}
+
+.meter {
+  flex: 1;
+  max-width: 160px;
+  height: 4px;
+  background: var(--muted);
+}
+
+.meter > i {
+  display: block;
+  height: 100%;
+  background: var(--tone);
+}
+
+.hyp p {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.evidence {
+  display: grid;
+  gap: 4px;
+}
+
+.evidence li {
+  display: flex;
+  gap: 8px;
+}
+
+.evidence li::before {
+  content: "";
+  flex-shrink: 0;
+  width: 4px;
+  height: 4px;
+  margin-top: 8px;
+  background: var(--muted-foreground);
+}
+
+.tools > summary {
+  cursor: pointer;
+}
+
+details.more > summary {
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+
+details.more[open] > summary {
+  margin-bottom: 4px;
+}
+
+.tasks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chart-4);
+  font-weight: 500;
+}
+
+.tasks li .muted {
+  margin-left: auto;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.alert {
+  padding: 8px 12px;
+  border-left: 2px solid var(--negative);
+  background: color-mix(in oklch, var(--negative) 6%, transparent);
+  color: var(--negative);
+}
+
+/* ---- Timeline ---- */
+
+.timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.events {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.ev {
+  display: grid;
+  grid-template-columns: 64px 72px minmax(0, 1fr);
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ev time {
+  color: var(--muted-foreground);
+  font: 12px / 20px var(--font-mono);
+}
+
+.ev .kind {
+  color: var(--tone, var(--muted-foreground));
+  font: 500 12px / 20px var(--font-mono);
+  text-transform: uppercase;
+}
+
+.ev .body {
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.ev .chip {
+  height: 24px;
+}
+
+.ev.k-phase .body {
+  font-weight: 600;
+}
+
+.ev.k-tool,
+.ev.k-note {
+  color: var(--muted-foreground);
+}
+
+.ev.k-error .body {
+  color: var(--negative);
+}
+
+.k-phase {
+  --tone: var(--foreground);
+}
+.k-signal,
+.k-error {
+  --tone: var(--negative);
+}
+.k-decision {
+  --tone: var(--chart-1);
+}
+.k-action {
+  --tone: var(--positive);
+}
+.k-message {
+  --tone: var(--chart-7);
+}
+.k-llm {
+  --tone: var(--chart-4);
+}
+
+.tools ol {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  font: 12px / 1.6 var(--font-mono);
+}
+
+.tools ol time {
+  margin-right: 8px;
+}
+
+.bad {
+  color: var(--negative);
+}
+
+.empty {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.empty strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ev {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .ev .kind {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .step.current > b,
+  .status[data-live] .dot::after {
+    animation: none;
+  }
+}
