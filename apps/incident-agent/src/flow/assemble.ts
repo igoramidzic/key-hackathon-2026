@@ -222,7 +222,10 @@ export async function desiredInvites(deps: FlowDeps, c: Case): Promise<Invite[]>
 
 export function channelName(incidentNumber: string, summary: string): string {
   const prefix = `${incidentNumber.toLowerCase()}-`;
-  const slug = slugify(summary, 50 - prefix.length) || 'incident';
+  // "Online Banking, Mobile Banking and 4 more apps failing: customerId missing…" → the symptom.
+  const symptom = summary.includes(': ') ? summary.slice(summary.indexOf(': ') + 2) : summary;
+  const slug =
+    slugify(symptom, 50 - prefix.length) || slugify(summary, 50 - prefix.length) || 'incident';
   return `${prefix}${slug}`.slice(0, 50).replace(/-+$/, '');
 }
 
@@ -261,7 +264,7 @@ export async function assembleChannel(
     lookup,
     create: async () => {
       try {
-        const ch = await deps.mcp.call<ChannelRecord>(
+        const res = await deps.mcp.call<{ channel?: ChannelRecord } & Partial<ChannelRecord>>(
           'create_channel',
           {
             name,
@@ -275,6 +278,10 @@ export async function assembleChannel(
           },
           { caseId: c.id },
         );
+        // create_channel answers { channel, notifications_sent }.
+        const ch = (res.channel ?? res) as ChannelRecord;
+        if (!ch.id || !ch.web_url)
+          throw new Error(`create_channel returned no channel id for ${name}`);
         return { id: ch.id, name: ch.name, web_url: ch.web_url };
       } catch (err) {
         if (err instanceof McpToolError && err.conflict) {

@@ -10,11 +10,12 @@ import type { Correlator } from '../correlate/correlator';
 import type { DependencyGraph } from '../correlate/graph';
 import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
-import { appsJoined, briefing, failure, rootCauseUpdate } from '../messages/teams';
+import { appsJoined, briefing, failure, fixReady, rootCauseUpdate } from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
 import { flush, postNow, queue, wasAnnounced } from './announce';
 import { assembleChannel, notInvited, syncMembers, upstreamSuspect } from './assemble';
+import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
 import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
@@ -99,6 +100,7 @@ export function startDeepRca(
     }
     const before = current.root_cause;
     current.root_cause = rootCause;
+    current.milestones.root_cause ??= new Date().toISOString();
     const top = current.suspects[0];
     deps.store.event(
       current,
@@ -256,11 +258,74 @@ export function briefed(deps: FlowDeps): StepFn {
   };
 }
 
-/** investigating: keep everyone posted until the fix is ready (#22 takes it from here). */
+/** True when the case knows its culprit well enough to write a fix. */
+export function fixReadyToStart(deps: FlowDeps, c: Case): boolean {
+  const threshold = deps.config.rcaConfidence;
+  if (c.root_cause)
+    return c.root_cause.confidence >= threshold && Boolean(c.root_cause.merge_request);
+  // Deep RCA gave up: fall back to a confident quick suspect.
+  const deep = c.background.deep_rca;
+  const top = c.suspects[0];
+  return Boolean(
+    deep && deep.state !== 'running' && top?.merge_request && top.confidence >= threshold,
+  );
+}
+
+/** Background fix generation (#22). */
+export function startFix(deps: FlowDeps, ctx: StepContext, c: Case, force = false): boolean {
+  const name = 'fix';
+  if (ctx.isRunning(c, name) || c.fix_mr) return false;
+  const prev = c.background[name];
+  if (!force && prev && (prev.state === 'done' || prev.runs >= 3)) return false;
+  return ctx.spawn(c, name, async () => {
+    const { fix, source, problems } = await proposeFix(deps, c);
+    const current = deps.store.get(c.id) ?? c;
+    if (!fix) {
+      deps.store.event(current, 'decision', `No automatic fix: ${problems.join('; ')}`);
+      queue(deps, current, `no_fix:${problems.join(';').slice(0, 60)}`, {
+        body: `**I couldn't build a safe automatic fix** (${problems.join('; ')}). Please propose one; I'll pick it up and promote it once it's merged.`,
+        mentions: [],
+        importance: 'high',
+      });
+      return;
+    }
+    deps.store.event(
+      current,
+      'decision',
+      `Fix proposal (${source}, ${fix.strategy}): ${fix.title} — ${fix.changes.length} edit(s)${problems.length ? `; skipped: ${problems.join('; ')}` : ''}`,
+    );
+    await openFixMr(deps, current, fix);
+  });
+}
+
+/** investigating: deep RCA in the background; once it's confident, write the fix (#22). */
 export function investigating(deps: FlowDeps): StepFn {
+  return async (c, ctx) => {
+    await upkeep(deps, c);
+    if (c.fix_mr) return { next: 'fix_proposed', why: `${c.fix_mr.project}!${c.fix_mr.iid}` };
+    if (fixReadyToStart(deps, c)) startFix(deps, ctx, c);
+    else startDeepRca(deps, ctx, c);
+    return { wait: Math.max(2_000, 10_000 / deps.config.speed) };
+  };
+}
+
+/** fix_proposed → awaiting_merge: ask the owners to review and merge (#22). */
+export function fixProposed(deps: FlowDeps): StepFn {
   return async (c) => {
     await upkeep(deps, c);
-    return { wait: Math.max(2_000, 10_000 / deps.config.speed) };
+    const who = await reviewers(deps, c);
+    await flush(deps, c, true);
+    await postNow(
+      deps,
+      c,
+      `fix_ready:${c.fix_mr!.iid}`,
+      fixReady(c, who),
+      `Fix ready for review: ${c.fix_mr!.web_url}`,
+    );
+    return {
+      next: 'awaiting_merge',
+      why: `waiting for a human to merge ${c.fix_mr!.project}!${c.fix_mr!.iid}`,
+    };
   };
 }
 
@@ -282,6 +347,7 @@ export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
     assembled: assembled(deps),
     briefed: briefed(deps),
     investigating: investigating(deps),
+    fix_proposed: fixProposed(deps),
   };
 }
 

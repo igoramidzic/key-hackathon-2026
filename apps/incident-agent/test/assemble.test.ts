@@ -56,7 +56,8 @@ function world() {
         members: (a.members as { user: string }[]).map((m) => ({ username: m.user })),
       };
       channels.set(ch.name, ch);
-      return ch;
+      // The real tool wraps the channel.
+      return { channel: ch, notifications_sent: [] };
     })
     .on('add_channel_members', (a) => {
       const ch = [...channels.values()].find((c) => c.id === a.channel)!;
