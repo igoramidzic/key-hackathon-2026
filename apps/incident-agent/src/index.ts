@@ -36,14 +36,17 @@ export async function checkMcpServer(
   const start = Date.now();
   let client: Client | null = null;
   let transport: StreamableHTTPClientTransport | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     client = new Client({ name: `incident-agent-check-${system}`, version: '0.1.0' });
     transport = new StreamableHTTPClientTransport(new URL(url));
     const connectPromise = client.connect(transport);
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+      timer = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
     });
     await Promise.race([connectPromise, timeoutPromise]);
+    clearTimeout(timer);
+    timer = undefined;
 
     const { tools } = await client.listTools();
     const toolNames = tools.map((t) => t.name).sort();
@@ -67,6 +70,9 @@ export async function checkMcpServer(
       durationMs: Date.now() - start,
     };
   } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
     if (client) {
       await client.close().catch(() => {});
     }

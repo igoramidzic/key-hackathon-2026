@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 describe('answer-key guard', () => {
   const srcDir = join(__dirname, '../src');
+  const forbiddenImportRegex =
+    /(?:import\s+|from\s+|import\s*\(|require\s*\()\s*['"]@sim\/(?:scenarios|contracts\/simulator)(?:\/[^'"]*)?['"]/;
 
   function getAllSourceFiles(dir: string): string[] {
     const files: string[] = [];
@@ -28,10 +30,39 @@ describe('answer-key guard', () => {
     expect(sourceFiles.length).toBeGreaterThan(0);
   });
 
-  it('must not import @sim/scenarios or @sim/contracts/simulator in src/', () => {
-    const forbiddenImportRegex =
-      /from\s+['"]@sim\/(?:scenarios|contracts\/simulator)(?:\/[^'"]*)?['"]|import\(['"]@sim\/(?:scenarios|contracts\/simulator)(?:\/[^'"]*)?['"]\)|require\(['"]@sim\/(?:scenarios|contracts\/simulator)(?:\/[^'"]*)?['"]\)/;
+  it('forbidden import regex matches bare imports, from imports, dynamic imports, and requires', () => {
+    const forbiddenCases = [
+      "import '@sim/scenarios';",
+      'import "@sim/scenarios";',
+      "import '@sim/scenarios/foo';",
+      "import '@sim/contracts/simulator';",
+      "import '@sim/contracts/simulator/types';",
+      "import { foo } from '@sim/scenarios';",
+      "import type { bar } from '@sim/contracts/simulator';",
+      "export { baz } from '@sim/scenarios';",
+      "import('@sim/scenarios')",
+      "import( '@sim/contracts/simulator' )",
+      "require('@sim/scenarios')",
+      "require( '@sim/contracts/simulator' )",
+    ];
 
+    for (const statement of forbiddenCases) {
+      expect(forbiddenImportRegex.test(statement), `Should match: ${statement}`).toBe(true);
+    }
+
+    const allowedCases = [
+      "import { foo } from '@sim/contracts';",
+      "import { config } from './config.js';",
+      "import '@modelcontextprotocol/sdk';",
+      "import { Client } from '@modelcontextprotocol/sdk/client/index.js';",
+    ];
+
+    for (const statement of allowedCases) {
+      expect(forbiddenImportRegex.test(statement), `Should not match: ${statement}`).toBe(false);
+    }
+  });
+
+  it('must not import @sim/scenarios or @sim/contracts/simulator in src/', () => {
     for (const filePath of sourceFiles) {
       const content = readFileSync(filePath, 'utf-8');
       const match = forbiddenImportRegex.exec(content);
