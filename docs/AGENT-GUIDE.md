@@ -1,7 +1,8 @@
 # Building the incident agent
 
 How to build an agent that resolves incidents in the simulated world. The world is in this repo;
-the agent can live anywhere (a separate repo, a folder here, a notebook). It needs only:
+the agent can live anywhere (a separate repo, a folder here, a notebook); this repo's own agent is
+[apps/incident-agent](../apps/incident-agent/README.md). It needs only:
 
 1. The four **MCP servers** (logs, servicenow, gitlab, teams) for investigation and actions.
 2. Optionally the **live log stream** and **ServiceNow activity feed** (SSE or long-poll) if you

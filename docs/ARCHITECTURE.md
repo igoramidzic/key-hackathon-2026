@@ -18,7 +18,7 @@ plus a simulator that runs background traffic and triggers incident scenarios.
   UIs (Vite)       logs-web 3001 │     sn-web 3002 │      gitlab-web 3003│    teams-web 3004 │
   MCP (HTTP)            logs-mcp 5001       sn-mcp 5002         gitlab-mcp 5003      teams-mcp 5004
                                   ▲                ▲                     ▲                    ▲
-                                  └──────── the agent (teammate's code) ─┴────────────────────┘
+                                  └──── the agent (apps/incident-agent) ──┴────────────────────┘
 ```
 
 ## Layout
@@ -36,6 +36,7 @@ plus a simulator that runs background traffic and triggers incident scenarios.
 | `systems/<name>/web` | `@sim/<name>-web`    | Vite + React UI. Talks to the REST API through `@sim/contracts/<name>` via the Vite proxy.                      |
 | `apps/simulator`     | `@sim/simulator`     | Scenario engine + traffic generator (REST on 4000) and CLI.                                                     |
 | `apps/control-panel` | `@sim/control-panel` | Control panel UI (3000).                                                                                        |
+| `apps/incident-agent` | `@sim/incident-agent` | The incident agent (not part of `pnpm dev`): watches the world over MCP and the live feeds. See its README.        |
 
 ## Ports
 
