@@ -207,7 +207,7 @@ resource.labels.container_name="payments-api" httpRequest.status>=500 -"client d
 
 | Symptom | Cause |
 | --- | --- |
-| `ECONNREFUSED` on 500x | `pnpm dev` isn't running, or still starting |
+| `ECONNREFUSED` on 500x | `pnpm dev` isn't running, or is still starting |
 | Tools return empty lists right after start | The world is still backfilling; wait for the control panel to say running |
 | `pnpm sim trigger` refuses | Another scenario is active: `pnpm sim stop` or pass `--force` |
 | `create_channel` conflict | Channel exists from an earlier run: `add_channel_members`, or `pnpm sim reset` |
