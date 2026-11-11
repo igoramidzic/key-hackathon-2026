@@ -12,6 +12,7 @@ import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
+import { assembleChannel, syncMembers, upstreamSuspect } from './assemble';
 import { declareIncident, linkAlerts, syncIncidentApp } from './incident';
 import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
@@ -167,12 +168,44 @@ export async function upkeep(deps: FlowDeps, c: Case): Promise<void> {
   );
   if (fresh) await linkAlerts(deps, c);
   await syncIncidentApp(deps, c);
+  // #19: late joiners (a new failing app, a new upstream suspect, the change author, the service
+  // desk once callers are grouped). Only recomputed when one of those inputs changes.
+  if (c.channel) {
+    const key = membershipKey(deps, c);
+    if (c.milestones.members_key !== key) {
+      await syncMembers(deps, c);
+      c.milestones.members_key = key;
+      deps.store.save(c);
+    }
+  }
+}
+
+function membershipKey(deps: FlowDeps, c: Case): string {
+  const suspect = upstreamSuspect(deps, c);
+  const mr = c.root_cause?.merge_request ?? c.suspects[0]?.merge_request;
+  return [
+    [...c.apps].sort().join(','),
+    suspect?.tla ?? '',
+    mr ? `${mr.project}!${mr.iid}` : '',
+    c.children.length > 0 ? 'callers' : '',
+  ].join('|');
+}
+
+/** declared → assembled: the incident channel with the right people (#19). */
+export function declared(deps: FlowDeps): StepFn {
+  return async (c) => {
+    await upkeep(deps, c);
+    await assembleChannel(deps, c);
+    c.milestones.members_key = membershipKey(deps, c);
+    return { next: 'assembled', why: `#${c.channel!.name} with ${c.members.length} people` };
+  };
 }
 
 export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
   return {
     detected: detected(deps),
     triaged: triaged(deps),
+    declared: declared(deps),
   };
 }
 
