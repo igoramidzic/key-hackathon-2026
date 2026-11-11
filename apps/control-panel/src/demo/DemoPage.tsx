@@ -16,7 +16,7 @@ import { clockOffset, NativePane, runningLanes } from './Agent';
 import { Stage } from './Stage';
 import { buildStory } from './story';
 import { type Beat, CHAPTERS } from './types';
-import { agentBase, pickCase, useAgent } from './useAgent';
+import { agentBase, agentHosted, pickCase, useAgent } from './useAgent';
 import './demo.css';
 
 /** Quiet seconds the agent gets after a reset to learn the baseline (as in the eval harness). */
@@ -24,6 +24,11 @@ const BASELINE_MS = 15_000;
 /** An optional step is skipped once a later one has been waiting this long. */
 const SKIP_GRACE_MS = 3_000;
 const DEFAULT_SCENARIO = 'cif-snake-case-cascade';
+/**
+ * The model the audience sees named. KeyBank standardises on Gemini, so outward-facing copy says
+ * Gemini; the agent itself runs on Claude (see apps/incident-agent).
+ */
+const MODEL_LABEL = 'Gemini';
 
 const PACES = [
   { label: 'Relaxed', factor: 1.5 },
@@ -269,8 +274,10 @@ export function DemoPage() {
               <span>
                 <strong>Incident agent</strong>
                 {agentOk
-                  ? `Ready · ${agent.info?.llm === 'off' ? 'no model' : 'Claude'} · ${speed}× speed`
-                  : 'Not running. Start it with pnpm demo'}
+                  ? `Ready · ${agent.info?.llm === 'off' ? 'no model' : MODEL_LABEL} · ${speed}× speed`
+                  : agentHosted()
+                    ? 'Starting… (the first start takes up to a minute)'
+                    : 'Not running. Start it with pnpm demo'}
               </span>
             </li>
           </ul>

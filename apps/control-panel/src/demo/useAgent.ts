@@ -1,3 +1,4 @@
+import { isSingleOrigin } from '@sim/contracts';
 import { useEffect, useState } from 'react';
 import type { AgentInfo, CaseView } from './types';
 
@@ -11,7 +12,13 @@ export interface AgentFeed {
 
 const KEY = 'demo.agent';
 
-/** Where the agent's live timeline is: `?agent=`, the last one used, or the default port. */
+/** True when the page is served by the hosted Worker, which runs the agent itself at /agent. */
+export const agentHosted = (): boolean => isSingleOrigin();
+
+/**
+ * Where the agent's live timeline is: `?agent=`, the last one used, or the default (the hosted
+ * Worker's /agent, or the local agent's port).
+ */
 export function agentBase(): string {
   const fromUrl = new URLSearchParams(window.location.search).get('agent');
   let stored: string | null = null;
@@ -21,7 +28,8 @@ export function agentBase(): string {
   } catch {
     // private mode: use the default
   }
-  return (fromUrl || stored || 'http://localhost:4100').replace(/\/+$/, '');
+  const fallback = agentHosted() ? `${window.location.origin}/agent` : 'http://localhost:4100';
+  return (fromUrl || stored || fallback).replace(/\/+$/, '');
 }
 
 /** The agent's cases, live over SSE (`/api/stream`), reconnecting by itself. */
@@ -31,40 +39,62 @@ export function useAgent(base: string): AgentFeed {
   const [cases, setCases] = useState<Map<string, CaseView>>(() => new Map());
 
   useEffect(() => {
-    const es = new EventSource(`${base}/api/stream`);
-    const parse = <T>(e: Event): T | null => {
-      try {
-        return JSON.parse((e as MessageEvent).data) as T;
-      } catch {
-        return null;
+    let es: EventSource;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const connect = () => {
+      es = new EventSource(`${base}/api/stream`);
+      listen(es);
+    };
+    // EventSource retries network errors itself but gives up on an HTTP error (the hosted agent
+    // answers 503 while its container starts), so reconnect by hand once it has closed.
+    const onError = () => {
+      setStatus('down');
+      if (es.readyState === EventSource.CLOSED && !stopped) {
+        clearTimeout(retry);
+        retry = setTimeout(connect, 3_000);
       }
     };
-    es.addEventListener('open', () => {
-      setStatus('live');
-      fetch(`${base}/api/info`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((i: AgentInfo | null) => setInfo(i))
-        .catch(() => setInfo(null));
-    });
-    es.addEventListener('error', () => setStatus('down'));
-    es.addEventListener('snapshot', (e) => {
-      const data = parse<{ cases: CaseView[] }>(e);
-      if (data) setCases(new Map(data.cases.map((c) => [c.id, c])));
-    });
-    es.addEventListener('case', (e) => {
-      const c = parse<CaseView>(e);
-      if (c) setCases((prev) => new Map(prev).set(c.id, c));
-    });
-    es.addEventListener('removed', (e) => {
-      const data = parse<{ id: string }>(e);
-      if (!data) return;
-      setCases((prev) => {
-        const next = new Map(prev);
-        next.delete(data.id);
-        return next;
+    const listen = (es: EventSource) => {
+      const parse = <T>(e: Event): T | null => {
+        try {
+          return JSON.parse((e as MessageEvent).data) as T;
+        } catch {
+          return null;
+        }
+      };
+      es.addEventListener('open', () => {
+        setStatus('live');
+        fetch(`${base}/api/info`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((i: AgentInfo | null) => setInfo(i))
+          .catch(() => setInfo(null));
       });
-    });
-    return () => es.close();
+      es.addEventListener('error', onError);
+      es.addEventListener('snapshot', (e) => {
+        const data = parse<{ cases: CaseView[] }>(e);
+        if (data) setCases(new Map(data.cases.map((c) => [c.id, c])));
+      });
+      es.addEventListener('case', (e) => {
+        const c = parse<CaseView>(e);
+        if (c) setCases((prev) => new Map(prev).set(c.id, c));
+      });
+      es.addEventListener('removed', (e) => {
+        const data = parse<{ id: string }>(e);
+        if (!data) return;
+        setCases((prev) => {
+          const next = new Map(prev);
+          next.delete(data.id);
+          return next;
+        });
+      });
+    };
+    connect();
+    return () => {
+      stopped = true;
+      clearTimeout(retry);
+      es.close();
+    };
   }, [base]);
 
   return { status, info, cases };

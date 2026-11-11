@@ -309,6 +309,7 @@ origin:
 | `/logs/`, `/servicenow/`, `/gitlab/`, `/teams/` | Each system's UI |
 | `/<system>/api/...` | That system's REST API (e.g. `/gitlab/api/v4/projects`, `/logs/api/logs/stream`) |
 | `/<system>/mcp` | That system's MCP server (Streamable HTTP) |
+| `/agent/*` | The incident agent's live timeline (`/agent/api/stream`, `/agent/api/info`), read by `/demo` |
 
 ```
 browser / agent ──► Worker ─┬─► static assets (5 UIs, SPA fallback per prefix)
@@ -316,7 +317,18 @@ browser / agent ──► Worker ─┬─► static assets (5 UIs, SPA fallback
                                   ├─ logs, servicenow, gitlab, teams REST APIs
                                   ├─ 4 MCP servers
                                   └─ simulator engine (traffic, scenarios, fix detection)
+                            └─► Durable Object "AgentHost" ─► container: the incident agent
+                                  (reaches the world through the public /<system>/mcp endpoints)
 ```
+
+- **The incident agent runs in a Cloudflare Container.** It needs a real Node process (the Claude
+  Agent SDK runs Claude Code as a subprocess), so `AgentHost` (`apps/cloudflare/src/agent.ts`)
+  starts `apps/incident-agent/Dockerfile` on the first `/agent` request and lets it stop 20
+  minutes after the last one. An open `/demo` page keeps it running, and the first start takes up
+  to a minute. It runs at `AGENT_SPEED` (4) with auto-resolve on, like `pnpm demo`. Set the key
+  with `pnpm --filter @sim/cloudflare exec wrangler secret put ANTHROPIC_API_KEY`; without it the
+  agent uses its deterministic heuristics. Deploying builds the image, so it needs Docker (or
+  Podman as `docker`) locally; Workers Builds has it.
 
 - **One Durable Object holds the whole estate in memory.** Every client sees one consistent
   world. Calls between systems (simulator → APIs, MCP → REST) are dispatched in process, so

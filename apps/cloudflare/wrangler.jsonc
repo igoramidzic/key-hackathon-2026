@@ -16,12 +16,29 @@
     "not_found_handling": "none"
   },
   "durable_objects": {
-    "bindings": [{ "name": "WORLD", "class_name": "SimWorld" }]
+    "bindings": [
+      { "name": "WORLD", "class_name": "SimWorld" },
+      { "name": "AGENT", "class_name": "AgentHost" }
+    ]
   },
+  // The incident agent runs in a container behind AgentHost, served at /agent (src/agent.ts).
+  // `wrangler deploy` builds the image from the repo root, so Docker (or Workers Builds) is needed.
+  // Set the Claude key with `wrangler secret put ANTHROPIC_API_KEY`; without it the agent runs
+  // its deterministic heuristics.
+  "containers": [
+    {
+      "class_name": "AgentHost",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "agent": { "dockerfile": "../incident-agent/Dockerfile", "build_context": "../.." }
+      }
+    }
+  ],
   // Declarative Durable Object exports (the worker already uses this flow, not migrations).
   // IncidentRoom belonged to the earlier incident-lab demo and is retired.
   "exports": {
     "SimWorld": { "type": "durable-object", "storage": "sqlite" },
+    "AgentHost": { "type": "durable-object", "storage": "sqlite" },
     "IncidentRoom": { "type": "durable-object", "state": "deleted" }
   },
   "vars": {
@@ -31,7 +48,10 @@
     "GITLAB_HISTORY_SCALE": "0.3",
     "GITLAB_MAX_CACHED_REPOS": "40",
     "TRAFFIC_RATE": "0.75",
-    "IDLE_MINUTES": "30"
+    "IDLE_MINUTES": "30",
+    // The demo page triggers scenarios at the agent's speed.
+    "AGENT_SPEED": "4",
+    "AGENT_IDLE_MINUTES": "20"
   },
   "observability": { "enabled": true }
 }

@@ -1,8 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
+import { type AgentEnv, AgentHost, isAgentPath } from './agent';
 import { createEstate, type Estate, isEstatePath, uiPrefixFor } from './estate';
 
-export interface Env {
+export { AgentHost };
+
+export interface Env extends AgentEnv {
   WORLD: DurableObjectNamespace<SimWorld>;
+  AGENT: DurableObjectNamespace<AgentHost>;
   ASSETS: Fetcher;
   /** Optional fixed public origin (defaults to the request's origin). */
   PUBLIC_URL?: string;
@@ -66,6 +70,7 @@ export class SimWorld extends DurableObject<Env> {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    if (isAgentPath(url.pathname)) return env.AGENT.getByName('agent').fetch(req);
     if (isEstatePath(url.pathname)) {
       return env.WORLD.get(env.WORLD.idFromName('world')).fetch(req);
     }

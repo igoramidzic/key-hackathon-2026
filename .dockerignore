@@ -1,0 +1,18 @@
+# Build context for apps/incident-agent/Dockerfile (the repo root).
+**/node_modules
+**/.git
+**/.turbo
+**/.wrangler
+**/.data
+**/dist
+**/coverage
+**/*.log
+**/.DS_Store
+# Secrets stay out of the image: the container gets its env from AgentHost at start.
+**/.env
+**/.env.*
+apps/cloudflare/public
+.claude
+.pr-reviews
+demo
+demo2
