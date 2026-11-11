@@ -295,9 +295,12 @@ describe('settle window, late arrivals, weak, alerts, humans, cooldown', () => {
     expect(store.open()).toHaveLength(0);
     await correlator.ingest(logSignal('XAA'));
     const c = store.open()[0]!;
-    // The buffered weak signal and the alert on a directly related app are adopted.
-    expect(c.signals.map((s) => s.id)).toEqual(expect.arrayContaining(['a1']));
+    // The buffered weak signal on a related app is adopted; the alert waits for YBB itself.
     expect(c.signals.some((s) => s.source === 'logs' && s.strength === 'weak')).toBe(true);
+    expect(c.signals.map((s) => s.id)).not.toContain('a1');
+    await correlator.ingest(logSignal('YBB', { sample_messages: ['upstream-core-api broke'] }));
+    expect(c.apps).toContain('YBB');
+    expect(c.signals.map((s) => s.id)).toContain('a1');
   });
 
   const call = (num: string, at: string, over: Partial<HumanSignal> = {}): HumanSignal => ({

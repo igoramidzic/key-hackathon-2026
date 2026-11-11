@@ -265,7 +265,11 @@ export class Correlator {
       for (let i = buffer.length - 1; i >= 0; i--) {
         const s = buffer[i]!;
         const tla = s.source === 'human' ? s.app_tla : s.app_tla;
-        if (tla && related(tla)) {
+        const fits =
+          s.source === 'alert'
+            ? Boolean(tla && c.apps.includes(tla))
+            : Boolean(tla && related(tla));
+        if (fits) {
           if (!c.signals.some((x) => x.id === s.id)) c.signals.push(s);
           buffer.splice(i, 1);
         }
@@ -278,13 +282,9 @@ export class Correlator {
   // ---------------------------------------------------------------------------
 
   private alert(signal: AlertSignal): Decision {
-    const graph = this.deps.graph();
-    const open = this.open();
-    const target =
-      open.find((c) => c.apps.includes(signal.app_tla)) ??
-      open.find(
-        (c) => c.apps.some((a) => graph.direct(a, signal.app_tla)) && c.kind === 'monitoring',
-      );
+    // Only for an app that is part of a case: background alerts on neighbouring apps never stop,
+    // so an alert on a related app waits until that app itself starts failing.
+    const target = this.open().find((c) => c.apps.includes(signal.app_tla));
     if (target) {
       this.attach(
         target,
