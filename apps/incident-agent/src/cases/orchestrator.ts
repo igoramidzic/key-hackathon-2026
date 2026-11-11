@@ -109,7 +109,7 @@ export class Orchestrator {
   }
 
   /** Runs one step for a case (exported for tests and the worker). Returns false when done. */
-  async step(caseId: string): Promise<{ done: boolean; waitMs: number }> {
+  async step(caseId: string): Promise<{ done: boolean; waitMs: number; retry?: boolean }> {
     const { store, steps } = this.opts;
     const idle = this.opts.idleMs ?? 5_000;
     const c = store.get(caseId);
@@ -131,7 +131,11 @@ export class Orchestrator {
         await this.fail(c, `${phase}: ${reason}`);
         return { done: true, waitMs: 0 };
       }
-      return { done: false, waitMs: backoffMs(n - 1, this.opts.retryBaseMs ?? 2_000, 60_000) };
+      return {
+        done: false,
+        waitMs: backoffMs(n - 1, this.opts.retryBaseMs ?? 2_000, 60_000),
+        retry: true,
+      };
     }
     if (c.attempts[phase]) {
       c.attempts[phase] = 0;
@@ -148,9 +152,11 @@ export class Orchestrator {
 
   private async work(caseId: string): Promise<void> {
     while (!this.stopped) {
-      const { done, waitMs } = await this.step(caseId);
+      const { done, waitMs, retry } = await this.step(caseId);
       if (done) break;
-      if (waitMs > 0) await this.wait(caseId, waitMs);
+      // A retry backs off in full: pokes (new signals) must not turn it into a tight loop.
+      if (retry) await (this.opts.sleep ?? sleep)(waitMs, this.stopping.signal);
+      else if (waitMs > 0) await this.wait(caseId, waitMs);
     }
     if (!this.stopped) this.cancelAll(caseId);
   }

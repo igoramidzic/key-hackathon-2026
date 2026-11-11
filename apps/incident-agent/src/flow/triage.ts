@@ -56,7 +56,7 @@ export async function discoverApps(
   const start = new Date(onset - 20 * 60_000).toISOString();
   const summary = await deps.mcp.call<Summary>(
     'summarize_errors',
-    { severity_min: 'WARNING', start_time: start, limit: 200 },
+    { severity_min: 'WARNING', start_time: start, limit: 100 },
     { caseId: c.id },
   );
   for (const fp of summary.items) {
@@ -104,7 +104,7 @@ export async function heuristicScope(deps: FlowDeps, c: Case): Promise<ScopeRepo
   const summary: Summary = apps.length
     ? await deps.mcp.call<Summary>(
         'summarize_errors',
-        { app_tla: apps.join(','), severity_min: severity, start_time: since, limit: 200 },
+        { app_tla: apps.join(','), severity_min: severity, start_time: since, limit: 100 },
         { caseId: c.id },
       )
     : { total_matched: 0, items: [] };

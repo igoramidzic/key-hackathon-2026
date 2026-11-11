@@ -109,6 +109,8 @@ export type Env = z.output<typeof EnvSchema>;
 export interface AgentConfig {
   hosted: boolean;
   mcp: Record<ServerName, string>;
+  /** UI bases, to recognise links that really point into the world. */
+  web: Record<ServerName, string>;
   logsApi: string;
   serviceNowApi: string;
   llm: { mode: 'claude' | 'off'; model: string; deepModel: string; reason: string };
@@ -176,6 +178,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       servicenow: e.AGENT_SERVICENOW_MCP_URL ?? base.servicenow.mcp,
       gitlab: e.AGENT_GITLAB_MCP_URL ?? base.gitlab.mcp,
       teams: e.AGENT_TEAMS_MCP_URL ?? base.teams.mcp,
+    },
+    web: {
+      logs: base.logs.web,
+      servicenow: base.servicenow.web,
+      gitlab: base.gitlab.web,
+      teams: base.teams.web,
     },
     logsApi: (e.AGENT_LOGS_API_URL ?? base.logs.api).replace(/\/+$/, ''),
     serviceNowApi: (e.AGENT_SERVICENOW_API_URL ?? base.servicenow.api).replace(/\/+$/, ''),

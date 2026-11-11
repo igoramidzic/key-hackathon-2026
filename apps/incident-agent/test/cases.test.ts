@@ -100,6 +100,31 @@ describe('Orchestrator transitions', () => {
     expect(c.timeline.filter((e) => e.kind === 'error')).toHaveLength(2);
   });
 
+  it('pokes do not cut a retry backoff short', async () => {
+    const store = new CaseStore(tmp());
+    const c = store.create({ kind: 'monitoring' });
+    let calls = 0;
+    const o = new Orchestrator({
+      store,
+      log: silent,
+      retryBaseMs: 200,
+      maxAttempts: 10,
+      steps: {
+        detected: async () => {
+          calls++;
+          throw new Error('bad arguments');
+        },
+      },
+    });
+    o.track(c);
+    for (let i = 0; i < 20; i++) {
+      o.poke(c.id);
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    expect(calls).toBeLessThanOrEqual(2);
+    await o.stop();
+  });
+
   it('fails the case after maxAttempts and reports the reason', async () => {
     const store = new CaseStore(tmp());
     const c = store.create({ kind: 'monitoring' });

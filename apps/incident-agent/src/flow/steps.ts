@@ -2,7 +2,7 @@
  * The incident flow: one step function per phase. Each step is idempotent: it can run again
  * after a crash or a retry without creating anything twice.
  */
-import type { Orchestrator, StepFn } from '../cases/orchestrator';
+import type { Orchestrator, StepContext, StepFn } from '../cases/orchestrator';
 import type { CaseStore } from '../cases/store';
 import type { Case, Phase } from '../cases/types';
 import type { AgentConfig } from '../config';
@@ -12,6 +12,7 @@ import type { Logger } from '../log';
 import type { Mcp } from '../mcp/gateway';
 import type { PhaseRunner } from '../phases/runner';
 import { hhmm } from '../util';
+import { deepRca, quickRca } from './rca';
 import { splitOff } from './regroup';
 import { triage } from './triage';
 
@@ -70,9 +71,85 @@ export function detected(deps: FlowDeps): StepFn {
   };
 }
 
+/** Background deep RCA (#17). Stores the root cause; later steps announce changes. */
+export function startDeepRca(
+  deps: FlowDeps,
+  ctx: StepContext,
+  c: Case,
+  opts: { hint?: string; force?: boolean } = {},
+): boolean {
+  const name = 'deep_rca';
+  if (ctx.isRunning(c, name)) return false;
+  // Runs once; a human hint or a failed verification asks for another pass explicitly.
+  const done = c.background[name];
+  if (!opts.force && done && done.state !== 'failed') return false;
+  if (!opts.force && done?.state === 'failed' && done.runs >= 3) return false;
+  const hint = opts.hint;
+  return ctx.spawn(c, name, async () => {
+    const started = Date.now();
+    const { rootCause, source } = await deepRca(deps, c, hint);
+    const current = deps.store.get(c.id) ?? c;
+    if (!rootCause) {
+      deps.store.event(current, 'decision', 'Deep RCA found no promoted change near the onset');
+      return;
+    }
+    const before = current.root_cause;
+    current.root_cause = rootCause;
+    const top = current.suspects[0];
+    deps.store.event(
+      current,
+      'decision',
+      `Root cause (${source}, ${Math.round(rootCause.confidence * 100)}%, ${Math.round((Date.now() - started) / 1000)}s): ` +
+        `${rootCause.culprit_tla} ${rootCause.change_request?.number ?? ''} ${rootCause.merge_request ? `${rootCause.merge_request.project}!${rootCause.merge_request.iid}` : ''}: ${rootCause.mechanism}` +
+        (top && top.tla !== rootCause.culprit_tla
+          ? ` (disagrees with the quick pass, which suspected ${top.tla})`
+          : '') +
+        (before && before.culprit_tla !== rootCause.culprit_tla
+          ? ` (was ${before.culprit_tla})`
+          : ''),
+      { url: rootCause.merge_request?.web_url ?? rootCause.change_request?.web_url },
+    );
+    // Another open case with the same culprit is the same problem (#29 merges them).
+    for (const other of deps.store.open()) {
+      if (other.id === current.id || other.root_cause?.culprit_tla !== rootCause.culprit_tla)
+        continue;
+      if (other.root_cause.change_request?.number !== rootCause.change_request?.number) continue;
+      deps.store.event(current, 'decision', `Same culprit as ${other.id}: flagged for merging`);
+      deps.store.event(other, 'decision', `Same culprit as ${current.id}: flagged for merging`);
+    }
+  });
+}
+
+/** triaged: quick RCA (suspects for the briefing), then deep RCA in the background. */
+export function triaged(deps: FlowDeps): StepFn {
+  return async (c, ctx) => {
+    if (c.suspects.length === 0 && !c.milestones.quick_rca) {
+      const started = Date.now();
+      c.suspects = await quickRca(deps, c);
+      c.milestones.quick_rca = new Date().toISOString();
+      deps.store.event(
+        c,
+        'decision',
+        c.suspects.length
+          ? `Quick RCA (${Math.round((Date.now() - started) / 1000)}s): ${c.suspects
+              .map(
+                (s) =>
+                  `${s.tla} ${s.change_request?.number ?? ''} ${Math.round(s.confidence * 100)}%`,
+              )
+              .join(', ')}. Top: ${c.suspects[0]!.reason}`
+          : 'Quick RCA: no change was promoted near the onset on the failing apps or their upstreams',
+        { url: c.suspects[0]?.merge_request?.web_url },
+      );
+    }
+    startDeepRca(deps, ctx, c);
+    return { wait: Math.max(2_000, 5_000 / deps.config.speed) };
+  };
+}
+
 export function flowSteps(deps: FlowDeps): Partial<Record<Phase, StepFn>> {
   return {
     detected: detected(deps),
+    triaged: triaged(deps),
   };
 }
 
