@@ -11,7 +11,7 @@ import {
   TabsTrigger,
 } from '@sim/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AtSign, Bell, CheckCheck, Loader2, Reply, UserPlus } from 'lucide-react';
+import { AtSign, Bell, CheckCheck, Loader2, Reply, UserPlus, Video } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api, keys, useNotifications, useUser } from './api';
@@ -22,6 +22,7 @@ const TYPE_ICON = {
   added_to_channel: { icon: UserPlus, label: 'Added to channel' },
   mention: { icon: AtSign, label: 'Mention' },
   reply: { icon: Reply, label: 'Reply' },
+  meeting: { icon: Video, label: 'Meeting' },
 } as const;
 
 export function ActivityPage() {
@@ -104,7 +105,7 @@ export function ActivityPage() {
             <EmptyState
               icon={<Bell />}
               title={tab === 'unread' ? "You're all caught up" : 'No activity yet'}
-              description="When someone adds you to a channel, @mentions you or replies to you, it shows up here."
+              description="When someone adds you to a channel, @mentions you, replies to you or starts a meeting, it shows up here."
             />
           ) : (
             <div className="grid grid-cols-[minmax(0,1fr)] gap-1">

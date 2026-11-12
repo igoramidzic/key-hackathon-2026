@@ -8,6 +8,7 @@ import type {
   ChannelRole,
   ChannelSummary,
   ChannelType,
+  Meeting,
   Message,
   MessageImportance,
   MessageKind,
@@ -55,6 +56,21 @@ interface ChannelRec {
   created_at: Date;
   members: Map<string, MemberRec>;
   messages: MessageRec[];
+  /** Names the channel had before renames, oldest first. They keep resolving to it. */
+  previous_names: string[];
+  /** The meeting in progress, or the most recent one. */
+  meeting: MeetingRec | null;
+}
+
+interface MeetingRec {
+  id: string;
+  title: string;
+  started_at: Date;
+  started_by: string;
+  ended_at: Date | null;
+  recording: boolean;
+  transcription: boolean;
+  facilitator: boolean;
 }
 
 interface MessageRec {
@@ -90,6 +106,21 @@ export interface CreateChannelArgs {
   type?: ChannelType;
   members?: ChannelMemberInput[];
   created_by?: string;
+}
+
+export interface UpdateChannelArgs {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  updated_by?: string;
+}
+
+export interface StartMeetingArgs {
+  title?: string;
+  record?: boolean;
+  transcribe?: boolean;
+  facilitator?: boolean;
+  started_by?: string;
 }
 
 export interface PostMessageArgs {
@@ -150,12 +181,15 @@ const ACRONYMS = new Set([
   'rtp',
 ]);
 
+/** ServiceNow record numbers inside a slug, e.g. the `prb0040001` of a renamed incident channel. */
+const RECORD_NUMBER = /^(inc|prb|chg)\d{4,}$/;
+
 const titleWords = (slug: string) =>
   slug
     .split('-')
     .filter(Boolean)
     .map((w) =>
-      ACRONYMS.has(w) || getWorld().appsByTla.has(w.toUpperCase())
+      ACRONYMS.has(w) || RECORD_NUMBER.test(w) || getWorld().appsByTla.has(w.toUpperCase())
         ? w.toUpperCase()
         : w[0]!.toUpperCase() + w.slice(1),
     )
@@ -170,6 +204,15 @@ export function defaultDisplayName(name: string): string {
   const match = name.match(/^inc(\d{4,})(?:-(.*))?$/);
   if (match) return `INC${match[1]}${match[2] ? ` ${titleWords(match[2])}` : ''}`;
   return titleWords(name);
+}
+
+/** `45 sec`, `12 min`, `1 h 5 min`. */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ''}`;
 }
 
 /** `support for CIF.` → `support for CIF`; `as CIF on-call` → `CIF on-call`. */
@@ -209,6 +252,11 @@ export function parseMentions(body: string): string[] {
   return out;
 }
 
+const durationSeconds = (meeting: MeetingRec): number | null =>
+  meeting.ended_at
+    ? Math.round((meeting.ended_at.getTime() - meeting.started_at.getTime()) / 1000)
+    : null;
+
 const personName = (username: string) => findPerson(username)?.name ?? username;
 const ref = (username: string) => ({ username, name: personName(username) });
 
@@ -221,7 +269,7 @@ export class TeamsStore {
   readonly channels = new Map<string, ChannelRec>();
   readonly messages = new Map<string, MessageRec>();
   readonly notifications: NotificationRec[] = [];
-  private seq = { message: 0, notification: 0 };
+  private seq = { message: 0, notification: 0, meeting: 0 };
 
   // ----- lookups -----
 
@@ -266,9 +314,12 @@ export class TeamsStore {
     } catch {
       throw notFound(`Unknown channel '${input}'.`);
     }
-    const matches = [...this.channels.values()].filter(
-      (c) => c.name === name && (!teamFilter || c.team_id === teamFilter.id),
+    const inScope = [...this.channels.values()].filter(
+      (c) => !teamFilter || c.team_id === teamFilter.id,
     );
+    let matches = inScope.filter((c) => c.name === name);
+    // A renamed channel still answers to its old names.
+    if (!matches.length) matches = inScope.filter((c) => c.previous_names.includes(name));
     if (matches.length === 1) return matches[0]!;
     if (matches.length > 1) {
       throw conflict(
@@ -291,6 +342,14 @@ export class TeamsStore {
     throw notFound(`Unknown channel '${input}'.${hint}`);
   }
 
+  /** The channel in a team that has this name now, else the one that used to have it. */
+  private channelNamed(teamId: string, name: string): ChannelRec | undefined {
+    const inTeam = this.channelsOf(teamId);
+    return (
+      inTeam.find((c) => c.name === name) ?? inTeam.find((c) => c.previous_names.includes(name))
+    );
+  }
+
   private ensureTeamMember(team: TeamRec, username: string) {
     team.members.add(username);
   }
@@ -304,12 +363,11 @@ export class TeamsStore {
   ): { channel: ChannelRec; notifications: NotificationRec[] } {
     const team = this.resolveTeam(args.team_id ?? DEFAULT_TEAM_ID);
     const name = normalizeChannelName(args.name);
-    const existing = [...this.channels.values()].find(
-      (c) => c.team_id === team.id && c.name === name,
-    );
+    const existing = this.channelNamed(team.id, name);
     if (existing) {
+      const renamed = existing.name === name ? '' : `, since renamed to #${existing.name}`;
       throw conflict(
-        `Channel #${name} already exists in ${team.name} (id ${existing.id}, ${this.channelUrl(existing)}). Add people with POST /api/channels/${existing.id}/members (MCP: add_channel_members).`,
+        `Channel #${name} already exists in ${team.name} (id ${existing.id}${renamed}, ${this.channelUrl(existing)}). Add people with POST /api/channels/${existing.id}/members (MCP: add_channel_members).`,
       );
     }
     const creator = requirePerson(args.created_by ?? BOT, 'created_by user');
@@ -331,6 +389,8 @@ export class TeamsStore {
       created_at: at,
       members: new Map(),
       messages: [],
+      previous_names: [],
+      meeting: null,
     };
     this.channels.set(id, channel);
     this.ensureTeamMember(team, creator.username);
@@ -353,6 +413,62 @@ export class TeamsStore {
       ? this.addMembers(channel, args.members, creator.username, at, opts)
       : { notifications: [] };
     return { channel, notifications };
+  }
+
+  /**
+   * Renames and/or re-describes a channel. The id and URL stay, the old name becomes an alias, and
+   * the channel gets one system message. A call that changes nothing is a no-op.
+   */
+  updateChannel(channel: ChannelRec, args: UpdateChannelArgs, at = new Date()): ChannelRec {
+    if (
+      args.name === undefined &&
+      args.display_name === undefined &&
+      args.description === undefined
+    ) {
+      throw badRequest('Nothing to update: pass at least one of name, display_name, description');
+    }
+    const actor = requirePerson(args.updated_by ?? BOT, 'updated_by user');
+    const team = this.teams.get(channel.team_id)!;
+    const name = args.name === undefined ? channel.name : normalizeChannelName(args.name);
+    if (name !== channel.name) {
+      const taken = this.channelNamed(team.id, name);
+      if (taken && taken !== channel) {
+        const renamed = taken.name === name ? '' : `, since renamed to #${taken.name}`;
+        throw conflict(
+          `Channel name #${name} is already taken in ${team.name} (id ${taken.id}${renamed}, ${this.channelUrl(taken)}). Pick another name.`,
+        );
+      }
+    }
+    let displayName = channel.display_name;
+    if (args.display_name !== undefined) {
+      displayName = args.display_name.trim() || defaultDisplayName(name);
+    } else if (name !== channel.name && displayName === defaultDisplayName(channel.name)) {
+      // The title was derived from the old name, so it follows the new one.
+      displayName = defaultDisplayName(name);
+    }
+    const description =
+      args.description === undefined ? channel.description : args.description.trim();
+
+    const renamed = name !== channel.name || displayName !== channel.display_name;
+    const described = description !== channel.description;
+    if (!renamed && !described) return channel;
+
+    const shown = displayName !== channel.display_name ? displayName : `#${name}`;
+    if (name !== channel.name) {
+      channel.previous_names = [...channel.previous_names.filter((n) => n !== name), channel.name];
+      channel.name = name;
+    }
+    channel.display_name = displayName;
+    channel.description = description;
+    this.appendMessage(channel, {
+      author: actor.username,
+      body: renamed
+        ? `${actor.name} renamed the channel to ${shown}${described ? ' and updated the description' : ''}.`
+        : `${actor.name} updated the channel description.`,
+      kind: 'system',
+      at,
+    });
+    return channel;
   }
 
   addMembers(
@@ -457,6 +573,89 @@ export class TeamsStore {
       at,
     });
     return member;
+  }
+
+  // ----- meetings -----
+
+  /**
+   * Turns the channel into a meeting and asks every member (except the starter) to join. While one
+   * is in progress it is returned as is: no second meeting, message or notification.
+   */
+  startMeeting(
+    channel: ChannelRec,
+    args: StartMeetingArgs = {},
+    at = new Date(),
+  ): { meeting: MeetingRec; notifications: NotificationRec[]; already_running: boolean } {
+    const starter = requirePerson(args.started_by ?? BOT, 'started_by user');
+    if (channel.meeting && !channel.meeting.ended_at) {
+      return { meeting: channel.meeting, notifications: [], already_running: true };
+    }
+    this.seq.meeting++;
+    const meeting: MeetingRec = {
+      id: `mtg_${String(this.seq.meeting).padStart(6, '0')}`,
+      title: args.title?.trim() || channel.display_name,
+      started_at: at,
+      started_by: starter.username,
+      ended_at: null,
+      recording: args.record ?? true,
+      transcription: args.transcribe ?? true,
+      facilitator: args.facilitator ?? true,
+    };
+    channel.meeting = meeting;
+    const options = [
+      meeting.recording && 'Recording on',
+      meeting.transcription && 'Transcription on',
+      meeting.facilitator && 'Facilitator taking notes',
+    ].filter(Boolean);
+    const message = this.appendMessage(channel, {
+      author: starter.username,
+      body: `Meeting started: ${meeting.title}.${options.length ? ` ${options.join(' · ')}.` : ''} Join: ${this.joinUrl(channel, meeting)}`,
+      kind: 'system',
+      at,
+    });
+    const notifications: NotificationRec[] = [];
+    for (const member of channel.members.values()) {
+      if (member.username === starter.username) continue;
+      notifications.push(
+        this.notify({
+          username: member.username,
+          type: 'meeting',
+          title: `${starter.name} started a meeting in #${channel.name}`,
+          body: `Join the call in #${channel.name}: ${meeting.title}`,
+          channel_id: channel.id,
+          message_id: message.id,
+          actor: starter.username,
+          created_at: at,
+        }),
+      );
+    }
+    return { meeting, notifications, already_running: false };
+  }
+
+  endMeeting(channel: ChannelRec, endedBy: string = BOT, at = new Date()): MeetingRec {
+    const actor = requirePerson(endedBy, 'ended_by user');
+    const meeting = channel.meeting;
+    if (!meeting || meeting.ended_at) {
+      const last = meeting?.ended_at
+        ? ` The last one (${meeting.id}) ended at ${meeting.ended_at.toISOString()}.`
+        : '';
+      throw conflict(
+        `No meeting is in progress in #${channel.name}.${last} Start one with POST /api/channels/${channel.id}/meeting (MCP: start_meeting).`,
+      );
+    }
+    meeting.ended_at = new Date(Math.max(at.getTime(), meeting.started_at.getTime()));
+    const saved = [meeting.recording && 'Recording', meeting.transcription && 'transcript']
+      .filter(Boolean)
+      .join(' and ');
+    this.appendMessage(channel, {
+      author: actor.username,
+      body: `Meeting ended after ${formatDuration(durationSeconds(meeting)!)}.${
+        saved ? ` ${saved[0]!.toUpperCase()}${saved.slice(1)} saved to the channel.` : ''
+      }`,
+      kind: 'system',
+      at: meeting.ended_at,
+    });
+    return meeting;
   }
 
   // ----- messages -----
@@ -623,6 +822,26 @@ export class TeamsStore {
     return `${URLS.teams.web}/channels/${channel.id}`;
   }
 
+  joinUrl(channel: ChannelRec, meeting: MeetingRec): string {
+    return `${this.channelUrl(channel)}?meeting=${meeting.id}`;
+  }
+
+  toMeeting(channel: ChannelRec, meeting: MeetingRec): Meeting {
+    return {
+      id: meeting.id,
+      title: meeting.title,
+      started_at: meeting.started_at.toISOString(),
+      started_by: meeting.started_by,
+      started_by_name: personName(meeting.started_by),
+      ended_at: meeting.ended_at?.toISOString() ?? null,
+      duration_seconds: durationSeconds(meeting),
+      recording: meeting.recording,
+      transcription: meeting.transcription,
+      facilitator: meeting.facilitator,
+      join_url: this.joinUrl(channel, meeting),
+    };
+  }
+
   lastActivity(channel: ChannelRec): Date {
     return channel.messages.at(-1)?.created_at ?? channel.created_at;
   }
@@ -667,6 +886,7 @@ export class TeamsStore {
       team_id: channel.team_id,
       team_name: this.teams.get(channel.team_id)?.name ?? channel.team_id,
       name: channel.name,
+      previous_names: [...channel.previous_names],
       display_name: channel.display_name,
       description: channel.description,
       type: channel.type,
@@ -676,6 +896,7 @@ export class TeamsStore {
       member_count: channel.members.size,
       message_count: channel.messages.length,
       last_activity_at: this.lastActivity(channel).toISOString(),
+      meeting: channel.meeting ? this.toMeeting(channel, channel.meeting) : null,
       web_url: this.channelUrl(channel),
     };
   }
@@ -804,4 +1025,4 @@ export class TeamsStore {
   }
 }
 
-export type { ChannelRec, MessageRec, NotificationRec, TeamRec };
+export type { ChannelRec, MeetingRec, MessageRec, NotificationRec, TeamRec };

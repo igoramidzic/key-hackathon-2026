@@ -17,16 +17,22 @@ import { FormField } from './form';
 
 type NoteType = 'work_note' | 'comment';
 
+/** How a record posts a journal entry; `done` clears the composer. */
+export interface NotePoster {
+  post: (note: { type: NoteType; text: string }, done: () => void) => void;
+  pending: boolean;
+  error: Error | null;
+}
+
 /**
  * The journal composer: one field that posts a work note, or an additional comment when the
  * "Additional comments (Customer visible)" box is checked.
  */
-function Composer({ number }: { number: string }) {
+function Composer({ poster, comments }: { poster: NotePoster; comments: boolean }) {
   const [type, setType] = useState<NoteType>('work_note');
   const [text, setText] = useState('');
-  const add = useAddJournal(number);
   const id = useId();
-  const post = () => add.mutate({ type, text }, { onSuccess: () => setText('') });
+  const post = () => poster.post({ type, text }, () => setText(''));
   const workNote = type === 'work_note';
   return (
     <div className="mb-6 grid gap-2">
@@ -54,23 +60,25 @@ function Composer({ number }: { number: string }) {
         />
       </FormField>
       <div className="flex flex-wrap items-center gap-3 sm:pl-[calc(10rem+0.75rem)]">
-        <label className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
-          <input
-            type="checkbox"
-            checked={!workNote}
-            onChange={(e) => setType(e.target.checked ? 'comment' : 'work_note')}
-            className="size-4 accent-primary"
-          />
-          Additional comments (Customer visible)
-        </label>
+        {comments && (
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+            <input
+              type="checkbox"
+              checked={!workNote}
+              onChange={(e) => setType(e.target.checked ? 'comment' : 'work_note')}
+              className="size-4 accent-primary"
+            />
+            Additional comments (Customer visible)
+          </label>
+        )}
         <span className="ml-auto flex items-center gap-3">
-          {add.error && <span className="text-destructive text-xs">{add.error.message}</span>}
+          {poster.error && <span className="text-destructive text-xs">{poster.error.message}</span>}
           <KbdGroup className="hidden text-muted-foreground sm:inline-flex">
             <Kbd>⌘</Kbd>
             <Kbd>Enter</Kbd>
           </KbdGroup>
-          <Button size="sm" disabled={!text.trim() || add.isPending} onClick={post}>
-            {add.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
+          <Button size="sm" disabled={!text.trim() || poster.pending} onClick={post}>
+            {poster.pending && <Loader2 className="animate-spin" data-icon="inline-start" />}
             Post
           </Button>
         </span>
@@ -145,15 +153,23 @@ function Entry({ entry }: { entry: JournalEntry }) {
   );
 }
 
-export function ActivityStream({ incident }: { incident: Incident }) {
-  const entries = [...incident.journal].reverse();
+/** The "Notes" section of a record: the composer over its journal, newest first. */
+export function Journal({
+  journal,
+  poster,
+  comments = true,
+}: {
+  journal: JournalEntry[];
+  poster: NotePoster;
+  /** Offer customer-visible comments besides work notes. */
+  comments?: boolean;
+}) {
+  const entries = [...journal].reverse();
   return (
     <Section title="Notes">
-      <Composer number={incident.number} />
+      <Composer poster={poster} comments={comments} />
       <div className="mb-3 flex items-center gap-2 border-b pb-2">
-        <h3 className="font-semibold text-[14px] text-foreground">
-          Activities: {incident.journal.length}
-        </h3>
+        <h3 className="font-semibold text-[14px] text-foreground">Activities: {journal.length}</h3>
       </div>
       <ol className="space-y-3">
         {entries.map((entry) => (
@@ -161,5 +177,19 @@ export function ActivityStream({ incident }: { incident: Incident }) {
         ))}
       </ol>
     </Section>
+  );
+}
+
+export function ActivityStream({ incident }: { incident: Incident }) {
+  const add = useAddJournal(incident.number);
+  return (
+    <Journal
+      journal={incident.journal}
+      poster={{
+        post: (note, done) => add.mutate(note, { onSuccess: done }),
+        pending: add.isPending,
+        error: add.error,
+      }}
+    />
   );
 }

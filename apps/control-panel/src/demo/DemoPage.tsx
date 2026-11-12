@@ -68,11 +68,18 @@ export function DemoPage() {
   const [index, setIndex] = useState(0);
   const [enteredAt, setEnteredAt] = useState(() => Date.now());
   const [auto, setAuto] = useState(true);
-  const pace = 1;
+  // `/demo?pace=brisk` (or relaxed) shortens every step's reading time; the recorder uses it so
+  // the one human step (Merge) is not held back by the tour.
+  const pace = useMemo(() => {
+    const want = new URLSearchParams(window.location.search).get('pace')?.toLowerCase();
+    const found = PACES.findIndex((p) => p.label.toLowerCase() === want);
+    return found >= 0 ? found : 1;
+  }, []);
   const history = useRef<number[]>([]);
   const firstReady = useRef<Record<string, number>>({});
   const doneAt = useRef<Record<string, number>>({});
   const triggering = useRef(false);
+  const faultOnset = useRef<string | null>(null);
 
   const speed = agent.info?.speed ?? 4;
   const liveRun = status.data?.run ?? null;
@@ -193,6 +200,7 @@ export function DemoPage() {
     firstReady.current = {};
     doneAt.current = {};
     setError(null);
+    faultOnset.current = null;
     setIndex(at);
     setEnteredAt(Date.now());
     setAuto(true);
@@ -233,11 +241,20 @@ export function DemoPage() {
     [view, cutoff],
   );
 
-  const onsetIso = run?.fault_onset_at ?? view?.onset_at ?? view?.opened_at ?? null;
+  // The first error's time, held for the whole tour: once the simulator's run ends its status
+  // goes away, and falling back to the case's own onset would move every time on screen.
+  if (!tour) faultOnset.current = null;
+  else if (run?.fault_onset_at) faultOnset.current = run.fault_onset_at;
+  const onsetIso = faultOnset.current ?? view?.onset_at ?? view?.opened_at ?? null;
   const onsetMs = onsetIso ? Date.parse(onsetIso) : null;
   const milestones = view?.records?.milestones;
+  // The clock stops when the agent has confirmed recovery (the time the recap shows), not at
+  // the simulator's own earlier mark, so it never jumps once the confirmation arrives.
   const endIso =
-    milestones?.['announce:recovered'] ?? milestones?.resolved ?? run?.recovered_at ?? null;
+    milestones?.['announce:recovered'] ??
+    milestones?.resolved ??
+    (view ? null : run?.recovered_at) ??
+    null;
   const clock =
     onsetMs === null
       ? null

@@ -19,6 +19,11 @@ import {
   NativeSelect,
   RelativeTime,
   Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
   Textarea,
 } from '@sim/ui';
 import {
@@ -35,15 +40,17 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { CURRENT_USER, useIncident, useUpdateIncident } from '../api';
 import { ActivityStream } from '../components/Activity';
 import {
   GroupLink,
   Muted,
   PriorityBadge,
+  RecordLink,
   refLinkClass,
   Section,
+  TierBadge,
   TlaChip,
   UserLink,
 } from '../components/bits';
@@ -57,6 +64,9 @@ import {
 } from '../components/form';
 import { IncidentTable } from '../components/IncidentTable';
 import { Page, usePageTitle } from '../components/Layout';
+import { listHeaderRowClass, listRowClass, SortHead } from '../components/list';
+import { formatDuration } from '../format';
+import { CommunicationKindBadge, CommunicationStateBadge } from './Communications';
 
 const LINK_ICONS: Record<LinkType, LucideIcon> = {
   teams_channel: MessagesSquare,
@@ -233,6 +243,162 @@ function ResolvePanel({ incident, onClose }: { incident: Incident; onClose: () =
   );
 }
 
+/** Other applications the incident affects, besides its configuration item. */
+function AffectedCis({ incident }: { incident: Incident }) {
+  const cis = incident.affected_cis ?? [];
+  if (cis.length === 0) return null;
+  return (
+    <Section title={`Affected CIs (${cis.length})`} bodyClassName="p-0">
+      <ul className="text-[13px]">
+        {cis.map((app) => (
+          <li
+            key={app.tla}
+            className="flex items-center gap-3 border-b border-border/70 px-4 py-1.5 last:border-b-0 even:bg-list-stripe"
+          >
+            <Link
+              to={`/apps/${app.tla}`}
+              className={`${refLinkClass} w-12 shrink-0 font-mono font-semibold`}
+            >
+              {app.tla}
+            </Link>
+            <span className="min-w-0 flex-1 truncate text-foreground">{app.name}</span>
+            <TierBadge tier={app.tier} />
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/**
+ * Resolution: what happened, for how long, who it hit and why. Filled in as the incident is
+ * worked, so it shows as soon as any of it is known.
+ */
+function Resolution({ incident: i }: { incident: Incident }) {
+  const started =
+    i.close_code ||
+    i.close_notes ||
+    i.cause_code ||
+    i.caused_by_change ||
+    i.resolved_by_change ||
+    i.outage_start ||
+    i.service_restored_at ||
+    i.root_cause ||
+    i.client_impact ||
+    i.employee_impact ||
+    i.problem;
+  if (!started && i.state !== 'resolved' && i.state !== 'closed') return null;
+  const none = <Muted>—</Muted>;
+  const time = (iso: string | null) => (iso ? formatDateTime(iso) : none);
+  const change = (number: string | null) => (number ? `/change_requests/${number}` : undefined);
+  return (
+    <Section title="Resolution" bodyClassName="grid gap-2.5">
+      <FormColumns>
+        <FormColumn>
+          <FormField label="Resolution code">{i.close_code ?? none}</FormField>
+          <FormField label="Cause code">{i.cause_code ?? none}</FormField>
+          <FormField label="Caused by change" href={change(i.caused_by_change)}>
+            <RecordLink table="change_requests" number={i.caused_by_change} />
+          </FormField>
+          <FormField label="Resolved by change" href={change(i.resolved_by_change)}>
+            <RecordLink table="change_requests" number={i.resolved_by_change} />
+          </FormField>
+        </FormColumn>
+        <FormColumn>
+          <FormField label="Outage start">{time(i.outage_start)}</FormField>
+          <FormField label="Service restored">{time(i.service_restored_at)}</FormField>
+          <FormField label="Duration" demo="outage-duration">
+            {i.outage_duration_minutes != null ? formatDuration(i.outage_duration_minutes) : none}
+          </FormField>
+        </FormColumn>
+      </FormColumns>
+      <FormField label="Impact to clients" demo="client-impact" multiline>
+        {i.client_impact || none}
+      </FormField>
+      <FormField label="Impact to employees" demo="employee-impact" multiline>
+        {i.employee_impact || none}
+      </FormField>
+      <FormField label="Root cause" multiline>
+        {i.root_cause || none}
+      </FormField>
+      <FormField label="Resolution notes" demo="close-notes" multiline>
+        {i.close_notes || none}
+      </FormField>
+      <FormColumns>
+        <FormColumn>
+          <FormField label="Problem" href={i.problem ? `/problems/${i.problem}` : undefined}>
+            <RecordLink table="problems" number={i.problem} />
+          </FormField>
+          <FormField label="Resolved by">
+            <UserLink user={i.resolved_by} />
+          </FormField>
+        </FormColumn>
+        <FormColumn>
+          <FormField label="Resolved">{time(i.resolved_at)}</FormField>
+          <FormField label="Closed">{time(i.closed_at)}</FormField>
+        </FormColumn>
+      </FormColumns>
+    </Section>
+  );
+}
+
+/** Critical Incident Communications drafted or sent for the incident, oldest first. */
+function Communications({ incident }: { incident: Incident }) {
+  const navigate = useNavigate();
+  const items = incident.communications ?? [];
+  if (items.length === 0) return null;
+  return (
+    <Section title={`Communications (${items.length})`} bodyClassName="p-0">
+      <Table>
+        <TableHeader>
+          <TableRow className={listHeaderRowClass}>
+            <SortHead className="w-28">Kind</SortHead>
+            <SortHead>Subject</SortHead>
+            <SortHead className="w-44">To</SortHead>
+            <SortHead className="w-24">State</SortHead>
+            <SortHead className="w-32">Time</SortHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((c) => {
+            const at = c.sent_at ?? c.drafted_at;
+            return (
+              <TableRow
+                key={c.number}
+                data-demo="communication-row"
+                data-number={c.number}
+                onClick={() => navigate(`/communications/${c.number}`)}
+                className={`${listRowClass} cursor-pointer`}
+              >
+                <TableCell>
+                  <CommunicationKindBadge kind={c.kind} />
+                </TableCell>
+                <TableCell className="w-full max-w-0 min-w-48">
+                  <Link
+                    to={`/communications/${c.number}`}
+                    onClick={(e) => e.stopPropagation()}
+                    title={c.subject}
+                    className={`${refLinkClass} block truncate`}
+                  >
+                    {c.subject}
+                  </Link>
+                </TableCell>
+                <TableCell className="whitespace-nowrap">{c.to}</TableCell>
+                <TableCell>
+                  <CommunicationStateBadge state={c.state} />
+                </TableCell>
+                <TableCell className="text-muted-foreground" title={formatDateTime(at)}>
+                  <RelativeTime value={at} />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Section>
+  );
+}
+
 export function IncidentDetail() {
   const { number = '' } = useParams();
   const { data: incident, error, isLoading } = useIncident(number);
@@ -360,6 +526,8 @@ export function IncidentDetail() {
           </div>
         </FormBody>
 
+        <AffectedCis incident={i} />
+
         <Section title="Related Links">
           {i.links.length > 0 ? (
             <ul className="grid gap-2 text-[13px]">
@@ -378,29 +546,9 @@ export function IncidentDetail() {
           </Section>
         )}
 
-        {(i.state === 'resolved' || i.state === 'closed' || i.close_notes) && (
-          <Section title="Resolution Information" bodyClassName="grid gap-2.5">
-            <FormColumns>
-              <FormColumn>
-                <FormField label="Resolution code">{i.close_code ?? <Muted>—</Muted>}</FormField>
-                <FormField label="Resolved by">
-                  <UserLink user={i.resolved_by} />
-                </FormField>
-              </FormColumn>
-              <FormColumn>
-                <FormField label="Resolved">
-                  {i.resolved_at ? formatDateTime(i.resolved_at) : <Muted>—</Muted>}
-                </FormField>
-                <FormField label="Closed">
-                  {i.closed_at ? formatDateTime(i.closed_at) : <Muted>—</Muted>}
-                </FormField>
-              </FormColumn>
-            </FormColumns>
-            <FormField label="Resolution notes" multiline>
-              {i.close_notes ?? <Muted>—</Muted>}
-            </FormField>
-          </Section>
-        )}
+        <Resolution incident={i} />
+
+        <Communications incident={i} />
 
         <ActivityStream incident={i} />
       </Page>

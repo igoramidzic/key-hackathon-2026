@@ -54,7 +54,9 @@ export function TeamsPane() {
   // The route accepts ids or names (agents may paste either); highlight by the resolved channel.
   const param = useMatch('/channels/:id')?.params.id;
   const active = param
-    ? channels.data?.items.find((c) => c.id === param || c.name === param)
+    ? channels.data?.items.find(
+        (c) => c.id === param || c.name === param || c.previous_names.includes(param),
+      )
     : undefined;
   const activeChannelId = active?.id;
   const activeTeam = active?.team_id;

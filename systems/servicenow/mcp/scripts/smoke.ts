@@ -1,6 +1,8 @@
 /**
  * Calls every ServiceNow MCP tool through a real MCP client over Streamable HTTP and walks an
- * incident through create → update → resolve. Needs the API (4002) and MCP server (5002) running.
+ * incident through create → update → resolve, then a second one through its change request,
+ * communication draft, resolution section and problem. Needs the API (4002) and MCP server (5002)
+ * running. It leaves its records behind: `curl -X POST localhost:4002/admin/reset` clears them.
  *
  *   pnpm --filter @sim/servicenow-mcp exec tsx scripts/smoke.ts
  */
@@ -189,6 +191,172 @@ check(
   'resolved incident appears in list_incidents',
 );
 
+// ----- Affected CIs, child incidents, change request -----
+const outage = await call<{ number: string; affected_cis: string[]; outage_start: string }>(
+  'create_incident',
+  {
+    short_description: 'CIF - customer profile lookups failing',
+    app_tla: 'CIF',
+    impact: 1,
+    urgency: 1,
+    affected_cis: ['OLB', 'mbl', 'CIF'],
+    outage_start: '20m',
+  },
+);
+check(
+  outage.affected_cis.join() === 'OLB,MBL',
+  `affected_cis are upper case without the incident's own app (got ${outage.affected_cis})`,
+);
+check(outage.outage_start, 'outage_start set on create');
+
+const phoned = await call<{ number: string }>('create_incident', {
+  short_description: 'Cannot open a customer profile',
+  contact_type: 'phone',
+  caller: 'mlopez',
+  opened_by: 'pnatarajan',
+});
+const grouped = await call<{ child_incidents: unknown[] }>('link_child_incidents', {
+  parent: outage.number,
+  children: [phoned.number],
+  child_comment: `This is a known outage tracked in ${outage.number}.`,
+});
+check(grouped.child_incidents.length === 1, 'call linked as a child incident');
+
+// No planned_start: the change stays a draft, so KBR leaves it alone.
+const change = await call<{ number: string; state: string }>('create_change_request', {
+  short_description: 'CIF - revert naming strategy change',
+  app_tla: 'CIF',
+  merge_requests: ['keybank/CIF00/customer-profile-api!7'],
+  type: 'emergency',
+  related_incidents: [outage.number],
+});
+check(change.state === 'new', 'change request without planned_start is a draft');
+await call('get_change_request', { number: change.number });
+const changes = await call<{ items: { number: string }[] }>('list_change_requests', {
+  app_tla: 'CIF',
+  related_incident: outage.number,
+});
+check(
+  changes.items.some((c) => c.number === change.number),
+  'change request listed for the incident',
+);
+
+// ----- Critical Incident Communications: drafted here, sent by a person in the UI -----
+type Draft = { number: string; state: string; subject: string; to: string; web_url: string };
+const draft = await call<Draft>('draft_incident_communication', {
+  incident: outage.number,
+  kind: 'new',
+  description: 'Customers cannot open their profile in online and mobile banking.',
+});
+check(draft.state === 'draft', 'communication is a draft');
+check(draft.to === 'GRP_CIM_Tech_P1', `P1 goes to GRP_CIM_Tech_P1 (got ${draft.to})`);
+check(
+  draft.subject === `<page> NEW - ${outage.number} - CIF - customer profile lookups failing`,
+  `subject is tagged NEW (got ${draft.subject})`,
+);
+check(draft.web_url.endsWith(draft.number), 'communication web_url ends with the number');
+const redraft = await call<Draft>('draft_incident_communication', {
+  incident: outage.number,
+  kind: 'new',
+  description: 'Customers and bankers cannot open customer profiles.',
+  client_impact: 'Customers cannot view or update their profile.',
+});
+check(redraft.number === draft.number, 're-drafting the same kind updates the draft in place');
+const email = await call<{ description: string; systems_impacted: string[] }>(
+  'get_incident_communication',
+  { number: draft.number },
+);
+check(email.description.startsWith('Customers and bankers'), 'draft holds the new wording');
+check(email.systems_impacted.join() === 'CIF,OLB,MBL', 'systems impacted = app + affected CIs');
+const drafts = await call<{ total: number }>('list_incident_communications', {
+  incident: outage.number,
+  state: 'draft',
+});
+check(drafts.total === 1, `one draft for the incident (got ${drafts.total})`);
+check(
+  !tools.some((t) => /send.*communication|communication.*send/.test(t.name)),
+  'no tool sends a communication',
+);
+
+// ----- Resolution section -----
+await call('update_incident', { number: outage.number, caused_by_change: 'CHG0999999' }, true);
+const restored = await call<{
+  state: string;
+  outage_duration_minutes: number;
+  cause_code: string;
+  resolved_by_change: string;
+}>('update_incident', {
+  number: outage.number,
+  state: 'resolved',
+  close_code: 'Resolved by change',
+  close_notes: 'Naming strategy change reverted.',
+  service_restored_at: 'now',
+  cause_code: 'Change',
+  resolved_by_change: change.number,
+  root_cause: 'A naming strategy change renamed the columns the profile queries rely on.',
+  client_impact: 'Customers could not view their profile for about 20 minutes.',
+  employee_impact: 'Bankers could not look up customer profiles.',
+});
+check(restored.state === 'resolved', 'outage resolved');
+check(
+  Math.abs(restored.outage_duration_minutes - 20) <= 1,
+  `outage duration derived (got ${restored.outage_duration_minutes} minutes)`,
+);
+check(restored.resolved_by_change === change.number, 'resolved_by_change recorded');
+await call('update_change_request', {
+  number: change.number,
+  state: 'canceled',
+  work_note: 'Smoke test only.',
+});
+
+// ----- Problems (the 8:00 AM stand-up) -----
+type Prb = { number: string; priority: number; standup_date: string | null; web_url: string };
+const problem = await call<Prb & { cause_code: string; incidents: string[] }>('create_problem', {
+  short_description: 'CIF - naming strategy change broke customer profile lookups',
+  incidents: [outage.number],
+  root_cause: 'A naming strategy change renamed the columns the profile queries rely on.',
+  mitigation_plan: 'Reverted through an emergency change request.',
+  action_items: '- Add a schema contract test to the CIF pipeline (CIF team)',
+});
+check(
+  /^PRB\d{7}$/.test(problem.number),
+  `problem number looks like PRB0040001 (${problem.number})`,
+);
+check(problem.priority === 1, 'problem takes the priority of its incident');
+check(problem.cause_code === 'Under investigation', 'cause_code defaults to Under investigation');
+check(/^\d{4}-\d{2}-\d{2}$/.test(problem.standup_date ?? ''), 'problem is on the next stand-up');
+check(problem.web_url.endsWith(problem.number), 'problem web_url ends with the number');
+await call('create_problem', { short_description: 'Again', incidents: [outage.number] }, true);
+const mine = await call<{ items: { number: string }[] }>('list_problems', {
+  incident: outage.number,
+});
+check(mine.items.length === 1 && mine.items[0]?.number === problem.number, 'found by incident');
+const agenda = await call<{ items: { number: string }[] }>('list_problems', {
+  standup: 'next',
+  active: true,
+});
+check(
+  agenda.items.some((p) => p.number === problem.number),
+  'problem is on the next stand-up agenda',
+);
+const worked = await call<{ state: string; journal: { type: string }[] }>('update_problem', {
+  number: problem.number,
+  state: 'root_cause_analysis',
+  cause_code: 'Change',
+  work_note: 'Timeline attached.',
+});
+check(worked.state === 'root_cause_analysis', 'problem moved to root_cause_analysis');
+const prb = await call<{ related_incidents: { number: string }[] }>('get_problem', {
+  number: problem.number,
+});
+check(prb.related_incidents[0]?.number === outage.number, 'problem lists its incident');
+const final = await call<{ problem: string; communications: { number: string }[] }>(
+  'get_incident',
+  { number: outage.number },
+);
+check(final.problem === problem.number, 'incident points at its problem');
+check(final.communications[0]?.number === draft.number, 'incident lists its communications');
+
 const missing = tools.map((t) => t.name).filter((n) => !called.has(n));
 check(missing.length === 0, `tools not exercised: ${missing.join(', ')}`);
 
@@ -197,4 +365,6 @@ if (failures.length) {
   console.error(`\n${failures.length} failure(s):\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`\nAll ${called.size} tools OK. Created and resolved ${created.number}.`);
+console.log(
+  `\nAll ${called.size} tools OK. Created and resolved ${created.number} and ${outage.number}, opened ${problem.number}, drafted ${draft.number}.`,
+);

@@ -15,6 +15,11 @@ import type {
   ChangeRequest,
   ChangeRequestSummary,
   ChangeUpdateInput,
+  Communication,
+  CommunicationDraftInput,
+  CommunicationListQuery,
+  CommunicationSendInput,
+  CommunicationSummary,
   DependencyDirection,
   DependencyGraph,
   GroupDetail,
@@ -29,6 +34,12 @@ import type {
   JournalEntry,
   JournalInput,
   LinkChildrenInput,
+  Problem,
+  ProblemCreateInput,
+  ProblemListQuery,
+  ProblemStandup,
+  ProblemSummary,
+  ProblemUpdateInput,
   UserDetail,
   UserListQuery,
   UserSummary,
@@ -65,6 +76,30 @@ export function createServiceNowClient(baseUrl: string) {
     /** Attaches incidents as children of `parent`; returns the parent. */
     linkChildren: (parent: string, body: LinkChildrenInput) =>
       http.post<Incident>(`/api/incidents/${seg(parent)}/children`, body),
+
+    // Problems (the record behind the daily 8:00 AM problem stand-up)
+    listProblems: (query: ProblemListQuery = {}) =>
+      http.get<Page<ProblemSummary>>('/api/problems', q(query)),
+    /** By PRB number or sys_id. */
+    getProblem: (numberOrSysId: string) => http.get<Problem>(`/api/problems/${seg(numberOrSysId)}`),
+    createProblem: (body: ProblemCreateInput) => http.post<Problem>('/api/problems', body),
+    updateProblem: (numberOrSysId: string, body: ProblemUpdateInput) =>
+      http.patch<Problem>(`/api/problems/${seg(numberOrSysId)}`, body),
+    /** The agenda of a stand-up: `next` (default), `today` or a YYYY-MM-DD date. */
+    problemStandup: (date = 'next') => http.get<ProblemStandup>('/api/problems/standup', { date }),
+
+    // Critical Incident Communications (email drafts to the internal distribution groups)
+    listCommunications: (query: CommunicationListQuery = {}) =>
+      http.get<Page<CommunicationSummary>>('/api/communications', q(query)),
+    /** By CIC number. */
+    getCommunication: (number: string) =>
+      http.get<Communication>(`/api/communications/${seg(number)}`),
+    /** Drafts (or re-drafts) the communication of one kind for an incident. */
+    draftCommunication: (incident: string, body: CommunicationDraftInput) =>
+      http.post<Communication>(`/api/incidents/${seg(incident)}/communications`, body),
+    /** Web UI only: a person sends the draft to the distribution group. */
+    sendCommunication: (number: string, body: CommunicationSendInput = {}) =>
+      http.post<Communication>(`/api/communications/${seg(number)}/send`, body),
 
     // Change requests (promotion from QV to production through KBR)
     listChanges: (query: ChangeListQuery = {}) =>

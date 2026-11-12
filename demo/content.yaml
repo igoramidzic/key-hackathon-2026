@@ -48,7 +48,7 @@ elevenlabs:
                                      #   hpp4J3VqNfWAUOO0d1Us Bella (professional, bright, warm)
                                      #   cgSgspJ2msm6clMCkdW9 Jessica (playful, bright, warm)
                                      #   EXAVITQu4vr4xnSDxMaL Sarah (mature, confident)
-  speed: 1.2 # 1.0 = as recorded. Changing this costs no credits.
+  speed: 1.21 # 1.0 = as recorded. Changing this costs no credits.
   model: eleven_v3                   # most expressive. eleven_multilingual_v2 is steadier.
   settings: {stability: 0.5}         # lower = more emotion and variation, higher = more even
 pacing: {lead_in: 0.8, gap: 0.3, tail: 0.7}   # seconds of silence: scene start / between beats / scene end
@@ -107,7 +107,7 @@ scenes:
   now:
     chapter: "Today: manual"
     narration:
-      n1: Here is how a critical incident runs today. Almost every step is manual.
+      n1: Today, a critical incident is a manual relay.
       n2: Incident Management hears about it from a page, a monitor, a Teams chat, an email, or the incident phone line.
       n3: They gather teams to judge impact and urgency, set the priority, then build a Teams chat, publish what is known, and start a recorded call.
       n4: Corporate incident response is engaged, communications go out, and only then does the hunt for the cause really begin.
@@ -119,7 +119,7 @@ scenes:
       headline: Today it is a manual relay
       # The steps are KeyBank's critical incident process. The total (01:48) is the real P1
       # average from the `cost` scene; how it splits across the steps is illustrative.
-      steps:                                  # time = elapsed so far, HH:MM. "+00:25" adds to the total.
+      steps:                                  # time = elapsed so far, HH:MM (shown as "22 min", "1 h 05 min"). "+00:25" adds to the total.
         - {at: n2, time: "00:10", text: "Incident Management is made aware", tool: "Page · NOC · monitor · phone"}
         - {at: n3@0.05, time: "00:22", text: "Gather teams, set impact, urgency and priority", tool: "CIC"}
         - {at: n3@0.5, time: "00:32", text: "Create the Teams chat, publish the issue, start a recorded call", tool: "Teams"}
@@ -128,8 +128,7 @@ scenes:
         - {at: n5@0.08, time: "01:48", text: "Restore the service, then the record, problem record and summary", tool: "ServiceNow"}
       elapsed:
         at: n1@0.5
-        label: Elapsed
-        unit: "hours : minutes"
+        label: Elapsed                        # counts up in hours and minutes, each labelled
         note: {at: n4.e, text: "The service is still down."}
       stamp: {at: n5@0.6, text: "All manual"}
 
@@ -137,9 +136,8 @@ scenes:
   cost:
     chapter: The cost
     narration:
-      c1: The numbers tell the story.
       c2: Over the last three months, a priority one incident took an average of one hour and forty-eight minutes to resolve for the applications it hit.
-      c3: Priority two took close to three hours, and well over three for the application that caused it. Every one of those minutes costs the bank revenue and customers.
+      c3: Priority two took close to three hours. Every one of those minutes costs the bank revenue and customers.
     screen:
       kicker: File 03 // What it costs
       subject: "P1 and P2 incidents, August to October"
@@ -161,14 +159,10 @@ scenes:
         text: "It watches the live log stream, the alert feeds, and new ServiceNow incidents around the clock."
         say: "It watches the live log stream, the alert feeds, and new Service Now incidents around the clock."
       i3:
-        text: "When something breaks, it starts the critical incident process on its own, with forty-nine tools across four systems: logs, ServiceNow, GitLab, and Teams."
-        say: "When something breaks, it starts the critical incident process on its own, with forty-nine tools across four systems: logs, Service Now, Git Lab, and Teams."
-      i4: It scopes the damage, traces the dependency graph to a common cause, and finds the exact change that broke production.
-      i5: Then it opens the parent incident, attaches the related incidents as children, stands up the Teams chat with the right support people, and proposes a fix. A human always makes the final call.
-      i6:
-        text: "It keeps ServiceNow current, raises the change request, and once service is back, completes the resolution steps the process requires."
-        say: "It keeps Service Now current, raises the change request, and once service is back, completes the resolution steps the process requires."
-      i7: "To train it safely, we built an entire simulated bank: four hundred applications, twelve hundred people, and realistic failures with decoys planted along the way."
+        text: "When something breaks, it runs the critical incident process itself, with fifty-nine tools across logs, ServiceNow, GitLab, and Teams."
+        say: "When something breaks, it runs the critical incident process itself, with fifty-nine tools across logs, Service Now, Git Lab, and Teams."
+      i4: It finds the cause, mobilizes the right people, proposes the fix, and does the paperwork. A human always makes the final call.
+      i7: "To train it safely, we built a simulated bank: four hundred applications, twelve hundred people, and failures with decoys planted along the way."
     screen:
       kicker: File 04 // The asset
       headline: NightWatch
@@ -180,7 +174,7 @@ scenes:
         fields:
           - [Alias, svc_incident_auto]
           - [Shift, 24 / 7]
-          - [Clearance, "Read, write. Never merge, never delete."]
+          - [Clearance, "Read, write, draft. Never merge, delete or send."]
       signals:
         at: i2
         heading: Signals
@@ -191,21 +185,19 @@ scenes:
       agent: {at: i1@0.4, title: "The agent", sub: "detection rules + LLM reasoning"}
       tools:
         at: i3@0.5
-        heading: 49 tools over MCP            # <- spoken too (i3)
+        heading: 59 tools over MCP            # <- spoken too (i3)
         items:
           - {at: i3@0.74, name: "Logs", count: 9}
-          - {at: i3@0.80, name: "ServiceNow", count: 17}
+          - {at: i3@0.80, name: "ServiceNow", count: 24}
           - {at: i3@0.88, name: "GitLab", count: 14}
-          - {at: i3@0.95, name: "Teams", count: 9}
+          - {at: i3@0.95, name: "Teams", count: 12}
       flow:                                   # style: human = the amber "a person decides" step
-        - {at: i4@0.02, text: "Scope"}
-        - {at: i4@0.25, text: "Trace"}
-        - {at: i4@0.62, text: "Find the change"}
-        - {at: i5@0.05, text: "Parent incident"}
-        - {at: i5@0.4, text: "Teams chat"}
-        - {at: i5@0.66, text: "Propose fix"}
-        - {at: i5@0.8, text: "Human approves", style: human}
-      note: {at: i5@0.82, text: "The agent has *no merge tool and no delete tool*. People stay in command."}
+        - {at: i4@0.02, text: "Find the cause"}
+        - {at: i4@0.22, text: "Mobilize people"}
+        - {at: i4@0.40, text: "Propose fix"}
+        - {at: i4@0.55, text: "Paperwork"}
+        - {at: i4@0.72, text: "Human approves", style: human}
+      note: {at: i4@0.74, text: "The agent has *no merge tool, no delete tool and no send button*. People stay in command."}
       range:                                  # the "simulated bank" card that replaces the diagram
         at: i7
         title: "The training ground: a simulated bank"
@@ -228,17 +220,26 @@ scenes:
     # Re-record with  uv run demo/record_live.py  (see README). Every number spoken here comes from
     # that run's own recap screen, so after re-recording check them against demo/live/run.json.
     narration:
-      d1: Let's watch it work. This is a real run, recorded on the simulated bank.
-      d2: A change has just shipped. Errors start in online banking, then mobile, then payments.
-      d3: Three seconds after the first error, NightWatch has noticed. The alerts that would page a person come later.
-      d4: Seven applications are failing, and dozens more feel it. NightWatch works out it is one problem, keeps one case, and sizes up the damage.
-      d6: It opens a priority one incident, assigns the team that owns the customer information file, and groups the help desk tickets about the same outage underneath it.
-      d7: Then it stands up a Teams channel and brings in eight people, from the on-call engineers to the incident commander. Each is told why they are there, and they get one briefing.
+      d1: Let's watch it work, in a real run on the simulated bank.
+      d2: A change ships. Errors start in online banking, then mobile, then payments.
+      d3: Three seconds after the first error, NightWatch has noticed. The alerts that page people come later.
+      d4: Six applications are failing. It works out they are one problem, keeps one case, and sizes up the damage.
       d5:
-        text: "Under a minute in, it names the cause in GitLab: a change that renamed every field in the customer profile. It passed review, and the service never returned an error itself."
-        say: "Under a minute in, it names the cause in Git Lab: a change that renamed every field in the customer profile. It passed review, and the service never returned an error itself."
-      d8: It writes the fix as a merge request. The one decision that matters stays with a person, who clicks merge. NightWatch raises the emergency change, the release goes out, and the errors drain away.
-      d9: "In this run: root cause in fifty-six seconds, and recovery confirmed two minutes and twenty-one seconds after the first error."
+        text: "It opens the parent incident in ServiceNow: priority one, assigned to the owning team, every affected system listed. Help desk tickets about the same outage go underneath it."
+        say: "It opens the parent incident in Service Now: priority one, assigned to the owning team, every affected system listed. Help desk tickets about the same outage go underneath it."
+      d6: It stands up the Teams chat, named with the incident number and what is wrong, and adds eight people. Each is told why they are there.
+      d7: "It posts the issue, then turns the chat into a call: everyone is prompted to join, with recording, transcription and the facilitator already on."
+      d8: And it drafts the critical incident communication for the priority one distribution list. A person reviews it and presses send.
+      d9: Seventy-two seconds in, it names the cause. A change renamed every field in the customer profile. It passed review, and the service never returned an error itself.
+      d10: It writes the fix as a merge request and posts the solution in the chat. The one decision that matters stays with a person, who clicks merge.
+      d11: NightWatch raises the emergency change, the release goes out, and the errors drain away.
+      d12: "Once it is resolved, it posts the resolution in Teams and fills out the incident: cause code, the change that caused it, the change that fixed it, and the impact."
+      d13: Resolving the parent closes every caller's ticket in one update.
+      d14:
+        text: "It opens the problem record, ready for tomorrow's 8 AM stand-up, and renames the chat with the problem number."
+        say: "It opens the problem record, ready for tomorrow's eight A.M. stand-up, and renames the chat with the problem number."
+      d15: "Then it drafts the all-clear: start, end, duration, impact and cause."
+      d16: "In this run: root cause in seventy-two seconds, and recovery confirmed three minutes and eight seconds after the first error."
     screen:
       live:
         recording: live/run.mp4               # made by record_live.py, with live/run.json beside it
@@ -255,20 +256,33 @@ scenes:
           - {at: d3, show: "Then the alerts start"}
           - {at: d4, show: "One problem, not dozens", skip: 6}
           - {at: d4@0.6, show: "How bad is it?"}
-          - {at: d6, show: "It opens the incident"}
-          - {at: d6@0.55, show: "Tickets about the same problem are grouped under it"}
-          - {at: d7, show: "It brings in the right people"}
-          - {at: d7@0.6, show: "And briefs them"}
-          - {at: d5, show: "It finds the cause"}
-          - {at: d5@0.45, show: "This is the change"}
-          - {at: d8, show: "It writes the fix"}
-          - {at: d8@0.22, from_event: merge_click, skip: -4, take: 7.5}
-          - {at: d8@0.52, show: "It ships the fix to production"}
-          - {at: d8@0.76, show: "Then checks it actually worked", skip: 14}
-          - {at: d9, show: "First error to fixed"}
+          - {at: d5, show: "It opens the parent incident"}
+          - {at: d5@0.42, show: "Every affected system is on the record"}
+          - {at: d5@0.66, show: "Tickets about the same problem are grouped under it"}
+          - {at: d6, show: "One chat, named for the incident"}
+          - {at: d6@0.55, show: "It brings in the right people"}
+          - {at: d7, show: "And briefs them"}
+          - {at: d7@0.3, show: "It turns the chat into a call"}
+          - {at: d8, show: "It drafts the incident communication"}
+          - {at: d9, show: "It finds the cause"}
+          - {at: d9@0.4, show: "This is the change"}
+          - {at: d10, show: "It writes the fix"}
+          - {at: d10@0.3, show: "And posts it where everyone is looking"}
+          - {at: d10@0.58, from_event: merge_click, skip: -4, take: 7.5}
+          - {at: d11, show: "It ships the fix to production"}
+          - {at: d11@0.5, show: "Then checks it actually worked", skip: 14}
+          - {at: d12, show: "All clear"}
+          - {at: d12@0.3, show: "It fills out the incident", skip: 1.6}
+          - {at: d13, show: "One update closes every caller ticket"}
+          - {at: d14, show: "It opens the problem record"}
+          - {at: d14@0.4, show: "Ready for the 8 AM stand-up"}
+          - {at: d14@0.7, show: "The chat takes the problem number"}
+          - {at: d15, show: "And drafts the all-clear"}
+          - {at: d15@0.45, show: "With the impact, the cause and what was done"}
+          - {at: d16, show: "First error to fixed"}
       result:
-        at: d9@0.62
-        big: "02:21"                          # <- spoken too (d9); from the run's recap screen
+        at: d16@0.62
+        big: "3 min 08 s"                     # <- spoken too (d16); from the run's recap screen
         text: from first error to recovery confirmed, in this recorded run
         versus: "Today's P1 average: *1 h 48 min* to resolve"
 
@@ -276,25 +290,21 @@ scenes:
   prod:
     chapter: Path to production
     narration:
-      g1: The path to production runs on tools the bank already has.
       g2:
-        text: "Google Gemini does the reasoning. It reads production through the GCP and Kibana MCP servers."
-        say: "Google Gemini does the reasoning. It reads production through the G.C.P. and Kibana M.C.P. servers."
-      g3:
-        text: "The GitLab MCP server and the KeyBank Codebase Analyst give it the code and its change history."
-        say: "The Git Lab M.C.P. server and the KeyBank Codebase Analyst give it the code and its change history."
+        text: "Google Gemini does the reasoning. It reads production through the GCP and Kibana MCP servers, and the code through GitLab and the KeyBank Codebase Analyst."
+        say: "Google Gemini does the reasoning. It reads production through the G.C.P. and Kibana M.C.P. servers, and the code through Git Lab and the KeyBank Codebase Analyst."
       g4:
         text: "Microsoft Studio connects it to Teams and ServiceNow, so it works where the incident team already works."
         say: "Microsoft Studio connects it to Teams and Service Now, so it works where the incident team already works."
-      g5: "We roll out in three phases. Shadow mode, where it only observes. Co-pilot, where a human approves each action. Then autonomy, for the patterns it has proven."
+      g5: "We roll out in three phases: shadow mode, co-pilot with a human approving each action, then autonomy for the patterns it has proven."
     screen:
       kicker: File 06 // Path to production
       headline: Built on the bank's own stack
       pipeline:                               # left to right. style: key = the highlighted box
-        - {at: g2@0.5, tag: "Signals", title: "GCP + Kibana", sub: "GCP MCP, Kibana MCP"}
+        - {at: g2@0.3, tag: "Signals", title: "GCP + Kibana", sub: "GCP MCP, Kibana MCP"}
         - {at: g2, tag: "Agent", title: "Google Gemini", sub: "NightWatch's reasoning", style: key}
-        - {at: g3, tag: "Code", title: "GitLab", sub: "GitLab MCP"}
-        - {at: g3@0.4, tag: "Code knowledge", title: "KeyBank Codebase Analyst", sub: "What the code does, who changed it"}
+        - {at: g2@0.62, tag: "Code", title: "GitLab", sub: "GitLab MCP"}
+        - {at: g2@0.78, tag: "Code knowledge", title: "KeyBank Codebase Analyst", sub: "What the code does, who changed it"}
         - {at: g4, tag: "People", title: "Microsoft Studio", sub: "Teams chat and calls"}
         - {at: g4@0.4, tag: "Record", title: "ServiceNow", sub: "Incidents, changes, problems"}
       guards:
@@ -302,16 +312,15 @@ scenes:
         - {at: g4@0.75, name: "No merge, no delete", text: "by design"}
         - {at: g4@0.9, name: "Every action", text: "written to the incident record"}
       phases:
-        - {at: g5@0.2, tag: "PHASE 1", title: "Shadow", text: "Observes and drafts. Changes nothing."}
-        - {at: g5@0.45, tag: "PHASE 2", title: "Co-pilot", text: "Acts once a human approves."}
-        - {at: g5@0.74, tag: "PHASE 3", title: "Autonomy", text: "Runs the patterns it has proven."}
+        - {at: g5@0.22, tag: "PHASE 1", title: "Shadow", text: "Observes and drafts. Changes nothing."}
+        - {at: g5@0.38, tag: "PHASE 2", title: "Co-pilot", text: "Acts once a human approves."}
+        - {at: g5@0.7, tag: "PHASE 3", title: "Autonomy", text: "Runs the patterns it has proven."}
 
   # ------------------------------------------------------------------ expansion
   next:
     chapter: What's next
     narration:
-      x1: And this is only the first mission.
-      x2: "Next: automatic phone calls to on-call support during off hours. The same playbook for non-production environments. Risk scoring on changes before they merge. And a memory of every past case, so NightWatch gets sharper each time."
+      x2: "Next: automatic phone calls to on-call support off hours. The same playbook for non-production. Risk scoring on changes before they merge. And a memory of every past case."
     screen:
       kicker: File 07 // Next missions
       headline: Only the first mission
@@ -320,7 +329,7 @@ scenes:
         - {at: x2@0.3, tab: "MISSION B", title: "Non-production", text: "The same playbook, minus the ServiceNow steps, for lower environments."}
         - {at: x2@0.52, tab: "MISSION C", title: "Change risk scoring", text: "Flag a risky merge before it ships, using the dependency graph."}
         - {at: x2@0.72, tab: "MISSION D", title: "Case memory", text: "Every solved incident makes the next diagnosis faster."}
-      also: {at: x2@0.92, text: "*Also on the board:* recorded, transcribed incident call · drafted Critical Incident Communication emails · problem records and post-incident summaries"}
+      also: {at: x2@0.92, text: "*Also on the board:* one-click approval to send a communication · a post-incident summary written from the call transcript"}
 
   # ------------------------------------------------------------------ close
   end:

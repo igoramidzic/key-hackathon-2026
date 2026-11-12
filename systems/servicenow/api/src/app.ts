@@ -10,11 +10,14 @@ import {
 } from '@sim/api-kit';
 import type { ResetResult } from '@sim/contracts';
 import {
+  ACTIVE_PROBLEM_STATES,
   ACTIVITY_KINDS,
   ACTIVITY_TABLES,
   type ActivityKind,
   type ActivityTable,
   type ActivityTailResult,
+  CAUSE_CODES,
+  type CauseCode,
   CHANGE_RISKS,
   CHANGE_STATES,
   CHANGE_TYPES,
@@ -23,7 +26,9 @@ import {
   type ChangeType,
   CLOSE_CODES,
   type CloseCode,
+  COMMUNICATION_KINDS,
   CONTACT_TYPES,
+  type CommunicationKind,
   type ContactType,
   INCIDENT_RELATIONSHIPS,
   INCIDENT_STATES,
@@ -31,14 +36,18 @@ import {
   isActiveState,
   LINK_TYPE_LABELS,
   LINK_TYPES,
+  PROBLEM_STATES,
   type Priority,
+  type ProblemState,
 } from '@sim/contracts/servicenow';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { ActivityFeed, type ActivityFilter } from './activity';
 import { ChangeStore } from './changes';
+import { CommunicationStore } from './communications';
 import { Directory, matchesQuery } from './directory';
 import { IncidentStore } from './incidents';
+import { ProblemStore } from './problems';
 
 export const SERVICE = 'servicenow-api';
 
@@ -76,11 +85,24 @@ const closeCode = z.preprocess(
   }),
 );
 
+const causeCode = z.preprocess(
+  (v) =>
+    typeof v === 'string'
+      ? (CAUSE_CODES.find((c) => c.toLowerCase() === v.trim().toLowerCase().replace(/_/g, ' ')) ??
+        v)
+      : v,
+  z.enum(CAUSE_CODES as [CauseCode, ...CauseCode[]], {
+    error: () => `cause_code must be one of: ${CAUSE_CODES.join(', ')}`,
+  }),
+);
+
 const contactType = z
   .enum(CONTACT_TYPES as [string, ...string[]])
   .transform((v) => v as (typeof CONTACT_TYPES)[number]);
 
 const text = z.string().trim().min(1);
+/** TLAs for the Affected CIs / Systems impacted lists. */
+const tlaList = z.array(text).max(50);
 
 const linkInput = z.object({
   type: z
@@ -105,6 +127,8 @@ const createSchema = z.object({
   assigned_to: text.optional(),
   parent_incident: text.optional(),
   child_incidents: z.array(text).max(100).optional(),
+  affected_cis: tlaList.optional(),
+  outage_start: text.optional(),
 });
 
 const updateSchema = z.object({
@@ -123,6 +147,15 @@ const updateSchema = z.object({
   parent_incident: text.nullable().optional(),
   close_code: closeCode.optional(),
   close_notes: text.optional(),
+  affected_cis: tlaList.optional(),
+  outage_start: text.nullable().optional(),
+  service_restored_at: text.nullable().optional(),
+  cause_code: causeCode.nullable().optional(),
+  caused_by_change: text.nullable().optional(),
+  resolved_by_change: text.nullable().optional(),
+  root_cause: z.string().nullable().optional(),
+  client_impact: z.string().nullable().optional(),
+  employee_impact: z.string().nullable().optional(),
   work_note: z.string().optional(),
   comment: z.string().optional(),
   add_links: z.array(linkInput).max(20).optional(),
@@ -325,6 +358,117 @@ const importSchema = z.object({
   deployments: z.array(deploymentRecord).optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Problems and Critical Incident Communications
+// ---------------------------------------------------------------------------
+
+const problemState = z.preprocess(lowerKey, enumOfValues<ProblemState>(PROBLEM_STATES, 'state'));
+const priorityValue = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().replace(/^p/i, '') : v),
+  z.coerce
+    .number()
+    .int()
+    .min(1, 'priority must be 1 (Critical) to 5 (Planning)')
+    .max(5, 'priority must be 1 (Critical) to 5 (Planning)')
+    .transform((n) => n as Priority),
+);
+const nullableText = z.string().nullable().optional();
+
+const problemCreateSchema = z.object({
+  short_description: text.max(160),
+  description: z.string().optional(),
+  app_tla: text.optional(),
+  incidents: z.array(text).max(50).optional(),
+  priority: priorityValue.optional(),
+  cause_code: causeCode.optional(),
+  root_cause: z.string().optional(),
+  workaround: z.string().optional(),
+  mitigation_plan: z.string().optional(),
+  action_items: z.string().optional(),
+  change_request: text.optional(),
+  caused_by_change: text.optional(),
+  vendor: z.string().optional(),
+  client_impact: z.string().optional(),
+  employee_impact: z.string().optional(),
+  chronic: z.boolean().optional(),
+  proactive: z.boolean().optional(),
+  assignment_group: text.optional(),
+  assigned_to: text.optional(),
+  problem_coordinator: text.optional(),
+  standup: z.boolean().optional(),
+  opened_by: text.optional(),
+});
+
+const problemUpdateSchema = z.object({
+  state: problemState.optional(),
+  short_description: text.max(160).optional(),
+  description: z.string().optional(),
+  priority: priorityValue.optional(),
+  cause_code: causeCode.optional(),
+  root_cause: nullableText,
+  workaround: nullableText,
+  mitigation_plan: nullableText,
+  action_items: nullableText,
+  change_request: text.nullable().optional(),
+  caused_by_change: text.nullable().optional(),
+  vendor: nullableText,
+  client_impact: nullableText,
+  employee_impact: nullableText,
+  chronic: z.boolean().optional(),
+  proactive: z.boolean().optional(),
+  assignment_group: text.nullable().optional(),
+  assigned_to: text.nullable().optional(),
+  problem_coordinator: text.nullable().optional(),
+  add_incidents: z.array(text).max(50).optional(),
+  standup: z.boolean().optional(),
+  work_note: z.string().optional(),
+  updated_by: text.optional(),
+});
+
+const problemListSchema = z.object({
+  ...pageQuery,
+  state: csv,
+  active: z.enum(['true', 'false']).optional(),
+  app_tla: z.string().optional(),
+  incident: z.string().optional(),
+  standup: z.string().optional(),
+  q: z.string().optional(),
+  opened_after: z.string().optional(),
+});
+
+const communicationKind = z.preprocess(
+  lowerKey,
+  enumOfValues<CommunicationKind>(COMMUNICATION_KINDS, 'kind'),
+);
+const communicationState = z.preprocess(lowerKey, z.enum(['draft', 'sent']));
+
+const communicationDraftSchema = z.object({
+  kind: communicationKind,
+  title: text.max(200).optional(),
+  description: text,
+  systems_impacted: tlaList.optional(),
+  start: text.optional(),
+  resolved: text.optional(),
+  client_impact: z.string().optional(),
+  employee_impact: z.string().optional(),
+  cause: z.string().optional(),
+  resolution_activities: z.string().optional(),
+  incident_manager: text.optional(),
+  communication_specialist: text.optional(),
+  technology_owners: z.array(text).max(20).optional(),
+  to: text.max(80).optional(),
+  drafted_by: text.optional(),
+});
+
+const communicationSendSchema = z.object({ sent_by: text.optional() });
+
+const communicationListSchema = z.object({
+  ...pageQuery,
+  incident: z.string().optional(),
+  state: communicationState.optional(),
+  kind: communicationKind.optional(),
+});
+
 const activityFilterShape = {
   table: csv,
   kind: csv,
@@ -364,6 +508,14 @@ export function buildApp() {
   const dir = new Directory();
   const store = new IncidentStore(dir);
   const changes = new ChangeStore(dir, store);
+  const problems = new ProblemStore(dir, store, changes);
+  const communications = new CommunicationStore(dir, store);
+  // The incident store is built first, so it reaches the stores above through these.
+  store.relations = {
+    changeNumber: (key) => changes.find(key)?.number,
+    communications: (incident) =>
+      communications.forIncident(incident).map((r) => communications.summary(r)),
+  };
   const activity = new ActivityFeed(store, changes);
 
   const app = createApi({
@@ -376,6 +528,10 @@ export function buildApp() {
       groups: dir.world.groups.length,
       change_requests: changes.records.length,
       scheduled_changes: changes.records.filter((r) => r.state === 'scheduled').length,
+      problems: problems.records.length,
+      open_problems: problems.records.filter((r) => ACTIVE_PROBLEM_STATES.includes(r.state)).length,
+      communications: communications.records.length,
+      draft_communications: communications.records.filter((r) => r.state === 'draft').length,
       activity_last_seq: activity.lastSeq,
       activity_waiters: activity.subscribers,
     }),
@@ -390,6 +546,8 @@ export function buildApp() {
   app.post('/admin/reset', (c) => {
     store.reset();
     changes.reset();
+    problems.reset();
+    communications.reset();
     return c.json<ResetResult>({ ok: true, service: SERVICE, reset_at: new Date().toISOString() });
   });
 
@@ -546,6 +704,67 @@ export function buildApp() {
   app.post('/api/incidents/:number/children', async (c) => {
     const body = await parseBody(c, linkChildrenSchema);
     return c.json(store.full(store.linkChildren(c.req.param('number'), body)));
+  });
+
+  app.post('/api/incidents/:number/communications', async (c) => {
+    const body = await parseBody(c, communicationDraftSchema);
+    const { rec, created } = communications.draft(c.req.param('number'), body);
+    return c.json(communications.full(rec), created ? 201 : 200);
+  });
+
+  // ----- Critical Incident Communications (automation drafts, a person sends) -----
+
+  app.get('/api/communications', (c) => {
+    const query = parseQuery(c, communicationListSchema);
+    const page = paginate(communications.list(query), query);
+    return c.json({ ...page, items: page.items.map((r) => communications.summary(r)) });
+  });
+
+  app.get('/api/communications/:number', (c) =>
+    c.json(communications.full(communications.require(c.req.param('number')))),
+  );
+
+  // The web UI's Send button. Deliberately not exposed as an MCP tool.
+  app.post('/api/communications/:number/send', async (c) => {
+    const body = await parseBody(c, communicationSendSchema);
+    return c.json(communications.full(communications.send(c.req.param('number'), body)));
+  });
+
+  // ----- Problems (the daily 8:00 AM problem stand-up) -----
+
+  app.get('/api/problems', (c) => {
+    const query = parseQuery(c, problemListSchema);
+    const records = problems.list({
+      state: csvEnum<ProblemState>(query.state, PROBLEM_STATES, 'state'),
+      active: query.active === undefined ? undefined : query.active === 'true',
+      app_tla: query.app_tla,
+      incident: query.incident,
+      standup: query.standup,
+      q: query.q,
+      opened_after: query.opened_after,
+    });
+    const page = paginate(records, query);
+    return c.json({ ...page, items: page.items.map((r) => problems.summary(r)) });
+  });
+
+  // Before `/api/problems/:number`, which would otherwise read "standup" as a number.
+  app.get('/api/problems/standup', (c) => {
+    const query = parseQuery(c, z.object({ date: z.string().default('next') }));
+    return c.json(problems.standup(query.date));
+  });
+
+  app.get('/api/problems/:number', (c) =>
+    c.json(problems.full(problems.require(c.req.param('number')))),
+  );
+
+  app.post('/api/problems', async (c) => {
+    const body = await parseBody(c, problemCreateSchema);
+    return c.json(problems.full(problems.create(body)), 201);
+  });
+
+  app.patch('/api/problems/:number', async (c) => {
+    const body = await parseBody(c, problemUpdateSchema);
+    return c.json(problems.full(problems.update(c.req.param('number'), body)));
   });
 
   // ----- Change requests (QV → production through KBR) -----
@@ -737,5 +956,5 @@ export function buildApp() {
     );
   });
 
-  return { app, store, changes, dir, activity };
+  return { app, store, changes, problems, communications, dir, activity };
 }

@@ -105,6 +105,8 @@ from GitLab's merged MRs after every reset (`backfillChangeHistory`).
 | Logs       | alert    | `http://localhost:3001/alerts/<id>`                        |
 | ServiceNow | incident | `http://localhost:3002/incidents/<INC number>`             |
 | ServiceNow | change   | `http://localhost:3002/change_requests/<CHG number>`       |
+| ServiceNow | problem  | `http://localhost:3002/problems/<PRB number>` (agenda: `/problems/standup`) |
+| ServiceNow | communication | `http://localhost:3002/communications/<CIC number>`   |
 | ServiceNow | app      | `http://localhost:3002/apps/<TLA>`                         |
 | ServiceNow | group    | `http://localhost:3002/groups/<group id>`                  |
 | ServiceNow | user     | `http://localhost:3002/users/<username>`                   |

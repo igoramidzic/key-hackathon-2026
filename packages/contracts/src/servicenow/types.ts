@@ -27,6 +27,10 @@ export interface IncidentCreateInput {
   parent_incident?: string;
   /** Existing incidents to attach as children of the new incident (it becomes their parent). */
   child_incidents?: string[];
+  /** Other applications (TLAs) the incident affects, besides the configuration item. */
+  affected_cis?: string[];
+  /** When the service started to degrade (ISO or relative). */
+  outage_start?: string;
 }
 
 /** Minimal incident shape the simulator reads back. */
@@ -66,6 +70,19 @@ export type CloseCode =
   | 'Duplicate'
   | 'No resolution provided'
   | 'User error';
+
+/** What caused the incident (Resolution section of an incident, and problems). */
+export type CauseCode =
+  | 'Change'
+  | 'Software defect'
+  | 'Configuration'
+  | 'Capacity'
+  | 'Hardware'
+  | 'Network'
+  | 'Data'
+  | 'Vendor'
+  | 'Human error'
+  | 'Under investigation';
 
 export type JournalType = 'work_note' | 'comment' | 'system';
 
@@ -183,6 +200,29 @@ export interface Incident extends IncidentSummary {
   closed_at: string | null;
   close_code: CloseCode | null;
   close_notes: string | null;
+  /** Other applications affected (the "Affected CIs" list), besides `app`. */
+  affected_cis: AppRef[];
+  // Resolution section: filled in as the incident is worked and required reading once resolved.
+  /** When the service started to degrade. */
+  outage_start: string | null;
+  /** When the service was confirmed back to normal. */
+  service_restored_at: string | null;
+  /** Minutes from `outage_start` to `service_restored_at`, when both are set. */
+  outage_duration_minutes: number | null;
+  cause_code: CauseCode | null;
+  /** The change request that caused the incident (CHG number). */
+  caused_by_change: string | null;
+  /** The change request that fixed it (CHG number). */
+  resolved_by_change: string | null;
+  root_cause: string | null;
+  /** Impact to clients, in plain business language. */
+  client_impact: string | null;
+  /** Impact to employees, in plain business language. */
+  employee_impact: string | null;
+  /** Problem record that investigates this incident (PRB number). */
+  problem: string | null;
+  /** Critical Incident Communications drafted or sent for this incident, oldest first. */
+  communications: CommunicationSummary[];
   reassignment_count: number;
   reopen_count: number;
   links: IncidentLink[];
@@ -241,6 +281,18 @@ export interface IncidentUpdateInput {
   /** Required (with close_notes) when moving to `resolved` or `closed`. */
   close_code?: CloseCode;
   close_notes?: string;
+  /** Replaces the Affected CIs list (TLAs). */
+  affected_cis?: string[];
+  /** ISO or relative time; null clears it. */
+  outage_start?: string | null;
+  service_restored_at?: string | null;
+  cause_code?: CauseCode | null;
+  /** CHG number; null clears it. */
+  caused_by_change?: string | null;
+  resolved_by_change?: string | null;
+  root_cause?: string | null;
+  client_impact?: string | null;
+  employee_impact?: string | null;
   /** Adds an internal work note in the same update. */
   work_note?: string;
   /** Adds a customer-visible comment in the same update. */
@@ -637,6 +689,253 @@ export interface ChangeImportInput {
   /** For closed changes. */
   release_id?: string;
   deployments?: ChangeDeployment[];
+}
+
+// ---------------------------------------------------------------------------
+// Problems (PRB): the record behind the daily 8:00 AM problem stand-up
+// ---------------------------------------------------------------------------
+
+/**
+ * A problem investigates one or more incidents after service is back: what happened, why, and
+ * what stops it happening again. New problems go on the agenda of the next daily problem
+ * stand-up (8:00 AM Eastern), where incidents that hit operations or customers are reviewed.
+ */
+export type ProblemState =
+  | 'open'
+  | 'root_cause_analysis'
+  | 'fix_in_progress'
+  | 'resolved'
+  | 'closed';
+
+export interface ProblemSummary {
+  sys_id: string;
+  number: string;
+  short_description: string;
+  state: ProblemState;
+  priority: Priority;
+  /** Highest priority among the incidents it investigates. */
+  incident_priority: Priority | null;
+  /** Configuration item. */
+  app: AppRef | null;
+  cause_code: CauseCode;
+  /** The same failure keeps coming back. */
+  chronic: boolean;
+  /** Opened before any incident happened. */
+  proactive: boolean;
+  assignment_group: GroupRef | null;
+  assigned_to: UserRef | null;
+  problem_coordinator: UserRef | null;
+  /** Incident numbers this problem investigates. */
+  incidents: string[];
+  /** Date (YYYY-MM-DD, Eastern) of the 8:00 AM stand-up it is on the agenda for; null = not on one. */
+  standup_date: string | null;
+  opened_at: string;
+  updated_at: string;
+  web_url: string;
+}
+
+/** Full problem (`GET /api/problems/:number`). */
+export interface Problem extends ProblemSummary {
+  description: string;
+  root_cause: string | null;
+  workaround: string | null;
+  /** "Mitigation/Repair Plan": what was done, and what is left to do. */
+  mitigation_plan: string | null;
+  action_items: string | null;
+  /** The change that fixed it (CHG number). */
+  change_request: string | null;
+  /** The change that caused it (CHG number). */
+  caused_by_change: string | null;
+  vendor: string | null;
+  /** Impact to clients / employees, copied to the stand-up agenda. */
+  client_impact: string | null;
+  employee_impact: string | null;
+  opened_by: UserRef;
+  updated_by: UserRef;
+  /** The incidents it investigates, oldest first. */
+  related_incidents: IncidentSummary[];
+  journal: JournalEntry[];
+}
+
+/** Body for `POST /api/problems`. */
+export interface ProblemCreateInput {
+  short_description: string;
+  description?: string;
+  app_tla?: string;
+  /** Incidents this problem investigates; each gets `problem` set. */
+  incidents?: string[];
+  /** Defaults to the highest priority among `incidents`, else 3. */
+  priority?: Priority;
+  /** Defaults to `Under investigation`. */
+  cause_code?: CauseCode;
+  root_cause?: string;
+  workaround?: string;
+  mitigation_plan?: string;
+  action_items?: string;
+  change_request?: string;
+  caused_by_change?: string;
+  vendor?: string;
+  client_impact?: string;
+  employee_impact?: string;
+  chronic?: boolean;
+  proactive?: boolean;
+  /** Defaults to the app's support group. */
+  assignment_group?: string;
+  assigned_to?: string;
+  /** Defaults to the Major Incident Management on-call. */
+  problem_coordinator?: string;
+  /** Put it on the next 8:00 AM stand-up (default true). */
+  standup?: boolean;
+  opened_by?: string;
+}
+
+export interface ProblemUpdateInput {
+  state?: ProblemState;
+  short_description?: string;
+  description?: string;
+  priority?: Priority;
+  cause_code?: CauseCode;
+  root_cause?: string | null;
+  workaround?: string | null;
+  mitigation_plan?: string | null;
+  action_items?: string | null;
+  change_request?: string | null;
+  caused_by_change?: string | null;
+  vendor?: string | null;
+  client_impact?: string | null;
+  employee_impact?: string | null;
+  chronic?: boolean;
+  proactive?: boolean;
+  assignment_group?: string | null;
+  assigned_to?: string | null;
+  problem_coordinator?: string | null;
+  /** More incidents to investigate. */
+  add_incidents?: string[];
+  /** true = next stand-up, false = take it off the agenda. */
+  standup?: boolean;
+  work_note?: string;
+  updated_by?: string;
+}
+
+export interface ProblemListQuery {
+  state?: ProblemState[];
+  /** true = not resolved or closed. */
+  active?: boolean;
+  app_tla?: string;
+  /** Problems that investigate this incident. */
+  incident?: string;
+  /** `next` (the upcoming 8:00 AM stand-up), `today`, or a YYYY-MM-DD date. */
+  standup?: string;
+  q?: string;
+  opened_after?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+/** `GET /api/problems/standup`: the agenda of one daily problem stand-up. */
+export interface ProblemStandup {
+  /** YYYY-MM-DD (Eastern). */
+  date: string;
+  /** ISO time of the call (8:00 AM Eastern on `date`). */
+  starts_at: string;
+  problems: Problem[];
+}
+
+// ---------------------------------------------------------------------------
+// Critical Incident Communications (CIC): the email to the internal distribution groups
+// ---------------------------------------------------------------------------
+
+/**
+ * `new` announces an active incident, `update` follows up, `restored` says service is back.
+ * A `restored` communication with no earlier one sent is titled NEW/RESTORED.
+ */
+export type CommunicationKind = 'new' | 'update' | 'restored';
+
+/** Drafts are written by automation or the Communication Specialist; a person sends them. */
+export type CommunicationState = 'draft' | 'sent';
+
+export interface CommunicationSummary {
+  /** e.g. `CIC0050001`. */
+  number: string;
+  /** Incident number. */
+  incident: string;
+  kind: CommunicationKind;
+  state: CommunicationState;
+  /** e.g. `<page> NEW - INC0010234 - Customer profile lookups failing`. */
+  subject: string;
+  /** Distribution group, e.g. `GRP_CIM_Tech_P1`. */
+  to: string;
+  priority: Priority;
+  drafted_at: string;
+  updated_at: string;
+  sent_at: string | null;
+  web_url: string;
+}
+
+/** Full communication (`GET /api/communications/:number`): everything the email shows. */
+export interface Communication extends CommunicationSummary {
+  from: string;
+  /** Headline after the incident number in the subject. */
+  title: string;
+  /** When the incident started. */
+  start: string;
+  /** When service was restored (`restored` only). */
+  resolved: string | null;
+  duration_minutes: number | null;
+  systems_impacted: AppRef[];
+  description: string;
+  client_impact: string | null;
+  employee_impact: string | null;
+  cause: string | null;
+  resolution_activities: string | null;
+  incident_manager: UserRef | null;
+  communication_specialist: UserRef | null;
+  technology_owners: UserRef[];
+  drafted_by: UserRef;
+  sent_by: UserRef | null;
+}
+
+/**
+ * Body for `POST /api/incidents/:number/communications`. Drafting the same `kind` again for an
+ * incident replaces the unsent draft instead of adding a second one.
+ */
+export interface CommunicationDraftInput {
+  kind: CommunicationKind;
+  /** Headline; defaults to the incident's short description. */
+  title?: string;
+  description: string;
+  /** TLAs; defaults to the incident's app and affected CIs. */
+  systems_impacted?: string[];
+  /** Defaults to the incident's outage start, else when it was opened. */
+  start?: string;
+  /** `restored`: defaults to the incident's service-restored time, else now. */
+  resolved?: string;
+  client_impact?: string;
+  employee_impact?: string;
+  cause?: string;
+  resolution_activities?: string;
+  /** Defaults to the Major Incident Management on-call (primary). */
+  incident_manager?: string;
+  /** Defaults to the Major Incident Management on-call (secondary). */
+  communication_specialist?: string;
+  /** Usernames; defaults to the owner of the incident's application. */
+  technology_owners?: string[];
+  /** Defaults to `GRP_CIM_Tech_P<priority>`. */
+  to?: string;
+  drafted_by?: string;
+}
+
+/** Body for `POST /api/communications/:number/send` (the web UI: a person sends, never a tool). */
+export interface CommunicationSendInput {
+  sent_by?: string;
+}
+
+export interface CommunicationListQuery {
+  incident?: string;
+  state?: CommunicationState;
+  kind?: CommunicationKind;
+  limit?: number;
+  cursor?: string;
 }
 
 // ---------------------------------------------------------------------------

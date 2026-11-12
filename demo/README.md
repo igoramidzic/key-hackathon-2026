@@ -38,7 +38,7 @@ points at a narration line that does not exist.
 
 The "Live case" chapter is not drawn: it plays a recording of the guided demo page working a real
 scenario, with the actual Logs, Moogsoft, ServiceNow, GitLab and Teams screens and a cursor that
-clicks Start and Merge. To record a new run (about three minutes; it resets the simulated bank):
+clicks Start and Merge. To record a new run (about five minutes; it resets the simulated bank):
 
 ```bash
 pnpm dev                      # terminal 1: the simulated bank
@@ -48,8 +48,10 @@ uv run demo/record_live.py    # terminal 3: records demo/live/run.mp4 and run.js
 
 Then rebuild. `content.yaml` (`demo` > `screen` > `live` > `cuts`) says which step of the recording
 plays under which narration line; the build speeds each part up to fit. The numbers spoken in that
-chapter (seven applications, eight people, fifty-six seconds, 2:21) come from that run's own recap
-screen, so check them against the new recording and change the narration if they moved.
+chapter (six applications, eight people, seventy-two seconds, 3 min 08 s) come from that run's own
+recap screen, so check them against the new recording and change the narration if they moved.
+The recorder opens the tour at its brisk pace (`/demo?pace=brisk`) so the Merge click comes about
+when the fix is ready. Durations on screen always carry their units ("22 min", "3 min 08 s").
 
 ## Things worth knowing
 

@@ -4,6 +4,8 @@ import type {
   AppSummary,
   ChangeRequest,
   ChangeRequestSummary,
+  Communication,
+  CommunicationSummary,
   Contact,
   DependencyGraph,
   GroupDetail,
@@ -12,6 +14,8 @@ import type {
   Incident,
   IncidentSummary,
   JournalEntry,
+  Problem,
+  ProblemSummary,
   UserDetail,
   UserRef,
   UserSummary,
@@ -64,6 +68,21 @@ export function journalRow(j: JournalEntry) {
   return { at: j.created_at, type: j.type, author: j.author.username, text: j.text };
 }
 
+export function communicationRow(c: CommunicationSummary) {
+  return {
+    number: c.number,
+    incident: c.incident,
+    kind: c.kind,
+    state: c.state,
+    subject: c.subject,
+    to: c.to,
+    priority: c.priority,
+    drafted_at: c.drafted_at,
+    sent_at: c.sent_at,
+    web_url: c.web_url,
+  };
+}
+
 export function incidentFull(i: Incident) {
   return {
     number: i.number,
@@ -90,6 +109,18 @@ export function incidentFull(i: Incident) {
     closed_at: i.closed_at,
     close_code: i.close_code,
     close_notes: i.close_notes,
+    affected_cis: i.affected_cis.map((a) => a.tla),
+    outage_start: i.outage_start,
+    service_restored_at: i.service_restored_at,
+    outage_duration_minutes: i.outage_duration_minutes,
+    cause_code: i.cause_code,
+    caused_by_change: i.caused_by_change,
+    resolved_by_change: i.resolved_by_change,
+    root_cause: i.root_cause,
+    client_impact: i.client_impact,
+    employee_impact: i.employee_impact,
+    problem: i.problem,
+    communications: i.communications.map(communicationRow),
     reassignment_count: i.reassignment_count,
     links: i.links.map((l) => ({ type: l.type, title: l.title, url: l.url })),
     parent_incident: i.parent_incident,
@@ -278,5 +309,103 @@ export function changeFull(c: ChangeRequest) {
     opened_at: c.opened_at,
     updated_at: c.updated_at,
     journal: c.journal.map(journalRow),
+  };
+}
+
+export function communicationFull(c: Communication) {
+  return {
+    number: c.number,
+    web_url: c.web_url,
+    incident: c.incident,
+    kind: c.kind,
+    state: c.state,
+    subject: c.subject,
+    from: c.from,
+    to: c.to,
+    priority: c.priority,
+    title: c.title,
+    start: c.start,
+    resolved: c.resolved,
+    duration_minutes: c.duration_minutes,
+    systems_impacted: c.systems_impacted.map((a) => a.tla),
+    description: c.description,
+    client_impact: c.client_impact,
+    employee_impact: c.employee_impact,
+    cause: c.cause,
+    resolution_activities: c.resolution_activities,
+    incident_manager: user(c.incident_manager),
+    communication_specialist: user(c.communication_specialist),
+    technology_owners: c.technology_owners.map(user),
+    drafted_by: c.drafted_by.username,
+    drafted_at: c.drafted_at,
+    updated_at: c.updated_at,
+    sent_by: c.sent_by?.username ?? null,
+    sent_at: c.sent_at,
+  };
+}
+
+export function problemRow(p: ProblemSummary) {
+  return {
+    number: p.number,
+    state: p.state,
+    priority: p.priority,
+    incident_priority: p.incident_priority,
+    short_description: p.short_description,
+    app_tla: p.app?.tla ?? null,
+    cause_code: p.cause_code,
+    chronic: p.chronic,
+    proactive: p.proactive,
+    assignment_group: group(p.assignment_group),
+    assigned_to: user(p.assigned_to),
+    problem_coordinator: user(p.problem_coordinator),
+    incidents: p.incidents,
+    standup_date: p.standup_date,
+    opened_at: p.opened_at,
+    updated_at: p.updated_at,
+    web_url: p.web_url,
+  };
+}
+
+export function problemFull(p: Problem) {
+  return {
+    number: p.number,
+    sys_id: p.sys_id,
+    web_url: p.web_url,
+    short_description: p.short_description,
+    description: p.description,
+    state: p.state,
+    priority: p.priority,
+    incident_priority: p.incident_priority,
+    app: app(p.app),
+    cause_code: p.cause_code,
+    chronic: p.chronic,
+    proactive: p.proactive,
+    assignment_group: group(p.assignment_group),
+    assigned_to: user(p.assigned_to),
+    problem_coordinator: user(p.problem_coordinator),
+    standup_date: p.standup_date,
+    root_cause: p.root_cause,
+    workaround: p.workaround,
+    mitigation_plan: p.mitigation_plan,
+    action_items: p.action_items,
+    change_request: p.change_request,
+    caused_by_change: p.caused_by_change,
+    vendor: p.vendor,
+    client_impact: p.client_impact,
+    employee_impact: p.employee_impact,
+    incidents: p.incidents,
+    related_incidents: p.related_incidents.map((i) => ({
+      number: i.number,
+      priority: i.priority,
+      state: i.state,
+      short_description: i.short_description,
+      app_tla: i.app?.tla ?? null,
+      opened_at: i.opened_at,
+      resolved_at: i.resolved_at,
+    })),
+    opened_by: p.opened_by.username,
+    opened_at: p.opened_at,
+    updated_at: p.updated_at,
+    journal: p.journal.map(journalRow),
   };
 }

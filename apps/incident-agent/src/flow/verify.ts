@@ -6,6 +6,7 @@
 import type { Case } from '../cases/types';
 import { duration, errorMessage, hhmm, isoNow } from '../util';
 import { logLink, type Summary, sinceClause, tlaClause } from './logs';
+import { type ProcessText, resolutionFields } from './process';
 import { failingApps } from './rca';
 import type { FlowDeps } from './steps';
 
@@ -155,15 +156,25 @@ export function draftResolution(c: Case): {
   };
 }
 
-/** Writes the drafted resolution; resolves the incident (and its children) when configured. */
-export async function writeResolution(deps: FlowDeps, c: Case): Promise<{ resolved: boolean }> {
+/**
+ * Writes the resolution: the close notes plus the incident's Resolution section (cause code, the
+ * change that caused it and the one that fixed it, outage window, impact, root cause). Resolves
+ * the incident (and its children) when configured; otherwise a person reviews and resolves.
+ */
+export async function writeResolution(
+  deps: FlowDeps,
+  c: Case,
+  text?: ProcessText,
+): Promise<{ resolved: boolean }> {
   const draft = draftResolution(c);
   const auto = deps.config.autoResolve;
+  const fields = text ? resolutionFields(c, text) : {};
   await deps.mcp.call(
     'update_incident',
     auto
       ? {
           number: c.incident!.number,
+          ...fields,
           state: 'resolved',
           close_code: draft.close_code,
           close_notes: draft.close_notes,
@@ -171,12 +182,24 @@ export async function writeResolution(deps: FlowDeps, c: Case): Promise<{ resolv
         }
       : {
           number: c.incident!.number,
+          ...fields,
           state: 'in_progress',
           work_note: `Resolution drafted, please review and resolve:\n\nClose code: ${draft.close_code}\n${draft.close_notes}`,
         },
     { caseId: c.id },
   );
-  c.resolution = { ...draft, drafted_at: isoNow(), resolved_at: auto ? isoNow() : null };
+  c.resolution = {
+    ...draft,
+    drafted_at: isoNow(),
+    resolved_at: auto ? isoNow() : null,
+    fields,
+  };
+  deps.store.event(
+    c,
+    'action',
+    `Filled the Resolution section of ${c.incident!.number}${auto ? ' and resolved it' : ''}${c.children.length && auto ? `; ${c.children.length} caller ticket(s) resolved with it` : ''}`,
+    { url: c.incident!.web_url },
+  );
   deps.store.save(c);
   return { resolved: auto };
 }

@@ -10,7 +10,7 @@ export type ChannelType = 'standard' | 'private';
 export type ChannelRole = 'owner' | 'member';
 export type MessageImportance = 'normal' | 'high' | 'urgent';
 export type MessageKind = 'message' | 'system';
-export type NotificationType = 'added_to_channel' | 'mention' | 'reply';
+export type NotificationType = 'added_to_channel' | 'mention' | 'reply' | 'meeting';
 
 export interface PersonRef {
   username: string;
@@ -81,13 +81,39 @@ export interface ChannelMember {
   added_at: string;
 }
 
+/** A call held in a channel: the incident bridge, optionally recorded and transcribed. */
+export interface Meeting {
+  /** e.g. `mtg_000001`. */
+  id: string;
+  title: string;
+  started_at: string;
+  /** Username. */
+  started_by: string;
+  started_by_name: string;
+  /** Null while the meeting is in progress. */
+  ended_at: string | null;
+  /** Set when the meeting has ended. */
+  duration_seconds: number | null;
+  recording: boolean;
+  transcription: boolean;
+  /** Facilitator, Teams' AI note-taker, is taking notes. */
+  facilitator: boolean;
+  /** `<channel web_url>?meeting=<id>`. */
+  join_url: string;
+}
+
 export interface ChannelSummary {
-  /** e.g. `ch_3f9a1c2b7d`. Channel names are also accepted wherever a channel id is. */
+  /**
+   * e.g. `ch_3f9a1c2b7d`. Never changes. Channel names (current or previous) are also accepted
+   * wherever a channel id is.
+   */
   id: string;
   team_id: string;
   team_name: string;
   /** Lowercase slug, e.g. `inc0010234-customer-profile-errors`. Unique within a team. */
   name: string;
+  /** Names the channel had before it was renamed, oldest first. They keep resolving to it. */
+  previous_names: string[];
   /** Human title, e.g. `INC0010234 Customer Profile Errors`. */
   display_name: string;
   description: string;
@@ -99,6 +125,8 @@ export interface ChannelSummary {
   member_count: number;
   message_count: number;
   last_activity_at: string;
+  /** The meeting in progress or, when none is, the most recent one. Null if there never was one. */
+  meeting: Meeting | null;
   web_url: string;
 }
 
@@ -171,6 +199,35 @@ export interface ChannelCreateInput {
   created_by?: string;
 }
 
+/** `PATCH /api/channels/:id`: at least one of `name`, `display_name`, `description`. */
+export interface ChannelUpdateInput {
+  /** New slug (normalised like on create). The old name keeps resolving to the channel. */
+  name?: string;
+  /** New human title. Defaults to one derived from `name` when the old title was derived too. */
+  display_name?: string;
+  description?: string;
+  /** Username or email. Defaults to `svc_incident_auto`. */
+  updated_by?: string;
+}
+
+export interface MeetingStartInput {
+  /** Defaults to the channel display name. */
+  title?: string;
+  /** Default true. */
+  record?: boolean;
+  /** Default true. */
+  transcribe?: boolean;
+  /** Default true. */
+  facilitator?: boolean;
+  /** Username or email. Defaults to `svc_incident_auto`. */
+  started_by?: string;
+}
+
+export interface MeetingEndInput {
+  /** Username or email. Defaults to `svc_incident_auto`. */
+  ended_by?: string;
+}
+
 export interface AddMembersInput {
   members: ChannelMemberInput[];
   /** Username or email. Defaults to `svc_incident_auto`. */
@@ -234,6 +291,24 @@ export interface RemoveMemberResult {
   channel_name: string;
   removed: ChannelMember;
   member_count: number;
+}
+
+/**
+ * `POST /api/channels/:id/meeting`. Idempotent: while a meeting is in progress it is returned
+ * again with `already_running: true` and nobody is notified.
+ */
+export interface MeetingStarted {
+  meeting: Meeting;
+  channel: ChannelSummary;
+  /** "Join the call" notifications sent to every member except the starter. */
+  notifications: Notification[];
+  already_running: boolean;
+}
+
+/** `POST /api/channels/:id/meeting/end`. */
+export interface MeetingEnded {
+  meeting: Meeting;
+  channel: ChannelSummary;
 }
 
 /** `POST /api/channels/:id/messages`: the message plus mention/reply notifications sent. */

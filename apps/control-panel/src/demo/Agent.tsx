@@ -6,10 +6,14 @@
 import { cn, SystemLogo } from '@sim/ui';
 import type { AgentEvent, CaseView, NativeView } from './types';
 
+/** Time since the first error, with its units spelled out: "56 s", "2 min 21 s", "1 h 05 min". */
 export const clockOffset = (fromMs: number | null, iso: string | null | undefined) => {
   if (fromMs === null || !iso) return null;
   const s = Math.max(0, Math.round((Date.parse(iso) - fromMs) / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ${String(s % 60).padStart(2, '0')} s`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
 };
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -22,6 +26,7 @@ const LANE_LABEL: Record<string, string> = {
   deep_rca: 'running a deeper root-cause analysis',
   fix: 'writing the fix',
   grouping: 'matching callers to the case',
+  communication: 'drafting the incident communication',
 };
 
 export interface Lane {
@@ -166,12 +171,20 @@ function Recap({ view, onsetMs }: { view: CaseView | null; onsetMs: number | nul
   const steps: { label: string; at: string | null | undefined; human?: boolean }[] = [
     { label: 'First error noticed', at: view.opened_at },
     { label: 'Incident declared', at: ms.declared },
-    { label: 'People briefed in one channel', at: ms['announce:briefing'] ?? ms.assembled },
+    {
+      label: 'People briefed in one chat, call recording',
+      at: ms['announce:briefing'] ?? ms.assembled,
+    },
+    { label: 'Incident communication drafted', at: ms.communication_new },
     { label: 'Root cause found', at: ms.root_cause },
     { label: 'Fix ready for review', at: ms.fix_proposed },
     { label: 'Fix merged', at: r.fix_mr?.merged_at ?? ms.shipping, human: true },
     { label: 'Fix in production', at: promoted ?? r.change?.deployed_at },
     { label: 'Recovery confirmed', at: ms['announce:recovered'] ?? r.verification?.healthy_since },
+    {
+      label: 'Resolution, problem record and all-clear written',
+      at: ms.communication_restored ?? ms.problem_opened,
+    },
   ].filter((s) => s.at);
   const stats = (
     [
@@ -186,7 +199,7 @@ function Recap({ view, onsetMs }: { view: CaseView | null; onsetMs: number | nul
       <ol>
         {steps.map((s) => (
           <li key={s.label} className={cn(s.human && 'is-human')}>
-            <time>{clockOffset(onsetMs, s.at) ?? '0:00'}</time>
+            <time>{clockOffset(onsetMs, s.at) ?? '0 s'}</time>
             <span>{s.label}</span>
             {s.human && <em>by a person</em>}
           </li>

@@ -76,6 +76,7 @@ export function FormField({
   mandatory,
   editable,
   href,
+  demo,
   className,
 }: {
   label: string;
@@ -86,11 +87,13 @@ export function FormField({
   mandatory?: 'empty' | 'filled';
   editable?: boolean;
   href?: string;
+  /** Name the guided demo points at (`field:<demo>`); defaults to the label in kebab case. */
+  demo?: string;
   className?: string;
 }) {
   return (
     <div
-      data-demo={`field:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+      data-demo={`field:${demo ?? label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
       className={cn(
         'grid gap-3',
         LABEL_COLS,

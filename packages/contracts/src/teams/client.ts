@@ -7,10 +7,15 @@ import type {
   ChannelCreated,
   ChannelCreateInput,
   ChannelSummary,
+  ChannelUpdateInput,
   ListChannelsQuery,
   ListMessagesQuery,
   ListNotificationsQuery,
   MarkReadResult,
+  MeetingEnded,
+  MeetingEndInput,
+  MeetingStarted,
+  MeetingStartInput,
   Message,
   MessageCreateInput,
   MessagePosted,
@@ -66,12 +71,22 @@ export function createTeamsClient(baseUrl: string) {
       http.get<Page<ChannelSummary>>('/api/channels', { ...query }),
     getChannel: (id: string) => http.get<Channel>(`/api/channels/${enc(id)}`),
     createChannel: (body: ChannelCreateInput) => http.post<ChannelCreated>('/api/channels', body),
+    /** Rename or re-describe a channel. Its id and web_url stay; the old name keeps resolving. */
+    updateChannel: (id: string, body: ChannelUpdateInput) =>
+      http.patch<Channel>(`/api/channels/${enc(id)}`, body),
     addChannelMembers: (id: string, body: AddMembersInput) =>
       http.post<AddMembersResult>(`/api/channels/${enc(id)}/members`, body),
     removeChannelMember: (id: string, user: string, removedBy?: string) =>
       del<RemoveMemberResult>(`/api/channels/${enc(id)}/members/${enc(user)}`, {
         removed_by: removedBy,
       }),
+
+    // Meetings
+    /** Turn the channel into a meeting. Returns the running one if there already is one. */
+    startMeeting: (id: string, body: MeetingStartInput = {}) =>
+      http.post<MeetingStarted>(`/api/channels/${enc(id)}/meeting`, body),
+    endMeeting: (id: string, body: MeetingEndInput = {}) =>
+      http.post<MeetingEnded>(`/api/channels/${enc(id)}/meeting/end`, body),
 
     // Messages
     listMessages: (id: string, query: ListMessagesQuery = {}) =>

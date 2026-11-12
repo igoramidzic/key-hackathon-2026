@@ -86,16 +86,21 @@ export class Correlator {
     return Math.max(120_000, (10 * 60_000) / this.deps.config.speed);
   }
 
+  /** When the world was last reset: what was resolved before that says nothing about it now. */
+  private resetAt = 0;
+
+  /** The world was reset (seeded baseline restored): drop the cool-down from earlier cases. */
+  worldReset(at = this.now()): void {
+    this.resetAt = at;
+  }
+
   private inCooldown(app: string): Case | undefined {
     const cooldown = this.deps.config.correlate.cooldownMin * 60_000;
-    return this.deps.store
-      .all()
-      .find(
-        (c) =>
-          c.phase === 'resolved' &&
-          c.apps.includes(app) &&
-          this.now() - Date.parse(c.milestones.resolved ?? c.updated_at) < cooldown,
-      );
+    return this.deps.store.all().find((c) => {
+      if (c.phase !== 'resolved' || !c.apps.includes(app)) return false;
+      const resolved = Date.parse(c.milestones.resolved ?? c.updated_at);
+      return resolved > this.resetAt && this.now() - resolved < cooldown;
+    });
   }
 
   private async traceApps(signal: LogSignal): Promise<Set<string> | undefined> {

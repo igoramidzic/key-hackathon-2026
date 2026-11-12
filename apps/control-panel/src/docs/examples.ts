@@ -74,6 +74,46 @@ export const EXAMPLES: Record<string, { args: Record<string, unknown>; note?: st
     },
     note: 'Use incidents you created: list_incidents with contact_type ["phone"] and relationship "standalone" finds calls to group.',
   },
+  list_problems: { args: { active: true, limit: 5 } },
+  get_problem: {
+    args: { number: '<PRB>' },
+    note: 'Problem numbers start at PRB0040001: copy one from list_problems or create_problem.',
+  },
+  create_problem: {
+    args: {
+      short_description: 'Customer profile lookups failing after a CIF change',
+      incidents: ['INC0010203'],
+      cause_code: 'Change',
+      root_cause: 'The profile API renamed its response fields; callers read the old names.',
+      mitigation_plan: 'Reverted through an emergency change.',
+      action_items: '- Add a contract test between CIF and its callers',
+      standup: true,
+    },
+    note: 'An incident can be investigated by one problem: use another incident to call it again.',
+  },
+  update_problem: {
+    args: {
+      number: '<PRB>',
+      state: 'root_cause_analysis',
+      work_note: 'Picked up for the stand-up.',
+    },
+    note: 'Use a problem you created.',
+  },
+  draft_incident_communication: {
+    args: {
+      incident: 'INC0010203',
+      kind: 'new',
+      title: 'Customer Profile Lookups Failing',
+      description:
+        'Starting at 2:14 PM ET, Online Banking (OLB) and Mobile Banking (MBL) began failing to load customer profiles. Incident Management engaged support teams at 2:16 PM ET.',
+    },
+    note: 'It only drafts: open the returned web_url in ServiceNow to review and send it.',
+  },
+  list_incident_communications: { args: { incident: 'INC0010203' } },
+  get_incident_communication: {
+    args: { number: '<CIC>' },
+    note: 'Communication numbers start at CIC0050001: copy one from draft_incident_communication.',
+  },
   // gitlab
   search_projects: { args: { tla: 'CIF' } },
   get_project: { args: { project: 'keybank/CIF00/customer-profile-api' } },
@@ -143,6 +183,22 @@ export const EXAMPLES: Record<string, { args: Record<string, unknown>; note?: st
   remove_channel_member: { args: { channel: 'general', user: 'tokafor' } },
   post_message: {
     args: { channel: 'general', body: 'Hello from the **agent docs**. @dwhitfield FYI.' },
+  },
+  update_channel: {
+    args: {
+      channel: 'inc0010203-docs-try-it',
+      name: 'inc0010203-prb0040001-docs-try-it',
+      display_name: 'INC0010203 · PRB0040001 Docs try it',
+    },
+    note: 'Rename a channel you created with create_channel; the old name keeps working.',
+  },
+  start_meeting: {
+    args: { channel: 'inc0010203-docs-try-it', title: 'INC0010203 bridge' },
+    note: 'Recording, transcription and the Facilitator are on by default. Calling it again returns the running meeting.',
+  },
+  end_meeting: {
+    args: { channel: 'inc0010203-docs-try-it' },
+    note: 'Needs a meeting in progress: call start_meeting first.',
   },
   read_messages: { args: { channel: 'general', limit: 5 } },
   list_notifications: { args: { user: 'dwhitfield' } },

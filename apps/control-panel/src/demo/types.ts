@@ -103,7 +103,19 @@ export interface CaseRecords {
     close_notes: string;
     drafted_at: string;
     resolved_at: string | null;
+    fields?: Record<string, string>;
   } | null;
+  meeting?: { id: string; started_at: string; ended_at: string | null; join_url: string } | null;
+  communications?: {
+    kind: 'new' | 'update' | 'restored';
+    number: string;
+    web_url: string;
+    subject: string;
+    to: string;
+    specialist: string | null;
+    drafted_at: string;
+  }[];
+  problem?: { number: string; web_url: string; standup_date: string | null } | null;
   milestones: Record<string, string>;
   signals: { logs: number; alerts: number; callers: number };
   cost_usd: number;
@@ -162,6 +174,7 @@ export const CHAPTERS = [
   'Fix',
   'Ship',
   'Recover',
+  'Close out',
 ] as const;
 export type Chapter = (typeof CHAPTERS)[number];
 

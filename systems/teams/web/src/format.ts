@@ -31,3 +31,14 @@ export function dayLabel(iso: string, now = new Date()): string {
   if (days === 1) return 'Yesterday';
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
+
+/** Running time of a call as a clock: `0:07`, `12:45`, `1:02:09`. */
+export function elapsedClock(sinceIso: string, now = Date.now()): string {
+  const total = Math.max(0, Math.floor((now - new Date(sinceIso).getTime()) / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`
+    : `${minutes}:${seconds}`;
+}

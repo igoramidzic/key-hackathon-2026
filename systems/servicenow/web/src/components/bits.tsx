@@ -123,7 +123,22 @@ export function GroupLink({ group }: { group: GroupRef | null }) {
   );
 }
 
-/** A white form section with a ruled header, as on ServiceNow forms and related lists. */
+/** Reference to another record by its number (INC, CHG, PRB, CIC), or a muted dash when empty. */
+export function RecordLink({
+  table,
+  number,
+}: {
+  table: 'incidents' | 'change_requests' | 'problems' | 'communications';
+  number: string | null;
+}) {
+  if (!number) return <Muted>—</Muted>;
+  return (
+    <Link to={`/${table}/${number}`} onClick={(e) => e.stopPropagation()} className={refLinkClass}>
+      {number}
+    </Link>
+  );
+}
+
 /** "Child Incidents (3)" → "child-incidents": the name the guided demo points at. */
 export function demoSlug(label: string): string {
   return label
@@ -133,6 +148,7 @@ export function demoSlug(label: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** A white form section with a ruled header, as on ServiceNow forms and related lists. */
 export function Section({
   title,
   actions,

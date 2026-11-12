@@ -3,6 +3,7 @@ import {
   type Channel,
   type ChannelMember,
   createTeamsClient,
+  type Meeting,
   type Message,
   type Notification,
 } from '@sim/contracts/teams';
@@ -23,14 +24,17 @@ const INSTRUCTIONS = `Simulated Microsoft Teams for the bank's IT organisation. 
 Typical flow:
 1. create_channel in the "Incident Response" team (the default) named inc<number>-<short-slug>, e.g. inc0010234-customer-profile-errors (lowercase, hyphens, max 50 chars; the ServiceNow incident number goes first). Add the initial people with a reason each.
 2. add_channel_members as you identify more owners (on-call support for the affected app, developers of the suspect repo, DBA/network/NOC). Always give a reason such as "support for CIF - Customer Information File".
-3. post_message for findings and status updates (markdown; @username mentions notify people; importance high/urgent for P1/P2).
-4. read_messages to see what humans replied (pass since=<last message id> to poll for new ones).
+3. post_message for findings and status updates (markdown; @username mentions notify people; importance high/urgent for P1/P2). Post the briefing first.
+4. start_meeting for P1/P2 incidents, once the channel and briefing exist: it turns the chat into a call with recording, transcription and the Facilitator (Teams' AI note-taker) on, and prompts every member to join. Calling it again while the call is running changes nothing.
+5. read_messages to see what humans replied (pass since=<last message id> to poll for new ones).
+6. update_channel when a problem record is opened: put the PRB number after the incident number, e.g. name inc0010234-prb0040001-customer-profile-errors, display_name "INC0010234 · PRB0040001 Customer profile errors". The channel id and web_url stay the same and the old name keeps working.
+7. end_meeting when the incident is resolved; the recording and transcript are saved to the channel.
 
 People: users are the same usernames (e.g. dwhitfield) or emails (dana.whitfield@keybank.example) as in ServiceNow and GitLab. Unknown users fail with suggested close matches. Your identity is svc_incident_auto ("Incident Automation"), the default creator/author.
 
-Notifications: every person added to a channel gets an activity notification ("You've been added to #<channel> as <reason>. Here's who else is in the channel: Name (role/reason), ...") plus a system message in the channel. @mentions create "mention" notifications; replies notify the parent author. list_notifications shows a user's activity feed.
+Notifications: start_meeting sends every channel member a "meeting" notification asking them to join the call. Every person added to a channel gets an activity notification ("You've been added to #<channel> as <reason>. Here's who else is in the channel: Name (role/reason), ...") plus a system message in the channel. @mentions create "mention" notifications; replies notify the parent author. list_notifications shows a user's activity feed.
 
-Channels are referenced by id (ch_...) or name. Each has a web_url to paste into ServiceNow work notes. There are no delete tools; remove_channel_member takes someone out of a channel.`;
+Channels are referenced by id (ch_...) or name (a renamed channel also answers to its previous names). Each has a web_url to paste into ServiceNow work notes. There are no delete tools; remove_channel_member takes someone out of a channel.`;
 
 // ---------------------------------------------------------------------------
 // Shared input fields
@@ -81,9 +85,31 @@ const member = (m: ChannelMember) => ({
   added_at: m.added_at,
 });
 
+/** The channel's current or most recent meeting; `in_progress` says which. */
+const meetingView = (m: Meeting) => ({
+  id: m.id,
+  title: m.title,
+  in_progress: m.ended_at === null,
+  started_at: m.started_at,
+  started_by: m.started_by,
+  ended_at: m.ended_at,
+  duration_seconds: m.duration_seconds,
+  recording: m.recording,
+  transcription: m.transcription,
+  facilitator: m.facilitator,
+  join_url: m.join_url,
+});
+
+const channelRefView = (c: { id: string; name: string; web_url: string }) => ({
+  id: c.id,
+  name: c.name,
+  web_url: c.web_url,
+});
+
 const channelView = (c: Channel) => ({
   id: c.id,
   name: c.name,
+  ...(c.previous_names.length ? { previous_names: c.previous_names } : {}),
   display_name: c.display_name,
   description: c.description,
   team: { id: c.team_id, name: c.team_name },
@@ -93,6 +119,7 @@ const channelView = (c: Channel) => ({
   created_at: c.created_at,
   message_count: c.message_count,
   last_activity_at: c.last_activity_at,
+  meeting: c.meeting ? meetingView(c.meeting) : null,
   web_url: c.web_url,
   member_count: c.member_count,
   members: c.members.map(member),
@@ -160,13 +187,13 @@ export const spec: McpServerSpec = {
     defineTool(server, 'list_channels', {
       title: 'List channels',
       description:
-        'Lists channels, most recently active first. Filter by team, member or text; incident_only returns incident channels (named inc<number>-<slug>). Use it to check whether an incident already has a channel before creating one. Returns compact summaries; use get_channel for members.',
+        'Lists channels, most recently active first. Filter by team, member or text; incident_only returns incident channels (named inc<number>-<slug>). Use it to check whether an incident already has a channel before creating one. Returns compact summaries, each with its current or most recent meeting (or null); use get_channel for members.',
       input: {
         q: z
           .string()
           .optional()
           .describe(
-            'Text in the channel name, display name or description, e.g. "inc0010234" or "customer-profile".',
+            'Text in the channel name (current or previous), display name or description, e.g. "inc0010234" or "customer-profile".',
           ),
         team: z.string().optional().describe('Team id or name, e.g. "incident-response".'),
         member: userRef('Only channels this person is a member of').optional(),
@@ -187,12 +214,14 @@ export const spec: McpServerSpec = {
           items: page.items.map((c) => ({
             id: c.id,
             name: c.name,
+            display_name: c.display_name,
             team: c.team_name,
             description: c.description,
             incident_number: c.incident_number,
             member_count: c.member_count,
             message_count: c.message_count,
             last_activity_at: c.last_activity_at,
+            meeting: c.meeting ? meetingView(c.meeting) : null,
             web_url: c.web_url,
           })),
           next_cursor: page.next_cursor,
@@ -204,7 +233,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'get_channel', {
       title: 'Get channel',
       description:
-        'Gets one channel with its full member list: username, name, title, role (owner/member), the reason each person was added, presence, and who added them. Use read_messages for the conversation.',
+        'Gets one channel with its full member list: username, name, title, role (owner/member), the reason each person was added, presence, and who added them. Also returns meeting: the call in progress (in_progress true) or the most recent one, or null if there never was one. Use read_messages for the conversation.',
       input: { channel: channelRef },
       annotations: READ_ONLY,
       run: async ({ channel }) => channelView(await api.getChannel(channel)),
@@ -262,6 +291,100 @@ export const spec: McpServerSpec = {
         return {
           channel: channelView(created),
           notifications_sent: created.notifications.map(notificationSent),
+        };
+      },
+    });
+
+    defineTool(server, 'update_channel', {
+      title: 'Update channel',
+      description:
+        'Renames a channel and/or changes its display name or description. Use it when a problem record is opened for the incident, to put the PRB number in the channel: name "inc0010234-prb0040001-customer-profile-errors", display_name "INC0010234 · PRB0040001 Customer profile errors". The channel id, web_url, members and messages are kept; the old name keeps resolving to the channel; incident_number follows the new name. Posts one system message in the channel ("Incident Automation renamed the channel to <display name>.") and notifies nobody. Pass at least one of name, display_name, description; repeating the same values changes nothing. Fails with a conflict if another channel in the team has the name. Returns the full channel.',
+      input: {
+        channel: channelRef,
+        name: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'New channel name, e.g. "inc0010234-prb0040001-customer-profile-errors". Lowercased and slugified like create_channel (max 50 chars); keep the incident number first.',
+          ),
+        display_name: z
+          .string()
+          .optional()
+          .describe(
+            'New human title shown in the channel header and channel list, e.g. "INC0010234 · PRB0040001 Customer profile errors". If omitted when renaming, a title derived from the old name is re-derived from the new one.',
+          ),
+        description: z
+          .string()
+          .optional()
+          .describe(
+            'New purpose shown in the channel header, e.g. "P2 CIF: customer profile lookups failing. ServiceNow INC0010234, problem PRB0040001."',
+          ),
+        updated_by: userRef('Who is making the change. Default svc_incident_auto').optional(),
+      },
+      annotations: IDEMPOTENT_WRITE,
+      run: async ({ channel, name, display_name, description, updated_by }) =>
+        channelView(
+          await api.updateChannel(channel, { name, display_name, description, updated_by }),
+        ),
+    });
+
+    defineTool(server, 'start_meeting', {
+      title: 'Start meeting',
+      description:
+        'Turns a channel\'s chat into a meeting (the incident call) and prompts people to join. Use it for P1/P2 incidents after creating the channel and posting the briefing. By default recording, transcription and the Facilitator (Teams\' AI note-taker) are switched on. Posts one system message in the channel with what is on and the join link, and sends every channel member except the starter a "meeting" notification ("Join the call in #<channel>: <title>"). Idempotent: if a meeting is already in progress it is returned with already_running true and nothing is posted or sent. Returns the meeting (id, title, join_url, recording/transcription/facilitator), the channel (id, name, web_url), the notifications sent and already_running.',
+      input: {
+        channel: channelRef,
+        title: z
+          .string()
+          .optional()
+          .describe(
+            'Meeting title. Default: the channel display name, e.g. "INC0010234 Customer Profile Errors".',
+          ),
+        record: z.boolean().optional().describe('Record the meeting. Default true.'),
+        transcribe: z.boolean().optional().describe('Transcribe the meeting. Default true.'),
+        facilitator: z
+          .boolean()
+          .optional()
+          .describe('Have the Facilitator (AI note-taker) take notes. Default true.'),
+        started_by: userRef('Who starts the meeting. Default svc_incident_auto').optional(),
+      },
+      annotations: IDEMPOTENT_WRITE,
+      run: async ({ channel, title, record, transcribe, facilitator, started_by }) => {
+        const started = await api.startMeeting(channel, {
+          title,
+          record,
+          transcribe,
+          facilitator,
+          started_by,
+        });
+        return {
+          meeting: meetingView(started.meeting),
+          channel: channelRefView(started.channel),
+          notifications_sent: started.notifications.map((n) => ({
+            to: n.username,
+            type: n.type,
+            body: n.body,
+          })),
+          already_running: started.already_running,
+        };
+      },
+    });
+
+    defineTool(server, 'end_meeting', {
+      title: 'End meeting',
+      description:
+        'Ends the meeting in progress in a channel. Use it when the incident is resolved. Sets ended_at and duration_seconds and posts a system message ("Meeting ended after 12 min. Recording and transcript saved to the channel."). Fails with a conflict when no meeting is in progress (check get_channel → meeting.in_progress). Returns the ended meeting and the channel (id, name, web_url).',
+      input: {
+        channel: channelRef,
+        ended_by: userRef('Who ends the meeting. Default svc_incident_auto').optional(),
+      },
+      annotations: WRITE,
+      run: async ({ channel, ended_by }) => {
+        const ended = await api.endMeeting(channel, { ended_by });
+        return {
+          meeting: meetingView(ended.meeting),
+          channel: channelRefView(ended.channel),
         };
       },
     });
@@ -374,7 +497,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'read_messages', {
       title: 'Read messages',
       description:
-        'Reads a channel\'s messages oldest to newest, including system messages (member added/removed) and threaded replies (reply_to_id). Pass since=<last message id you saw> (or an ISO time / "15m") to get only newer messages, e.g. to see what people replied. Paginate with cursor.',
+        'Reads a channel\'s messages oldest to newest, including system messages (member added/removed, channel renamed, meeting started/ended) and threaded replies (reply_to_id). Pass since=<last message id you saw> (or an ISO time / "15m") to get only newer messages, e.g. to see what people replied. Paginate with cursor.',
       input: {
         channel: channelRef,
         since: z
@@ -399,7 +522,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'list_notifications', {
       title: 'List notifications',
       description:
-        "Lists a person's Teams activity feed, newest first: added_to_channel (with the reason and who else is in the channel), mention and reply notifications. Useful to verify what someone was told when they were pulled into an incident. Returns unread_count too.",
+        "Lists a person's Teams activity feed, newest first: added_to_channel (with the reason and who else is in the channel), mention, reply and meeting (asked to join a call) notifications. Useful to verify what someone was told when they were pulled into an incident. Returns unread_count too.",
       input: {
         user: userRef('Whose activity feed'),
         unread_only: z.boolean().optional().describe('Only unread notifications.'),

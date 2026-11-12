@@ -15,6 +15,7 @@ import {
   briefing,
   callersGrouped,
   changeRaised,
+  communicationDrafted,
   failure,
   fixReady,
   notRecovered,
@@ -31,6 +32,16 @@ import { groupCallers } from './callers';
 import { chatHooks, pollChat } from './chat';
 import { openFixMr, proposeFix, reviewers } from './fix';
 import { declareIncident, linkAlerts, syncIncidentApp, workNote } from './incident';
+import {
+  draftCommunication,
+  endMeeting,
+  inviteSpecialist,
+  openProblem,
+  processText,
+  renameForProblem,
+  startMeeting,
+  syncIncidentRecord,
+} from './process';
 import { deepRca, quickRcaPhase } from './rca';
 import { autoRegroup, humanRegroup, splitOff } from './regroup';
 import { checkMerge, followChange, raiseChange } from './ship';
@@ -190,6 +201,7 @@ export async function upkeep(deps: FlowDeps, c: Case, ctx?: StepContext): Promis
   );
   if (fresh) await linkAlerts(deps, c);
   await syncIncidentApp(deps, c);
+  await syncIncidentRecord(deps, c);
   // #25: group the bankers' calls under the incident, until the case is resolved.
   const calls = c.signals.filter((x) => x.source === 'human').length;
   const lastCheck = c.milestones.callers_checked ? Date.parse(c.milestones.callers_checked) : 0;
@@ -314,9 +326,35 @@ export function assembled(deps: FlowDeps): StepFn {
   };
 }
 
-/** briefed → investigating: deep RCA and the fix run in the background; upkeep announces. */
+/**
+ * Background: the NEW Critical Incident Communication for the distribution group. The agent
+ * drafts it and tells the Communication Specialist; a person reviews and sends it.
+ */
+export function startCommunication(deps: FlowDeps, ctx: StepContext, c: Case): boolean {
+  const name = 'communication';
+  if (ctx.isRunning(c, name) || c.background[name]) return false;
+  if (c.communications.some((x) => x.kind === 'new')) return false;
+  return ctx.spawn(c, name, async (signal) => {
+    const { text } = await processText(deps, c, 'new');
+    const current = deps.store.get(c.id) ?? c;
+    if (signal.aborted || current.merged_into || isTerminal(current.phase)) return;
+    // Service came back while this was being written: the RESTORED one covers it.
+    if (current.communications.length || current.milestones['announce:recovered']) return;
+    const draft = await draftCommunication(deps, current, 'new', text);
+    if (draft?.specialist) await inviteSpecialist(deps, current, draft.specialist);
+    if (draft && current.channel)
+      queue(deps, current, `communication:${draft.number}`, communicationDrafted(draft), null);
+  });
+}
+
+/**
+ * briefed → investigating: turn the chat into a recorded call and draft the communication; deep
+ * RCA and the fix run in the background; upkeep announces.
+ */
 export function briefed(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
+    await startMeeting(deps, c);
+    startCommunication(deps, ctx, c);
     startDeepRca(deps, ctx, c);
     return { next: 'investigating' };
   };
@@ -483,19 +521,18 @@ export function verifying(deps: FlowDeps): StepFn {
       const link = await afterLink(deps, c);
       await flush(deps, c, true);
       await postNow(deps, c, 'recovered', recovered(c, r.beforePerMin, r.afterPerMin, link));
-      const { resolved } = await writeResolution(deps, c);
-      if (resolved) {
-        await resolveAlerts(deps, c);
-        await postNow(deps, c, 'resolution', resolutionMessage(c, true), null);
-        return {
-          next: 'resolved',
-          why: `recovered (${r.beforePerMin.toFixed(1)} → ${r.afterPerMin.toFixed(1)} errors/min) and resolved`,
-        };
-      }
-      await postNow(deps, c, 'resolution', resolutionMessage(c, false), null);
+      // The paperwork the process asks for once service is back: the Resolution section, the
+      // problem record for the stand-up, the chat's new name and the closing communication.
+      const { text } = await processText(deps, c, 'restored');
+      const { resolved } = await writeResolution(deps, c, text);
+      if (await openProblem(deps, c, text)) await renameForProblem(deps, c);
+      await draftCommunication(deps, c, 'restored', text);
+      await endMeeting(deps, c);
+      if (resolved) await resolveAlerts(deps, c);
+      await postNow(deps, c, 'resolution', resolutionMessage(c, resolved), null);
       return {
-        next: 'resolution_drafted',
-        why: `recovered (${r.beforePerMin.toFixed(1)} → ${r.afterPerMin.toFixed(1)} errors/min)`,
+        next: resolved ? 'resolved' : 'resolution_drafted',
+        why: `recovered (${r.beforePerMin.toFixed(1)} → ${r.afterPerMin.toFixed(1)} errors/min)${resolved ? ' and resolved' : ''}`,
       };
     }
     if (r.status === 'timeout') {

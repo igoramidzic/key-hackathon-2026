@@ -647,6 +647,16 @@ async function headline(detail: ScenarioDetail) {
   await step('channel members', 'teams', 'get_channel', { channel: channelId });
   await step('incident channels', 'teams', 'list_channels', { incident_only: true });
   await step('teams list', 'teams', 'list_teams', {});
+  await step(
+    'turn the chat into a recorded call',
+    'teams',
+    'start_meeting',
+    { channel: channelId, title: `${number} bridge` },
+    (o) =>
+      o.meeting?.recording && o.meeting?.transcription && o.meeting?.facilitator
+        ? true
+        : 'recording, transcription or facilitator is off',
+  );
   await step('remove MIM after handover', 'teams', 'remove_channel_member', {
     channel: channelId,
     user: 'tokafor',
@@ -703,6 +713,32 @@ async function headline(detail: ScenarioDetail) {
     await step('incident record', 'servicenow', 'get_incident', { number }, (o) =>
       (o.links ?? o.related_links ?? []).length >= 1 ? true : 'links missing',
     );
+    const draft = await step(
+      'draft the NEW Critical Incident Communication',
+      'servicenow',
+      'draft_incident_communication',
+      {
+        incident: number,
+        kind: 'new',
+        title: 'Customer Profile Lookups Failing',
+        description: `Applications that depend on ${culprit} are returning errors. Support teams are engaged.`,
+        systems_impacted: [culprit, ...failingTlas.slice(0, 4)],
+      },
+      (o) =>
+        o.state === 'draft' &&
+        /NEW - /.test(o.subject ?? '') &&
+        /^GRP_CIM_Tech_P\d$/.test(o.to ?? '')
+          ? true
+          : `state ${o.state}, subject ${o.subject}, to ${o.to}`,
+    );
+    if (draft)
+      await step(
+        'read the draft: nobody has sent it',
+        'servicenow',
+        'get_incident_communication',
+        { number: draft.number },
+        (o) => (o.state === 'draft' && !o.sent_at ? true : `state ${o.state}`),
+      );
   }
   if (alertId)
     await step('link alert to incident', 'logs', 'update_alert', {
@@ -791,6 +827,113 @@ async function headline(detail: ScenarioDetail) {
           call.state,
         );
       }
+
+      // --- Once resolved: the Resolution section, the problem record, the chat's name, the all-clear
+      await step(
+        'fill out the Resolution section',
+        'servicenow',
+        'update_incident',
+        {
+          number,
+          cause_code: 'Change',
+          ...(chg ? { resolved_by_change: chg.number } : {}),
+          service_restored_at: 'now',
+          root_cause: 'A naming strategy change broke the response contract callers rely on.',
+          client_impact: 'Clients could not load their profile in online and mobile banking.',
+          employee_impact: 'Branch staff could not look up customers.',
+        },
+        (o) => (o.cause_code === 'Change' && o.service_restored_at ? true : 'fields not set'),
+      );
+      const prb = await step(
+        'open the problem record for the 8 AM stand-up',
+        'servicenow',
+        'create_problem',
+        {
+          short_description: `${culprit} change broke its callers`,
+          incidents: [number],
+          cause_code: 'Change',
+          root_cause: 'A naming strategy change broke the response contract callers rely on.',
+          mitigation_plan: `Reverted by ${fixMr.web_url}.`,
+          standup: true,
+        },
+        (o) =>
+          /^PRB\d+$/.test(o.number ?? '') && o.standup_date
+            ? true
+            : `number ${o.number}, stand-up ${o.standup_date}`,
+      );
+      if (prb) {
+        await step(
+          'add action items to the problem',
+          'servicenow',
+          'update_problem',
+          {
+            number: prb.number,
+            action_items: '- Add a contract test between the service and its callers',
+            work_note: 'Action items added for the stand-up.',
+          },
+          (o) => (String(o.action_items ?? '').includes('contract test') ? true : 'not saved'),
+        );
+        await step(
+          'problem record links the incident',
+          'servicenow',
+          'get_problem',
+          { number: prb.number },
+          (o) =>
+            (o.incidents ?? []).some((i: unknown) => JSON.stringify(i).includes(number))
+              ? true
+              : 'incident missing',
+        );
+        await step(
+          "it is on the next stand-up's agenda",
+          'servicenow',
+          'list_problems',
+          { standup: 'next' },
+          (o) =>
+            o.items?.some((p: { number: string }) => p.number === prb.number)
+              ? true
+              : 'not on the agenda',
+        );
+        await step(
+          'rename the chat with the problem number',
+          'teams',
+          'update_channel',
+          {
+            channel: channelId,
+            name: `${number.toLowerCase()}-${prb.number.toLowerCase()}-customer-profile-errors`,
+          },
+          (o) =>
+            String(o.name ?? o.channel?.name).includes(prb.number.toLowerCase())
+              ? true
+              : 'not renamed',
+        );
+      }
+      await step('end the call', 'teams', 'end_meeting', { channel: channelId }, (o) =>
+        o.meeting?.ended_at ? true : 'still running',
+      );
+      await step(
+        'draft the RESTORED Critical Incident Communication',
+        'servicenow',
+        'draft_incident_communication',
+        {
+          incident: number,
+          kind: 'restored',
+          description: `Applications that depend on ${culprit} returned errors until a corrective change was promoted.`,
+          cause: 'A change to the response format of an upstream service.',
+          resolution_activities:
+            'The change was reverted and promoted through an emergency change.',
+        },
+        (o) => (/RESTORED - /.test(o.subject ?? '') && o.resolved ? true : `subject ${o.subject}`),
+      );
+      await step(
+        'both communications are on the incident, unsent',
+        'servicenow',
+        'list_incident_communications',
+        { incident: number },
+        (o) =>
+          o.items?.length === 2 && o.items.every((x: { state: string }) => x.state === 'draft')
+            ? true
+            : `${o.items?.length} communications`,
+      );
     }
   }
 

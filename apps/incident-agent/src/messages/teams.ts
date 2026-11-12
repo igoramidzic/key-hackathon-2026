@@ -252,13 +252,46 @@ export function notRecovered(_c: Case, after: number, logsUrl: string | null): M
   };
 }
 
+/** The closing message: what was resolved and the paperwork that now exists. */
 export function resolutionDrafted(c: Case, autoResolved: boolean): Message {
   const inc = c.incident ? md(c.incident.number, c.incident.web_url) : 'the incident';
-  return {
-    body: autoResolved
-      ? `**Resolved** ${inc} with the drafted resolution; the grouped calls were resolved with it. Time to restore: ${duration(Date.parse(c.milestones.verifying ?? c.updated_at) - Date.parse(c.scope?.onset ?? c.opened_at))}.`
+  const restore = duration(
+    Date.parse(c.verification?.healthy_since ?? c.milestones.verifying ?? c.updated_at) -
+      Date.parse(c.scope?.onset ?? c.opened_at),
+  );
+  const lines = [
+    autoResolved
+      ? `**Resolved** ${inc}. Time to restore: ${restore}.`
       : `**Resolution drafted** on ${inc}. Please review the close notes and resolve it.`,
-    mentions: [],
+    '',
+    `- **Incident record:** the Resolution section is filled in${c.resolution?.fields.cause_code ? ` (cause code ${c.resolution.fields.cause_code}${c.resolution.fields.caused_by_change ? `, caused by ${c.resolution.fields.caused_by_change}` : ''}${c.resolution.fields.resolved_by_change ? `, fixed by ${c.resolution.fields.resolved_by_change}` : ''})` : ''}.`,
+  ];
+  if (c.children.length)
+    lines.push(
+      `- **Caller tickets:** ${c.children.length} grouped under it ${autoResolved ? 'were resolved with the same resolution' : 'will be resolved with it'}.`,
+    );
+  if (c.problem)
+    lines.push(
+      `- **Problem record:** ${md(c.problem.number, c.problem.web_url)} is on the agenda for the 8:00 AM problem stand-up${c.problem.standup_date ? ` on ${c.problem.standup_date}` : ''}. This chat now carries its number.`,
+    );
+  const comm = c.communications.find((x) => x.kind === 'restored');
+  if (comm)
+    lines.push(
+      `- **Communication:** the RESTORED Critical Incident Communication ${md(comm.number, comm.web_url)} is drafted for ${comm.to || 'the distribution group'}${comm.specialist ? `; @${comm.specialist} please review and send` : ''}.`,
+    );
+  if (c.meeting) lines.push('- **Call:** ended; the recording and transcript are in this chat.');
+  return {
+    body: lines.join('\n'),
+    mentions: comm?.specialist ? [comm.specialist] : [],
+    importance: 'normal',
+  };
+}
+
+/** Tells the channel a communication draft is waiting for a person to send. */
+export function communicationDrafted(comm: Case['communications'][number]): Message {
+  return {
+    body: `**Critical Incident Communication drafted:** ${md(comm.subject || comm.number, comm.web_url)} for ${comm.to || 'the distribution group'}. ${comm.specialist ? `@${comm.specialist} please` : 'Communication Specialist: please'} review and send it from ServiceNow; I only draft.`,
+    mentions: comm.specialist ? [comm.specialist] : [],
     importance: 'normal',
   };
 }

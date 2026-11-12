@@ -288,7 +288,9 @@
   font-size: 16px;
 }
 .demo-recap time {
-  width: 48px;
+  width: 104px;
+  text-align: right;
+  white-space: nowrap;
   font-family: "Geist Mono Variable", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);

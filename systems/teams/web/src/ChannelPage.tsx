@@ -1,5 +1,11 @@
 import { URLS } from '@sim/contracts';
-import type { Channel, ChannelMember, Message, MessageImportance } from '@sim/contracts/teams';
+import type {
+  Channel,
+  ChannelMember,
+  Meeting,
+  Message,
+  MessageImportance,
+} from '@sim/contracts/teams';
 import { Button, cn, ErrorState, RelativeTime, Spinner } from '@sim/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -7,18 +13,20 @@ import {
   AtSign,
   ExternalLink,
   Hash,
+  Pencil,
   Reply,
   SendHorizontal,
   Siren,
   UserMinus,
   UserPlus,
   Users,
+  Video,
   X,
 } from 'lucide-react';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { api, keys, useAllChannels, useChannel, useMessages, useUser } from './api';
-import { BOT_USERNAME, dayLabel, messageTime } from './format';
+import { BOT_USERNAME, dayLabel, elapsedClock, messageTime } from './format';
 import { Markdown, type MarkdownEnv, MarkdownEnvProvider } from './Markdown';
 import { PersonAvatar, TeamAvatar } from './people';
 import { useViewer } from './viewer';
@@ -54,7 +62,12 @@ export function ChannelPage({ id }: { id: string }) {
   const env = useMemo<MarkdownEnv>(() => {
     const names = new Map(known);
     for (const u of others.data?.items ?? []) names.set(u.username, u.name);
-    const channelIds = new Map((channels.data?.items ?? []).map((c) => [c.name, c.id]));
+    // Renamed channels stay linkable by their old names; current names win.
+    const channelIds = new Map<string, string>();
+    for (const c of channels.data?.items ?? []) {
+      for (const old of c.previous_names) channelIds.set(old, c.id);
+    }
+    for (const c of channels.data?.items ?? []) channelIds.set(c.name, c.id);
     return { names, channels: channelIds, viewer, link };
   }, [known, others.data, channels.data, viewer, link]);
 
@@ -75,6 +88,9 @@ export function ChannelPage({ id }: { id: string }) {
           showMembers={showMembers}
           onToggleMembers={() => setShowMembers((v) => !v)}
         />
+        {channel.data.meeting && !channel.data.meeting.ended_at && (
+          <MeetingBar channel={channel.data} meeting={channel.data.meeting} />
+        )}
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             <MessageList channel={channel.data} messages={messages.data?.items} />
@@ -114,6 +130,7 @@ function ChannelHeader({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h1
+              data-demo="channel-title"
               className="truncate font-semibold text-[18px] leading-tight"
               title={channel.description || channel.name}
             >
@@ -191,6 +208,49 @@ function ChannelHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+/** Slim bar under the header while the channel's meeting is in progress. */
+function MeetingBar({ channel, meeting }: { channel: Channel; meeting: Meeting }) {
+  const { link } = useViewer();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const chip =
+    'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-card px-2 text-[12px] text-muted-foreground';
+  return (
+    <div
+      data-demo="meeting"
+      className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-4 md:px-5"
+    >
+      <Video className="size-4 shrink-0 text-muted-foreground" />
+      <span className="shrink-0 font-semibold text-[13px]">Meeting in progress</span>
+      <span
+        className="shrink-0 text-[13px] text-muted-foreground tabular-nums"
+        title={`Started by ${meeting.started_by_name}`}
+      >
+        {elapsedClock(meeting.started_at, now)}
+      </span>
+      <div className="ml-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+        {meeting.recording && (
+          <span className={chip}>
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-negative" />
+            Recording
+          </span>
+        )}
+        {meeting.transcription && <span className={chip}>Transcription</span>}
+        {meeting.facilitator && <span className={chip}>Facilitator</span>}
+      </div>
+      <div className="flex-1" />
+      <Button asChild size="sm" className="shrink-0 px-3 text-[13px]">
+        <Link to={link(`/channels/${channel.id}?meeting=${meeting.id}`)} title={meeting.title}>
+          Join
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -273,7 +333,7 @@ function MessageList({ channel, messages }: { channel: Channel; messages?: Messa
             <Fragment key={thread.root.id}>
               {showDay && <DayDivider label={day} />}
               {thread.root.kind === 'system' ? (
-                <SystemLine message={thread.root} />
+                <SystemLine message={thread.root} meeting={channel.meeting} />
               ) : (
                 <ThreadCard thread={thread} channel={channel} />
               )}
@@ -314,17 +374,32 @@ function DayDivider({ label }: { label: string }) {
   );
 }
 
-function SystemLine({ message }: { message: Message }) {
+function SystemLine({ message, meeting }: { message: Message; meeting: Meeting | null }) {
   const removed = /\b(removed|left)\b/.test(message.body);
   const created = /created the channel/.test(message.body);
-  const Icon = created ? Hash : removed ? UserMinus : UserPlus;
+  const edited = /(renamed the channel|updated the channel description)/.test(message.body);
+  const call = /^Meeting (started|ended)\b/.test(message.body);
+  const Icon = call ? Video : edited ? Pencil : created ? Hash : removed ? UserMinus : UserPlus;
+  // "Meeting started: … Join: <url>": the link is only useful while that meeting is running.
+  const join = message.body.match(/^(.*) Join: (https?:\/\/\S+)$/);
+  const live = join && meeting && !meeting.ended_at && join[2]!.endsWith(`?meeting=${meeting.id}`);
   return (
     <div
       id={message.id}
       className="flex items-center justify-center gap-1.5 rounded-[4px] px-4 py-0.5 text-center text-[12px] text-muted-foreground"
     >
       <Icon className="size-3.5 shrink-0" />
-      <span>{message.body}</span>
+      <span>
+        {join ? join[1] : message.body}
+        {live && (
+          <>
+            {' '}
+            <a href={join[2]} className="font-semibold text-primary hover:underline">
+              Join
+            </a>
+          </>
+        )}
+      </span>
       <span className="shrink-0 tabular-nums">{messageTime(message.created_at)}</span>
     </div>
   );

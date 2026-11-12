@@ -105,9 +105,14 @@ function SearchBox() {
     if (!needle) return [];
     return (channels.data?.items ?? [])
       .filter((c) =>
-        [c.name, c.display_name, c.description, c.team_name, c.incident_number ?? ''].some((v) =>
-          v.toLowerCase().includes(needle),
-        ),
+        [
+          c.name,
+          ...c.previous_names,
+          c.display_name,
+          c.description,
+          c.team_name,
+          c.incident_number ?? '',
+        ].some((v) => v.toLowerCase().includes(needle)),
       )
       .slice(0, 8);
   }, [q, channels.data]);

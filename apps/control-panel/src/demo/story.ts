@@ -72,6 +72,13 @@ export function buildStory(input: StoryInput): Beat[] {
   const recovered =
     !!ms['announce:recovered'] || !!v?.healthy_since || reached(view, 'resolution_drafted');
   const rate = (n: number) => Math.round(n).toLocaleString();
+  const comm = (kind: 'new' | 'restored') => r?.communications?.find((x) => x.kind === kind);
+  const newComm = comm('new');
+  const restoredComm = comm('restored');
+  const problem = r?.problem;
+  const resolved = !!r?.resolution?.resolved_at;
+  const closedOut = reached(view, 'resolution_drafted');
+  const snUrl = (path: string) => `${URLS.servicenow.web}${path}`;
 
   const beats: Beat[] = [
     {
@@ -179,7 +186,7 @@ export function buildStory(input: StoryInput): Beat[] {
     {
       id: 'incident',
       chapter: 'Mobilize',
-      title: 'It opens the incident',
+      title: 'It opens the parent incident',
       say: 'Priority is set, and it goes straight to the team that owns the suspect application.',
       ready: !!inc,
       at: ms.declared,
@@ -195,6 +202,26 @@ export function buildStory(input: StoryInput): Beat[] {
           ]
         : [],
       dwell: 7,
+    },
+    {
+      id: 'cis',
+      chapter: 'Mobilize',
+      title: 'Every affected system is on the record',
+      say: `The incident lists all ${plural(apps, 'application')} it touches, not just the one it is filed against.`,
+      ready: !!inc && apps > 1,
+      panes: inc
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: inc.web_url,
+              what: inc.number,
+              spots: [{ sel: demo('section:affected-cis') }],
+            },
+          ]
+        : [],
+      dwell: 5,
+      optional: true,
     },
     {
       id: 'callers',
@@ -217,12 +244,31 @@ export function buildStory(input: StoryInput): Beat[] {
       optional: true,
     },
     {
+      id: 'chat',
+      chapter: 'Mobilize',
+      title: 'One chat, named for the incident',
+      say: 'The name starts with the incident number and says what is wrong, so anyone can find it.',
+      ready: !!r?.channel,
+      at: ms.assembled,
+      panes: r?.channel
+        ? [
+            {
+              kind: 'frame',
+              screen: 'teams',
+              url: r.channel.web_url,
+              what: `#${r.channel.name}`,
+              spots: [{ sel: demo('channel-title'), label: inc?.number }],
+            },
+          ]
+        : [],
+      dwell: 5,
+    },
+    {
       id: 'channel',
       chapter: 'Mobilize',
       title: 'It brings in the right people',
       say: `${plural(r?.members.length ?? 0, 'person', 'people')} in one Teams channel, each told why they are there.`,
       ready: !!r?.channel,
-      at: ms.assembled,
       panes: r?.channel
         ? [
             {
@@ -259,6 +305,48 @@ export function buildStory(input: StoryInput): Beat[] {
           ]
         : [],
       dwell: 9,
+    },
+    {
+      id: 'call',
+      chapter: 'Mobilize',
+      title: 'It turns the chat into a call',
+      say: 'Everyone is prompted to join. Recording, transcription and the Facilitator are already on.',
+      ready: !!r?.meeting,
+      at: ms.meeting_started,
+      panes: r?.channel
+        ? [
+            {
+              kind: 'frame',
+              screen: 'teams',
+              url: r.channel.web_url,
+              what: `#${r.channel.name}`,
+              spots: [{ sel: demo('meeting') }],
+            },
+          ]
+        : [],
+      dwell: 6,
+      optional: true,
+    },
+    {
+      id: 'comms',
+      chapter: 'Mobilize',
+      title: 'It drafts the incident communication',
+      say: `The email that tells ${newComm?.to || 'the distribution group'} what is down. The agent drafts it; a person sends it.`,
+      ready: !!newComm,
+      at: ms.communication_new,
+      panes: newComm
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: newComm.web_url,
+              what: newComm.number,
+              spots: [{ sel: demo('communication-email') }],
+            },
+          ]
+        : [],
+      dwell: 8,
+      optional: true,
     },
     {
       id: 'rootcause',
@@ -309,6 +397,26 @@ export function buildStory(input: StoryInput): Beat[] {
           ]
         : [],
       dwell: 7,
+    },
+    {
+      id: 'solution',
+      chapter: 'Fix',
+      title: 'And posts it where everyone is looking',
+      say: 'The cause, the evidence and the fix go into the chat, with the owners called out by name.',
+      ready: Object.keys(ms).some((k) => k.startsWith('announce:fix_ready')),
+      panes: r?.channel
+        ? [
+            {
+              kind: 'frame',
+              screen: 'teams',
+              url: r.channel.web_url,
+              what: `#${r.channel.name}`,
+              spots: [{ sel: `${demo('message')}[data-author="${BOT}"]`, nth: 'last' }],
+            },
+          ]
+        : [],
+      dwell: 6,
+      optional: true,
     },
     {
       id: 'merge',
@@ -379,7 +487,7 @@ export function buildStory(input: StoryInput): Beat[] {
       id: 'recovered',
       chapter: 'Recover',
       title: 'All clear',
-      say: 'The agent tells the channel it is fixed, and writes up the resolution.',
+      say: 'The agent tells the chat it is fixed. Now the paperwork, which it also does.',
       ready: recovered,
       at: ms['announce:recovered'],
       panes: r?.channel
@@ -397,12 +505,164 @@ export function buildStory(input: StoryInput): Beat[] {
     },
   ];
 
+  beats.push(
+    {
+      id: 'resolution',
+      chapter: 'Close out',
+      title: 'It fills out the incident',
+      say: 'The Resolution section: cause code, the change that caused it, the change that fixed it, the outage window and the impact.',
+      ready: !!r?.resolution?.fields && Object.keys(r.resolution.fields).length > 0,
+      at: r?.resolution?.drafted_at,
+      panes: inc
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: inc.web_url,
+              what: inc.number,
+              spots: [{ sel: demo('section:resolution') }],
+            },
+          ]
+        : [],
+      dwell: 8,
+      optional: true,
+    },
+    {
+      id: 'bulk',
+      chapter: 'Close out',
+      title: 'One update closes every caller ticket',
+      say: `Resolving the parent resolved the ${plural(r?.children.length ?? 0, 'ticket')} under it, each with the same resolution for its caller.`,
+      ready: resolved && (r?.children.length ?? 0) > 0,
+      panes: inc
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: inc.web_url,
+              what: inc.number,
+              spots: [{ sel: demo('section:child-incidents') }],
+            },
+          ]
+        : [],
+      dwell: 5,
+      optional: true,
+    },
+    {
+      id: 'problem',
+      chapter: 'Close out',
+      title: 'It opens the problem record',
+      say: 'What happened, why, and what stops a repeat, tied to the incident and the changes.',
+      ready: !!problem,
+      at: ms.problem_opened,
+      panes: problem
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: problem.web_url,
+              what: problem.number,
+              spots: [{ sel: demo('field:root-cause') }, { sel: demo('field:action-items') }],
+            },
+          ]
+        : [],
+      dwell: 8,
+      optional: true,
+    },
+    {
+      id: 'standup',
+      chapter: 'Close out',
+      title: 'Ready for the 8 AM stand-up',
+      say: 'The problem is already on the agenda for the daily problem stand-up.',
+      ready: !!problem?.standup_date,
+      panes: problem
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: snUrl('/problems/standup'),
+              what: 'Problem stand-up',
+              spots: [{ sel: `${demo('standup-item')}[data-number="${problem.number}"]` }],
+            },
+          ]
+        : [],
+      dwell: 7,
+      optional: true,
+    },
+    {
+      id: 'renamed',
+      chapter: 'Close out',
+      title: 'The chat takes the problem number',
+      say: 'Renamed, so the conversation, the recording and the transcript are found from the problem too.',
+      ready: !!ms.channel_renamed,
+      at: ms.channel_renamed,
+      panes: r?.channel
+        ? [
+            {
+              kind: 'frame',
+              screen: 'teams',
+              url: r.channel.web_url,
+              what: `#${r.channel.name}`,
+              spots: [{ sel: demo('channel-title'), label: problem?.number }],
+            },
+          ]
+        : [],
+      dwell: 5,
+      optional: true,
+    },
+    {
+      id: 'restored',
+      chapter: 'Close out',
+      title: 'And drafts the all-clear',
+      say: 'The same email, now marked restored, with when it started, when it ended and how long it lasted.',
+      ready: !!restoredComm,
+      at: ms.communication_restored,
+      panes: restoredComm
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: restoredComm.web_url,
+              what: restoredComm.number,
+              spots: [{ sel: demo('communication-email') }],
+            },
+          ]
+        : [],
+      dwell: 6,
+      optional: true,
+    },
+    {
+      id: 'restored-detail',
+      chapter: 'Close out',
+      title: 'With the impact, the cause and what was done',
+      say: 'Written in plain language from what the agent found. A person reviews it and presses send.',
+      ready: !!restoredComm,
+      panes: restoredComm
+        ? [
+            {
+              kind: 'frame',
+              screen: 'servicenow',
+              url: restoredComm.web_url,
+              what: restoredComm.number,
+              spots: [
+                { sel: demo('communication-item:impact-to-our-clients') },
+                { sel: demo('communication-item:impact-to-our-employees') },
+                { sel: demo('communication-item:cause') },
+                { sel: demo('communication-item:resolution-activities') },
+              ],
+            },
+          ]
+        : [],
+      dwell: 7,
+      optional: true,
+    },
+  );
+
   beats.push({
     id: 'recap',
-    chapter: 'Recover',
+    chapter: 'Close out',
     title: 'First error to fixed',
     say: 'The agent did the legwork. A person made the one decision that mattered.',
-    ready: recovered,
+    ready: recovered && (closedOut || view?.open === false),
     panes: [{ kind: 'native', view: 'recap' }],
     dwell: 3600,
   });

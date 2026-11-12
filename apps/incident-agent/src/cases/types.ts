@@ -326,6 +326,43 @@ export const Case = z.object({
       close_notes: z.string(),
       drafted_at: z.string(),
       resolved_at: z.string().nullable().default(null),
+      /** The incident's Resolution section, as written to ServiceNow. */
+      fields: z.record(z.string(), z.string()).default({}),
+    })
+    .nullable()
+    .default(null),
+  /** The recorded call the incident channel was turned into. */
+  meeting: z
+    .object({
+      id: z.string(),
+      started_at: z.string(),
+      ended_at: z.string().nullable().default(null),
+      join_url: z.string().default(''),
+    })
+    .nullable()
+    .default(null),
+  /** Critical Incident Communication drafts (a person reviews and sends them). */
+  communications: z
+    .array(
+      z.object({
+        kind: z.enum(['new', 'update', 'restored']),
+        number: z.string(),
+        web_url: z.string(),
+        subject: z.string().default(''),
+        /** The headline, kept so the RESTORED communication carries the same one. */
+        title: z.string().default(''),
+        to: z.string().default(''),
+        specialist: z.string().nullable().default(null),
+        drafted_at: z.string(),
+      }),
+    )
+    .default([]),
+  /** The problem record opened for the daily problem stand-up. */
+  problem: z
+    .object({
+      number: z.string(),
+      web_url: z.string(),
+      standup_date: z.string().nullable().default(null),
     })
     .nullable()
     .default(null),

@@ -3,12 +3,15 @@ import {
   type ChangeCreateInput,
   type ChangeListQuery,
   type ChangeUpdateInput,
+  type CommunicationListQuery,
   createServiceNowClient,
   type GroupListQuery,
   type IncidentCreateInput,
   type IncidentListQuery,
   type IncidentUpdateInput,
   type JournalInput,
+  type ProblemListQuery,
+  type ProblemUpdateInput,
   type UserListQuery,
 } from '@sim/contracts/servicenow';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -160,6 +163,75 @@ export function useUpdateChange(number: string) {
     onSuccess: (change) => {
       client.setQueryData(['change', number], change);
       void client.invalidateQueries({ queryKey: ['changes'] });
+    },
+  });
+}
+
+export function useProblems(query: ProblemListQuery) {
+  return useQuery({
+    queryKey: ['problems', query],
+    queryFn: () => sn.listProblems(query),
+    refetchInterval: LIVE,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useProblem(number: string) {
+  return useQuery({
+    queryKey: ['problem', number],
+    queryFn: () => sn.getProblem(number),
+    refetchInterval: 3_000,
+  });
+}
+
+/** The agenda of a stand-up: `next`, `today` or a YYYY-MM-DD date. */
+export function useProblemStandup(date: string) {
+  return useQuery({
+    queryKey: ['problems', 'standup', date],
+    queryFn: () => sn.problemStandup(date),
+    refetchInterval: LIVE,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useUpdateProblem(number: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProblemUpdateInput) =>
+      sn.updateProblem(number, { updated_by: CURRENT_USER, ...body }),
+    onSuccess: (problem) => {
+      client.setQueryData(['problem', number], problem);
+      void client.invalidateQueries({ queryKey: ['problems'] });
+    },
+  });
+}
+
+export function useCommunications(query: CommunicationListQuery) {
+  return useQuery({
+    queryKey: ['communications', query],
+    queryFn: () => sn.listCommunications(query),
+    refetchInterval: LIVE,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCommunication(number: string) {
+  return useQuery({
+    queryKey: ['communication', number],
+    queryFn: () => sn.getCommunication(number),
+    refetchInterval: 3_000,
+  });
+}
+
+/** A person sends the draft: the current user, as with every other human action in this UI. */
+export function useSendCommunication(number: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => sn.sendCommunication(number, { sent_by: CURRENT_USER }),
+    onSuccess: (communication) => {
+      client.setQueryData(['communication', number], communication);
+      void client.invalidateQueries({ queryKey: ['communications'] });
+      void client.invalidateQueries({ queryKey: ['incident', communication.incident] });
     },
   });
 }

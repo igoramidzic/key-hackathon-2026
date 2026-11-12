@@ -16,14 +16,17 @@ import {
 import {
   AppWindow,
   Bell,
+  CalendarClock,
   ChevronDown,
   CircleHelp,
   Clock,
   GitPullRequestArrow,
   Inbox,
   type LucideIcon,
+  Mail,
   Plus,
   Search,
+  SearchCheck,
   Star,
   UserRound,
   UsersRound,
@@ -66,6 +69,13 @@ function fallbackTitle(pathname: string, search: string): string {
     if (id === 'new') return 'Change Request - Create';
     return id ? `Change Request - ${id}` : 'Change Requests';
   }
+  if (table === 'problems') {
+    if (id === 'standup') return 'Problem stand-up';
+    return id ? `Problem - ${id}` : 'Problems';
+  }
+  if (table === 'communications') {
+    return id ? `Communication - ${id}` : 'Critical Incident Communications';
+  }
   if (table === 'apps') return id ? `Business Application - ${id}` : 'Business Applications';
   if (table === 'groups') return id ? `Group - ${id}` : 'Groups';
   if (table === 'users') return id ? `User - ${id}` : 'Users';
@@ -92,6 +102,18 @@ const ALL_MENU: { heading: string; items: MenuLink[] }[] = [
       { label: 'Open - Unassigned', to: '/incidents?view=unassigned', icon: Inbox },
       { label: 'All', to: '/incidents?view=all', icon: Inbox },
     ],
+  },
+  {
+    heading: 'Problem',
+    items: [
+      { label: 'Open', to: '/problems', icon: SearchCheck },
+      { label: 'Stand-up agenda', to: '/problems/standup', icon: CalendarClock },
+      { label: 'All', to: '/problems?view=all', icon: SearchCheck },
+    ],
+  },
+  {
+    heading: 'Critical Incident Communication',
+    items: [{ label: 'Communications', to: '/communications', icon: Mail }],
   },
   {
     heading: 'Change',
@@ -129,6 +151,8 @@ const FAVORITES: MenuLink[] = [
 
 const WORKSPACES: MenuLink[] = [
   { label: 'Incidents', to: '/incidents', icon: Inbox },
+  { label: 'Problems', to: '/problems', icon: SearchCheck },
+  { label: 'Communications', to: '/communications', icon: Mail },
   { label: 'Change Requests', to: '/change_requests', icon: GitPullRequestArrow },
   { label: 'Business Applications', to: '/apps', icon: AppWindow },
   { label: 'Groups', to: '/groups', icon: UsersRound },

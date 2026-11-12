@@ -53,6 +53,7 @@ const names = tools.map((t) => t.name).sort();
 const expected = [
   'add_channel_members',
   'create_channel',
+  'end_meeting',
   'get_channel',
   'list_channels',
   'list_notifications',
@@ -60,6 +61,8 @@ const expected = [
   'post_message',
   'read_messages',
   'remove_channel_member',
+  'start_meeting',
+  'update_channel',
 ];
 check(`tools listed: ${names.join(', ')}`, JSON.stringify(names) === JSON.stringify(expected));
 
@@ -241,6 +244,96 @@ const afterRemove = await call('get_channel', { channel: channelName });
 check('member gone after removal', !afterRemove.members.some((m: Json) => m.username === 'mbell'));
 const removeAgain = await callError('remove_channel_member', { channel: channelId, user: 'mbell' });
 check('removing a non-member explains why', removeAgain.includes('not a member'), removeAgain);
+
+// start_meeting / end_meeting
+const noMeeting = await callError('end_meeting', { channel: channelId });
+check('end_meeting without a meeting is a conflict', noMeeting.includes('No meeting'), noMeeting);
+const started = await call('start_meeting', { channel: channelId });
+check(
+  'start_meeting defaults: recording, transcription and Facilitator on',
+  /^mtg_/.test(started.meeting.id) &&
+    started.meeting.in_progress === true &&
+    started.meeting.recording &&
+    started.meeting.transcription &&
+    started.meeting.facilitator &&
+    started.meeting.join_url === `${started.channel.web_url}?meeting=${started.meeting.id}` &&
+    started.channel.id === channelId &&
+    started.already_running === false,
+  started,
+);
+check(
+  'start_meeting asked every member but the starter to join',
+  started.notifications_sent.length === 3 &&
+    started.notifications_sent.every(
+      (n: Json) => n.type === 'meeting' && n.body.startsWith(`Join the call in #${channelName}`),
+    ) &&
+    !started.notifications_sent.some((n: Json) => n.to === 'svc_incident_auto'),
+  started.notifications_sent,
+);
+const startedAgain = await call('start_meeting', { channel: channelName, record: false });
+check(
+  'start_meeting is idempotent while the meeting runs',
+  startedAgain.already_running === true &&
+    startedAgain.meeting.id === started.meeting.id &&
+    startedAgain.meeting.recording === true &&
+    startedAgain.notifications_sent.length === 0,
+  startedAgain,
+);
+const inCall = await call('get_channel', { channel: channelId });
+check(
+  'get_channel shows the meeting in progress',
+  inCall.meeting?.id === started.meeting.id && inCall.meeting.in_progress === true,
+  inCall.meeting,
+);
+
+// update_channel: rename once a problem record exists
+const renamedName = 'inc0010234-prb0040001-customer-profile-errors';
+const renamed = await call('update_channel', {
+  channel: channelName,
+  name: renamedName,
+  display_name: 'INC0010234 · PRB0040001 Customer profile errors',
+});
+check(
+  'update_channel renames and keeps id, web_url and incident number',
+  renamed.id === channelId &&
+    renamed.name === renamedName &&
+    renamed.display_name === 'INC0010234 · PRB0040001 Customer profile errors' &&
+    renamed.web_url === created.channel.web_url &&
+    renamed.incident_number === 'INC0010234' &&
+    renamed.previous_names[0] === channelName,
+  renamed,
+);
+const byOldName = await call('get_channel', { channel: channelName });
+check('the old name still resolves', byOldName.id === channelId && byOldName.name === renamedName);
+const nothing = await callError('update_channel', { channel: channelId });
+check('update_channel needs at least one field', nothing.includes('at least one'), nothing);
+const taken = await callError('update_channel', { channel: channelId, name: 'general' });
+check('update_channel rejects a taken name', taken.includes('already taken'), taken);
+
+const ended = await call('end_meeting', { channel: channelName });
+check(
+  'end_meeting sets ended_at and duration',
+  ended.meeting.id === started.meeting.id &&
+    ended.meeting.in_progress === false &&
+    !!ended.meeting.ended_at &&
+    typeof ended.meeting.duration_seconds === 'number' &&
+    ended.channel.name === renamedName,
+  ended,
+);
+const afterCall = await call('read_messages', { channel: channelId, since: replied.id });
+check(
+  'system messages for meeting start, rename and meeting end',
+  ['Meeting started:', 'renamed the channel to', 'Meeting ended after'].every((text) =>
+    afterCall.items.some((m: Json) => m.kind === 'system' && m.body.includes(text)),
+  ),
+  afterCall.items.map((m: Json) => m.body),
+);
+const listedAfter = await call('list_channels', { q: channelName });
+check(
+  'list_channels finds the channel by its old name, with the ended meeting',
+  listedAfter.items[0]?.id === channelId && listedAfter.items[0].meeting?.in_progress === false,
+  listedAfter,
+);
 
 await client.close();
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll MCP checks passed');

@@ -355,4 +355,13 @@ describe('settle window, late arrivals, weak, alerts, humans, cooldown', () => {
     const d = await correlator.ingest(logSignal('ZDD'));
     expect(d.action).toBe('suppress');
   });
+
+  it('a world reset ends the cooldown: the same apps failing again is a new problem', async () => {
+    const { correlator, store } = setup(tinyGraph());
+    await correlator.ingest(logSignal('ZDD'));
+    store.setPhase(store.open()[0]!, 'resolved');
+    correlator.worldReset(Date.now() + 1_000);
+    const d = await correlator.ingest(logSignal('ZDD'));
+    expect(d.action).toBe('new');
+  });
 });

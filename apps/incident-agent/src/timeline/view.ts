@@ -123,7 +123,12 @@ export interface CaseRecords {
     close_notes: string;
     drafted_at: string;
     resolved_at: string | null;
+    /** The incident's Resolution section as written to ServiceNow. */
+    fields: Record<string, string>;
   } | null;
+  meeting: Case['meeting'];
+  communications: Case['communications'];
+  problem: Case['problem'];
   /** Phase and announcement times (ISO), keyed as in the case. */
   milestones: Record<string, string>;
   signals: { logs: number; alerts: number; callers: number };
@@ -455,6 +460,9 @@ function records(c: Case): CaseRecords {
     },
     verification: c.verification,
     resolution: c.resolution,
+    meeting: c.meeting,
+    communications: c.communications,
+    problem: c.problem,
     milestones: Object.fromEntries(Object.entries(c.milestones).filter(([, v]) => ISO.test(v))),
     signals: count,
     cost_usd: Math.round(cost * 1000) / 1000,

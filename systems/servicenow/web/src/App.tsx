@@ -3,10 +3,12 @@ import { Navigate, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { AppDetail, AppList } from './pages/Apps';
 import { ChangeCreate, ChangeDetail, ChangeList } from './pages/Changes';
+import { CommunicationDetail, CommunicationList } from './pages/Communications';
 import { GroupDetail, GroupList } from './pages/Groups';
 import { IncidentCreate } from './pages/IncidentCreate';
 import { IncidentDetail } from './pages/IncidentDetail';
 import { IncidentList } from './pages/IncidentList';
+import { ProblemDetail, ProblemList, ProblemStandupPage } from './pages/Problems';
 import { SearchPage } from './pages/Search';
 import { UserDetail, UserList } from './pages/Users';
 
@@ -18,6 +20,11 @@ export function App() {
         <Route path="/incidents" element={<IncidentList />} />
         <Route path="/incidents/new" element={<IncidentCreate />} />
         <Route path="/incidents/:number" element={<IncidentDetail />} />
+        <Route path="/problems" element={<ProblemList />} />
+        <Route path="/problems/standup" element={<ProblemStandupPage />} />
+        <Route path="/problems/:number" element={<ProblemDetail />} />
+        <Route path="/communications" element={<CommunicationList />} />
+        <Route path="/communications/:number" element={<CommunicationDetail />} />
         <Route path="/change_requests" element={<ChangeList />} />
         <Route path="/change_requests/new" element={<ChangeCreate />} />
         <Route path="/change_requests/:number" element={<ChangeDetail />} />

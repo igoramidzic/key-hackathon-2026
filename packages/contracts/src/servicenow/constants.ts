@@ -2,11 +2,13 @@ import { URLS } from '../config';
 import type {
   ActivityKind,
   ActivityTable,
+  CauseCode,
   ChangeCloseCode,
   ChangeRisk,
   ChangeState,
   ChangeType,
   CloseCode,
+  CommunicationKind,
   ContactType,
   GroupType,
   ImpactUrgency,
@@ -15,6 +17,7 @@ import type {
   IncidentState,
   LinkType,
   Priority,
+  ProblemState,
   ReleaseStatus,
 } from './types';
 
@@ -147,6 +150,8 @@ export const serviceNowWebUrl = {
   group: (id: string, base = URLS.servicenow.web) => `${base}/groups/${id}`,
   user: (username: string, base = URLS.servicenow.web) => `${base}/users/${username}`,
   change: (number: string, base = URLS.servicenow.web) => `${base}/change_requests/${number}`,
+  problem: (number: string, base = URLS.servicenow.web) => `${base}/problems/${number}`,
+  communication: (number: string, base = URLS.servicenow.web) => `${base}/communications/${number}`,
 };
 
 // ---------------------------------------------------------------------------
@@ -233,3 +238,64 @@ export const ACTIVITY_KINDS: ActivityKind[] = [
   'change_request.work_note',
   'change_request.comment',
 ];
+
+// ---------------------------------------------------------------------------
+// Resolution, problems and Critical Incident Communications
+// ---------------------------------------------------------------------------
+
+export const CAUSE_CODES: CauseCode[] = [
+  'Change',
+  'Software defect',
+  'Configuration',
+  'Capacity',
+  'Hardware',
+  'Network',
+  'Data',
+  'Vendor',
+  'Human error',
+  'Under investigation',
+];
+
+export const PROBLEM_STATES: ProblemState[] = [
+  'open',
+  'root_cause_analysis',
+  'fix_in_progress',
+  'resolved',
+  'closed',
+];
+
+export const ACTIVE_PROBLEM_STATES: ProblemState[] = [
+  'open',
+  'root_cause_analysis',
+  'fix_in_progress',
+];
+
+export const PROBLEM_STATE_LABELS: Record<ProblemState, string> = {
+  open: 'Open',
+  root_cause_analysis: 'Root Cause Analysis',
+  fix_in_progress: 'Fix in Progress',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
+export const problemNumber = (n: number) => `PRB${String(n).padStart(7, '0')}`;
+
+export const COMMUNICATION_KINDS: CommunicationKind[] = ['new', 'update', 'restored'];
+
+export const COMMUNICATION_KIND_LABELS: Record<CommunicationKind, string> = {
+  new: 'NEW',
+  update: 'UPDATE',
+  restored: 'RESTORED',
+};
+
+export const communicationNumber = (n: number) => `CIC${String(n).padStart(7, '0')}`;
+
+/** The mailbox Critical Incident Communications are sent from. */
+export const COMMUNICATION_FROM =
+  'Critical Incident Communications <critical_incident_communications@keybank.example>';
+
+/** Distribution group for a priority, e.g. `GRP_CIM_Tech_P1`. */
+export const communicationGroup = (priority: number) => `GRP_CIM_Tech_P${priority}`;
+
+/** The daily problem stand-up: 8:00 AM Eastern. */
+export const STANDUP = { hour: 8, time_zone: 'America/New_York', label: '8:00 AM ET' } as const;

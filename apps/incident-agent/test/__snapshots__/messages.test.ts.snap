@@ -50,9 +50,17 @@ exports[`message templates (snapshots) > fix, change, promotion, recovery, resol
 
 exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 5`] = `"**Not recovered yet:** still 40.0 errors/min after the deploy. Re-checking the root cause."`;
 
-exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 6`] = `"**Resolution drafted** on [INC0010234](http://sn.test/incidents/INC0010234). Please review the close notes and resolve it."`;
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 6`] = `
+"**Resolution drafted** on [INC0010234](http://sn.test/incidents/INC0010234). Please review the close notes and resolve it.
 
-exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 7`] = `"**Resolved** [INC0010234](http://sn.test/incidents/INC0010234) with the drafted resolution; the grouped calls were resolved with it. Time to restore: 17m 0s."`;
+- **Incident record:** the Resolution section is filled in."
+`;
+
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 7`] = `
+"**Resolved** [INC0010234](http://sn.test/incidents/INC0010234). Time to restore: 17m 0s.
+
+- **Incident record:** the Resolution section is filled in."
+`;
 
 exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 8`] = `"**Grouped 2 calls** under [INC0010234](http://sn.test/incidents/INC0010234) from Akron, Cleveland: INC0010240, INC0010241. Callers will get the updates and the resolution."`;
 

@@ -98,6 +98,7 @@ export class Agent {
 
   private worldReset(source: string): void {
     const archived = this.orchestrator.archiveAll(`world reset (${source})`);
+    this.correlator.worldReset();
     if (archived.length)
       this.log.warn(`world reset (${source}): archived ${archived.length} case(s)`);
   }

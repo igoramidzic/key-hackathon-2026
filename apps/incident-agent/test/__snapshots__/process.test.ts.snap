@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the resolution > writes the Resolution section with the close notes, and says so in the channel 1`] = `
+"**Resolved** [INC0010234](http://sn.test/incidents/INC0010234). Time to restore: 14m 0s.
+
+- **Incident record:** the Resolution section is filled in (cause code Change, caused by CHG0030081, fixed by CHG0030090).
+- **Caller tickets:** 2 grouped under it were resolved with the same resolution.
+- **Problem record:** [PRB0040001](http://sn.test/problems/PRB0040001) is on the agenda for the 8:00 AM problem stand-up on 2026-11-12. This chat now carries its number.
+- **Communication:** the RESTORED Critical Incident Communication [CIC0050002](http://sn.test/communications/CIC0050002) is drafted for GRP_CIM_Tech_P1; @rsmith please review and send.
+- **Call:** ended; the recording and transcript are in this chat."
+`;
+
+exports[`the resolution > writes the Resolution section with the close notes, and says so in the channel 2`] = `"**Critical Incident Communication drafted:** [<page> RESTORED - INC0010234 - Customer Lookups Failing](http://sn.test/communications/CIC0050002) for GRP_CIM_Tech_P1. @rsmith please review and send it from ServiceNow; I only draft."`;

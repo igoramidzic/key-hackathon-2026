@@ -1,6 +1,7 @@
 import { badRequest, conflict, notFound, parseTime } from '@sim/api-kit';
 import {
   CONTACT_TYPE_LABELS,
+  type CommunicationSummary,
   type ContactType,
   type FieldChange,
   IMPACT_LABELS,
@@ -24,13 +25,17 @@ import {
 import { sysId } from '@sim/world';
 import { type Directory, matchesQuery } from './directory';
 import {
+  clip,
   DEFAULT_ACTOR,
+  emptyResolution,
   FIRST_NUMBER,
   type IdGen,
   type IncidentRecord,
   incidentNumber,
   type JournalRecord,
   type LinkRecord,
+  minutesBetween,
+  parseWhen,
 } from './model';
 import { seedIncidents } from './seed';
 
@@ -50,6 +55,17 @@ export interface IncidentFilter {
   opened_after?: string;
   opened_before?: string;
   sort?: IncidentSort;
+}
+
+/**
+ * What the stores built on top of this one know about an incident. `buildApp` wires these once
+ * those stores exist (they take this store in their constructor, so it cannot import them).
+ */
+export interface IncidentRelations {
+  /** The canonical CHG number, or undefined when there is no such change request. */
+  changeNumber?: (key: string) => string | undefined;
+  /** Critical Incident Communications of an incident, oldest first. */
+  communications?: (incident: string) => CommunicationSummary[];
 }
 
 /** Internal options for `update` (not part of the API). */
@@ -97,7 +113,21 @@ const FIELD_LABELS: Record<string, string> = {
   parent_incident: 'Parent Incident',
   child_incidents: 'Child incidents',
   links: 'Related link',
+  affected_cis: 'Affected CIs',
+  outage_start: 'Outage start',
+  service_restored_at: 'Service restored',
+  cause_code: 'Cause code',
+  caused_by_change: 'Caused by change',
+  resolved_by_change: 'Resolved by change',
+  root_cause: 'Root cause',
+  client_impact: 'Impact to clients',
+  employee_impact: 'Impact to employees',
+  problem: 'Problem',
 };
+
+/** Paragraph fields: the journal records a one-line preview, not the whole text. */
+const LONG_TEXT_FIELDS = ['root_cause', 'client_impact', 'employee_impact'] as const;
+const isLongText = (field: string) => (LONG_TEXT_FIELDS as readonly string[]).includes(field);
 
 /** "State changed from New to In Progress" lines for a system journal entry. */
 export function describeChanges(changes: FieldChange[]): string {
@@ -106,6 +136,8 @@ export function describeChanges(changes: FieldChange[]): string {
       if (c.field === 'links') return `Related link added: ${c.to}`;
       if (c.field === 'description') return 'Description updated';
       if (c.field === 'close_notes') return `Resolution notes set: ${c.to ?? '(empty)'}`;
+      if (isLongText(c.field))
+        return c.to === null ? `${c.label} cleared` : `${c.label} set: ${c.to}`;
       return `${c.label} changed from ${c.from ?? '(empty)'} to ${c.to ?? '(empty)'}`;
     })
     .join('\n');
@@ -123,6 +155,9 @@ export class IncidentStore {
     journal: () => `jrn_${String(++this.journalSeq).padStart(6, '0')}`,
     link: () => `lnk_${String(++this.linkSeq).padStart(5, '0')}`,
   };
+
+  /** Wired by `buildApp`: change request lookups and the communications of an incident. */
+  relations: IncidentRelations = {};
 
   constructor(private readonly dir: Directory) {
     this.reset();
@@ -322,6 +357,10 @@ export class IncidentStore {
     const assignee = input.assigned_to
       ? this.dir.requireUser(input.assigned_to, 'assigned_to').username
       : null;
+    const affected = this.affectedCis(input.affected_cis ?? [], app);
+    const outageStart = input.outage_start
+      ? parseWhen(input.outage_start, 'outage_start', now)
+      : null;
     const at = now.toISOString();
     const n = this.nextNumber++;
     const number = incidentNumber(n);
@@ -352,6 +391,9 @@ export class IncidentStore {
       reassignment_count: 0,
       reopen_count: 0,
       parent_incident: null,
+      ...emptyResolution(),
+      affected_cis: affected,
+      outage_start: outageStart,
       links: [],
       journal: [],
     };
@@ -435,6 +477,8 @@ export class IncidentStore {
         rec.assignment_group ? this.dir.groupRef(rec.assignment_group).name : null,
       ],
       ['assigned_to', rec.assigned_to ? this.dir.userRef(rec.assigned_to).name : null],
+      ['affected_cis', rec.affected_cis.join(', ') || null],
+      ['outage_start', rec.outage_start],
     ];
     return fields
       .filter(([, v]) => v !== null)
@@ -485,6 +529,38 @@ export class IncidentStore {
     }
     if (input.close_code !== undefined) next.close_code = input.close_code;
     if (input.close_notes !== undefined) next.close_notes = input.close_notes.trim();
+    if (input.affected_cis !== undefined || next.app_tla !== rec.app_tla) {
+      // The configuration item itself is never listed as an affected CI.
+      const cis = this.affectedCis(input.affected_cis ?? rec.affected_cis, next.app_tla);
+      if (cis.join() !== rec.affected_cis.join()) next.affected_cis = cis;
+    }
+    if (input.outage_start !== undefined) {
+      next.outage_start =
+        input.outage_start === null ? null : parseWhen(input.outage_start, 'outage_start', now);
+    }
+    if (input.service_restored_at !== undefined) {
+      next.service_restored_at =
+        input.service_restored_at === null
+          ? null
+          : parseWhen(input.service_restored_at, 'service_restored_at', now);
+    }
+    if (input.cause_code !== undefined) next.cause_code = input.cause_code;
+    if (input.caused_by_change !== undefined) {
+      next.caused_by_change =
+        input.caused_by_change === null
+          ? null
+          : this.changeRef(input.caused_by_change, 'caused_by_change');
+    }
+    if (input.resolved_by_change !== undefined) {
+      next.resolved_by_change =
+        input.resolved_by_change === null
+          ? null
+          : this.changeRef(input.resolved_by_change, 'resolved_by_change');
+    }
+    for (const field of LONG_TEXT_FIELDS) {
+      const value = input[field];
+      if (value !== undefined) next[field] = value?.trim() || null;
+    }
     const oldParent = rec.parent_incident;
     if (input.parent_incident !== undefined) {
       if (input.parent_incident === null) {
@@ -513,6 +589,15 @@ export class IncidentStore {
         'close_code',
         'close_notes',
         'parent_incident',
+        'affected_cis',
+        'outage_start',
+        'service_restored_at',
+        'cause_code',
+        'caused_by_change',
+        'resolved_by_change',
+        'root_cause',
+        'client_impact',
+        'employee_impact',
       ] as const
     ).filter((f) => next[f] !== rec[f]);
 
@@ -544,6 +629,8 @@ export class IncidentStore {
       next.closed_at = null;
       next.close_code = null;
       next.close_notes = null;
+      // Service is evidently not back; what is known about the outage and its cause stays.
+      next.service_restored_at = null;
     }
     if (next.assignment_group !== rec.assignment_group && rec.assignment_group) {
       next.reassignment_count = rec.reassignment_count + 1;
@@ -610,6 +697,46 @@ export class IncidentStore {
     if (input.comment?.trim()) this.copyCommentToChildren(rec, input.comment, actor, at);
     this.cascadeToChildren(rec, actor, now);
     return rec;
+  }
+
+  /** Valid, upper-cased, de-duplicated TLAs without the incident's own application. */
+  private affectedCis(values: string[], own: string | null): string[] {
+    const out: string[] = [];
+    for (const value of values) {
+      const tla = this.dir.requireApp(value, 'affected_cis').tla;
+      if (tla !== own && !out.includes(tla)) out.push(tla);
+    }
+    return out;
+  }
+
+  /** A CHG number; checked against the change store when it is wired in. */
+  private changeRef(value: string, field: string): string {
+    const key = value.trim().toUpperCase();
+    const lookup = this.relations.changeNumber;
+    if (!lookup) return key;
+    const number = lookup(key);
+    if (!number) {
+      throw badRequest(
+        `Unknown ${field} '${value}'. Use a change request number such as CHG0030012 (list_change_requests finds them).`,
+      );
+    }
+    return number;
+  }
+
+  /** Points an incident at the problem that investigates it (called by the problem store). */
+  setProblem(rec: IncidentRecord, problem: string, text: string, actor: string, at: string) {
+    const from = rec.problem;
+    rec.problem = problem;
+    rec.journal.push({
+      id: this.ids.journal(),
+      type: 'system',
+      text,
+      author: actor,
+      created_at: at,
+      changes: [{ field: 'problem', label: FIELD_LABELS.problem!, from, to: problem }],
+    });
+    rec.updated_at = at;
+    rec.updated_by = actor;
   }
 
   private noteChildChange(
@@ -721,6 +848,8 @@ export class IncidentStore {
         return rec.app_tla ? this.dir.appDisplay(rec.app_tla) : null;
       case 'contact_type':
         return CONTACT_TYPE_LABELS[rec.contact_type] ?? rec.contact_type;
+      case 'affected_cis':
+        return rec.affected_cis.join(', ') || null;
       default: {
         const v = rec[field as keyof IncidentRecord];
         return v === null || v === undefined || v === '' ? null : String(v);
@@ -746,6 +875,12 @@ export class IncidentStore {
       'close_code',
       'close_notes',
       'parent_incident',
+      'affected_cis',
+      'outage_start',
+      'service_restored_at',
+      'cause_code',
+      'caused_by_change',
+      'resolved_by_change',
     ];
     const changes: FieldChange[] = [];
     for (const field of fields) {
@@ -758,6 +893,11 @@ export class IncidentStore {
         from: field === 'description' ? null : from,
         to: field === 'description' ? null : to,
       });
+    }
+    for (const field of LONG_TEXT_FIELDS) {
+      const to = after[field];
+      if (before[field] === to) continue;
+      changes.push({ field, label: FIELD_LABELS[field]!, from: null, to: to ? clip(to) : null });
     }
     return changes;
   }
@@ -803,6 +943,21 @@ export class IncidentStore {
       closed_at: r.closed_at,
       close_code: r.close_code,
       close_notes: r.close_notes,
+      affected_cis: r.affected_cis.map((tla) => d.appRef(tla)),
+      outage_start: r.outage_start,
+      service_restored_at: r.service_restored_at,
+      outage_duration_minutes:
+        r.outage_start && r.service_restored_at
+          ? minutesBetween(r.outage_start, r.service_restored_at)
+          : null,
+      cause_code: r.cause_code,
+      caused_by_change: r.caused_by_change,
+      resolved_by_change: r.resolved_by_change,
+      root_cause: r.root_cause,
+      client_impact: r.client_impact,
+      employee_impact: r.employee_impact,
+      problem: r.problem,
+      communications: this.relations.communications?.(r.number) ?? [],
       reassignment_count: r.reassignment_count,
       reopen_count: r.reopen_count,
       links: r.links.map((l) => ({

@@ -168,7 +168,7 @@ orientation from [AGENTS.md](AGENTS.md) (`CLAUDE.md` imports it).
 
 ### MCP servers
 
-Four servers with 45 tools. Every tool has a typed input schema and a description of when to use
+Four servers with 59 tools. Every tool has a typed input schema and a description of when to use
 it; lists are paginated with `limit` and `cursor`; there are no delete tools. Writes default to
 the bot identity `svc_incident_auto` ("Incident Automation") unless you pass an author.
 
@@ -237,9 +237,9 @@ Hosted model APIs whose MCP connector calls the server from the provider's cloud
 | Server | Tools |
 | --- | --- |
 | **logs** | `search_logs`, `get_log_entry`, `tail_logs` (long-poll with a cursor), `summarize_errors` (error fingerprints per app with counts and first and last seen), `get_log_histogram`, `list_log_services`, `list_alerts`, `get_alert`, `update_alert` |
-| **servicenow** | `list_incidents` (also by contact type, parent and relationship), `get_incident`, `create_incident` (optionally as the parent of existing incidents), `update_incident` (fields, work note, links and resolve in one call; resolving a parent resolves its children), `add_incident_note`, `link_child_incidents` (group incidents that are the same problem), `list_change_requests` (what KBR promoted, by app, MR or time), `get_change_request` (MRs, deployed versions, KBR notes), `create_change_request` (promote merged MRs at a planned start), `update_change_request` (reschedule, cancel, add MRs), `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
+| **servicenow** | `list_incidents` (also by contact type, parent and relationship), `get_incident`, `create_incident` (optionally as the parent of existing incidents), `update_incident` (fields, Affected CIs, the Resolution section, work note, links and resolve in one call; resolving a parent resolves its children), `add_incident_note`, `link_child_incidents` (group incidents that are the same problem), `list_change_requests` (what KBR promoted, by app, MR or time), `get_change_request` (MRs, deployed versions, KBR notes), `create_change_request` (promote merged MRs at a planned start), `update_change_request` (reschedule, cancel, add MRs), `list_problems`, `get_problem`, `create_problem` (the record for the daily 8:00 AM problem stand-up, linked to its incidents), `update_problem`, `draft_incident_communication` (the Critical Incident Communication email for the distribution group: NEW, UPDATE or RESTORED; it only drafts, a person sends it in the UI), `list_incident_communications`, `get_incident_communication`, `search_apps`, `get_app` (owner, support group, on-call, dependencies), `get_app_dependencies` (graph walk up or down), `search_support_groups`, `get_support_group`, `search_users`, `get_user` |
 | **gitlab** | `search_projects`, `get_project`, `list_recent_commits` (by project or a whole TLA), `get_commit`, `compare_refs` (accepts `main~2`, `HEAD^`), `list_merge_requests`, `get_merge_request` (diffs, pipeline, approvals), `get_file_tree`, `get_file`, `fetch_repository` (every file plus a tarball URL, i.e. "clone"), `create_merge_request` (branch, commit and MR in one call; full-content or find/replace edits), `update_merge_request` (labels), `add_merge_request_note`, `create_tag` |
-| **teams** | `list_teams`, `list_channels`, `get_channel`, `create_channel` (with initial members and reasons), `add_channel_members`, `remove_channel_member`, `post_message`, `read_messages`, `list_notifications` |
+| **teams** | `list_teams`, `list_channels`, `get_channel`, `create_channel` (with initial members and reasons), `update_channel` (rename; the old name keeps working), `start_meeting` (turn the chat into a recorded, transcribed call and prompt members to join), `end_meeting`, `add_channel_members`, `remove_channel_member`, `post_message`, `read_messages`, `list_notifications` |
 
 There is deliberately no merge tool: a human merges the fix MR in the GitLab UI, and a change
 request promotes it to production. The REST call is
@@ -383,7 +383,7 @@ pnpm e2e
 
 This runs against the live stack (`pnpm dev` first). It checks that every service answers and
 that every MCP tool has a well-formed contract. It then drives the headline scenario the way an
-agent would, calling all 49 tools: it traces the cascade to CIF, opens an incident, groups the
+agent would, calling all 59 tools: it traces the cascade to CIF, opens an incident, groups the
 bankers' calls under it, opens a Teams channel, and opens a fix MR. A human-style merge follows; the run
 must stay broken until a change request promotes it through KBR, then recover, and resolving the incident must resolve the calls. Finally it runs
 every other scenario, checking symptoms, a green culprit, alerts or the help-desk incident, and

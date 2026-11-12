@@ -1,6 +1,7 @@
 import {
   badRequest,
   csv,
+  formatZodError,
   pageQuery,
   paginate,
   parseBody,
@@ -9,12 +10,15 @@ import {
 } from '@sim/api-kit';
 import type { ResetResult } from '@sim/contracts';
 import type {
+  Channel,
   ChannelCreated,
   MarkReadResult,
+  MeetingEnded,
+  MeetingStarted,
   MessagePosted,
   NotificationPage,
 } from '@sim/contracts/teams';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { seedStore } from './seed';
 import { incidentNumberOf, TeamsStore } from './store';
@@ -57,6 +61,23 @@ const createChannelBody = z.object({
   created_by: z.string().min(1).optional(),
 });
 
+const updateChannelBody = z.object({
+  name: z.string().min(1).max(200).optional(),
+  display_name: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  updated_by: z.string().min(1).optional(),
+});
+
+const startMeetingBody = z.object({
+  title: z.string().max(200).optional(),
+  record: z.boolean().optional(),
+  transcribe: z.boolean().optional(),
+  facilitator: z.boolean().optional(),
+  started_by: z.string().min(1).optional(),
+});
+
+const endMeetingBody = z.object({ ended_by: z.string().min(1).optional() });
+
 /** Accepts `{members:[…]}`, a bare array, or a single `{user, reason}`. */
 const addMembersBody = z.preprocess(
   (raw) => {
@@ -80,6 +101,22 @@ const postMessageBody = z.object({
   importance: z.enum(['normal', 'high', 'urgent']).optional(),
   reply_to_id: z.string().min(1).optional(),
 });
+
+/** Like `parseBody`, but an empty body counts as `{}`: every field of these routes is optional. */
+async function optionalBody<S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> {
+  const text = await c.req.text();
+  let raw: unknown = {};
+  if (text.trim()) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      throw badRequest('Request body must be JSON');
+    }
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) throw badRequest(formatZodError(result.error));
+  return result.data;
+}
 
 const bool = z
   .enum(['true', 'false', '1', '0'])
@@ -135,7 +172,9 @@ export function registerRoutes(app: Hono) {
       .filter(
         (ch) =>
           !needle ||
-          `${ch.name} ${ch.display_name} ${ch.description}`.toLowerCase().includes(needle),
+          `${ch.name} ${ch.previous_names.join(' ')} ${ch.display_name} ${ch.description}`
+            .toLowerCase()
+            .includes(needle),
       )
       .sort((a, b) => store.lastActivity(b).getTime() - store.lastActivity(a).getTime())
       .map((ch) => store.toSummary(ch));
@@ -157,6 +196,37 @@ export function registerRoutes(app: Hono) {
   app.get('/api/channels/:id', (c) =>
     c.json(store.toChannel(store.resolveChannel(c.req.param('id')))),
   );
+
+  app.patch('/api/channels/:id', async (c) => {
+    const channel = store.resolveChannel(c.req.param('id'));
+    const body = await parseBody(c, updateChannelBody);
+    return c.json<Channel>(store.toChannel(store.updateChannel(channel, body)));
+  });
+
+  app.post('/api/channels/:id/meeting', async (c) => {
+    const channel = store.resolveChannel(c.req.param('id'));
+    const body = await optionalBody(c, startMeetingBody);
+    const { meeting, notifications, already_running } = store.startMeeting(channel, body);
+    return c.json<MeetingStarted>(
+      {
+        meeting: store.toMeeting(channel, meeting),
+        channel: store.toSummary(channel),
+        notifications: notifications.map((n) => store.toNotification(n)),
+        already_running,
+      },
+      already_running ? 200 : 201,
+    );
+  });
+
+  app.post('/api/channels/:id/meeting/end', async (c) => {
+    const channel = store.resolveChannel(c.req.param('id'));
+    const body = await optionalBody(c, endMeetingBody);
+    const meeting = store.endMeeting(channel, body.ended_by);
+    return c.json<MeetingEnded>({
+      meeting: store.toMeeting(channel, meeting),
+      channel: store.toSummary(channel),
+    });
+  });
 
   app.get('/api/channels/:id/members', (c) =>
     c.json(store.toChannel(store.resolveChannel(c.req.param('id'))).members),

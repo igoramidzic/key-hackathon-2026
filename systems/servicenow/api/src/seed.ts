@@ -23,6 +23,7 @@ import {
 } from '@sim/world';
 import { type Directory, SYSTEM_USER } from './directory';
 import {
+  emptyResolution,
   FIRST_NUMBER,
   type IdGen,
   type IncidentRecord,
@@ -989,6 +990,7 @@ export function seedIncidents(dir: Directory, now: Date, ids: IdGen): IncidentRe
       reassignment_count: 0,
       reopen_count: 0,
       parent_incident: null,
+      ...emptyResolution(),
       links: [],
       journal: [],
     };
@@ -1374,6 +1376,7 @@ function pastMajorIncident(
     reassignment_count: 0,
     reopen_count: 0,
     parent_incident: null,
+    ...emptyResolution(),
     links: [
       {
         id: ids.link(),

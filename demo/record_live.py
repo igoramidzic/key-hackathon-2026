@@ -90,7 +90,9 @@ async def spotlight(page):
 
 async def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--url", default="http://localhost:3000/demo")
+    # Brisk pace: the tour reaches the Merge step about when the fix is ready, so the run's
+    # "first error to restored" time measures the agent rather than the tour's reading time.
+    ap.add_argument("--url", default="http://localhost:3000/demo?pace=brisk")
     ap.add_argument("--max", type=float, default=600, help="give up after this many seconds")
     args = ap.parse_args()
 
@@ -165,10 +167,21 @@ async def main() -> None:
                 if spot:
                     if spot["click"] and s["needsYou"] and not merged_click:
                         await asyncio.sleep(2.2)  # let the audience read "your turn"
+                        # The page may have scrolled the button into view since: aim at where it is now.
+                        spot = await spotlight(page) or spot
                         await click(spot["x"] + spot["w"] / 2, spot["y"] + spot["h"] / 2)
                         merged_click = True
                         beats.append({"t": round(time.monotonic() - t0, 2), "event": "merge_click"})
                         print("         clicked Merge", flush=True)
+                        # A click that missed (the frame was still settling) is tried again.
+                        for _ in range(3):
+                            await asyncio.sleep(3)
+                            if not (await page.evaluate(STATE_JS))["needsYou"]:
+                                break
+                            spot = await spotlight(page)
+                            if spot and spot["click"]:
+                                await click(spot["x"] + spot["w"] / 2, spot["y"] + spot["h"] / 2)
+                                print("         clicked Merge again", flush=True)
                     else:
                         # Rest just inside the bottom-right of the spotlight, not on top of its text.
                         await glide(min(spot["x"] + spot["w"] - 18, W - 30), min(spot["y"] + spot["h"] - 10, H - 130))

@@ -21,6 +21,10 @@ export const READ_TOOLS = {
     'get_incident',
     'list_change_requests',
     'get_change_request',
+    'list_problems',
+    'get_problem',
+    'list_incident_communications',
+    'get_incident_communication',
     'search_apps',
     'get_app',
     'get_app_dependencies',
@@ -53,9 +57,20 @@ export const WRITE_TOOLS = {
     'link_child_incidents',
     'create_change_request',
     'update_change_request',
+    'create_problem',
+    'update_problem',
+    'draft_incident_communication',
   ],
   gitlab: ['create_merge_request', 'update_merge_request', 'add_merge_request_note', 'create_tag'],
-  teams: ['create_channel', 'add_channel_members', 'remove_channel_member', 'post_message'],
+  teams: [
+    'create_channel',
+    'update_channel',
+    'add_channel_members',
+    'remove_channel_member',
+    'post_message',
+    'start_meeting',
+    'end_meeting',
+  ],
 } as const satisfies Record<ServerName, readonly string[]>;
 
 export type ReadTool = (typeof READ_TOOLS)[ServerName][number];

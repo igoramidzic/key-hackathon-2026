@@ -50,6 +50,12 @@ SNOW feed ──┘   (one problem,          │                                
   awaiting_merge → shipping → verifying → resolution_drafted → resolved`, run by the orchestrator
   (`cases/`), with deep RCA, fix generation and caller grouping in the background. Every create is
   found again by a natural key after a crash (correlation id, channel name, MR branch, CHG).
+- **The process around the fix** (`flow/process.ts`): the incident lists its Affected CIs and
+  records the cause as soon as it is known; for a P1/P2 the channel becomes a recorded,
+  transcribed call; a NEW Critical Incident Communication is drafted for the distribution group
+  (a person sends it, there is no send tool); after recovery the agent fills the incident's
+  Resolution section, opens the problem record for the 8:00 AM problem stand-up, renames the
+  channel with the problem number, ends the call and drafts the RESTORED communication.
 - **Upkeep** on every step after declaring: link new alerts, re-point the incident when the root
   cause changes, add late joiners to the channel, group callers, read the channel and answer,
   merge or split cases, and post coalesced status updates mirrored as work notes.
@@ -67,6 +73,7 @@ investigation that returns JSON validated with zod.
 | Deep RCA: the culprit, its mechanism, evidence, what's ruled out | `AGENT_MODEL_DEEP` (Opus) | changes, MRs, code, logs, CMDB |
 | Fix: revert or forward fix, validated against main | `AGENT_MODEL_DEEP` (Opus) | GitLab read tools |
 | Caller grouping, chat classification and answers | `AGENT_MODEL` (Sonnet) | none / read tools |
+| Communications, Resolution section and problem record: the prose | `AGENT_MODEL` (Sonnet) | none |
 
 Phases get read tools only (`phases/runner.ts`, `phases/claude.ts`); the orchestrator performs every
 write. Whatever the model names is checked against the systems: change requests and MRs must exist
@@ -92,7 +99,7 @@ src/
   cases/          case model, store, orchestrator, CLI
   phases/         LLM phase runner and the Claude provider
   flow/           the steps and their deterministic actions: triage, rca, incident, assemble,
-                  announce, fix, ship, verify, callers, chat, regroup
+                  announce, process, fix, ship, verify, callers, chat, regroup
   messages/       Teams message templates (snapshot-tested)
   timeline/       live case timeline server and page
 eval/             scenario harness and scorecard (the only place allowed to touch the simulator API)

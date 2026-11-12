@@ -1,8 +1,8 @@
 {
- "duration": 180.66,
+ "duration": 262.88,
  "beats": [
   {
-   "t": 3.37,
+   "t": 3.36,
    "pre": false,
    "title": "A bank, and the four tools that run it",
    "say": "Everything here is simulated: 400 applications, and the systems its IT teams use every day.",
@@ -12,7 +12,7 @@
    "error": ""
   },
   {
-   "t": 10.31,
+   "t": 7.61,
    "pre": false,
    "title": "A normal afternoon",
    "say": "Logs flow in and nothing is wrong. The agent is learning what normal looks like.",
@@ -22,7 +22,7 @@
    "error": ""
   },
   {
-   "t": 18.48,
+   "t": 18.33,
    "pre": false,
    "title": "A routine change ships",
    "say": "Changes go to production all day. One of them is about to break something.",
@@ -32,176 +32,296 @@
    "error": ""
   },
   {
-   "t": 27.29,
+   "t": 27.27,
    "pre": false,
    "title": "Errors appear",
    "say": "Within seconds the agent notices the spike and opens a case. No alert has fired yet.",
    "chapter": "Detect",
-   "clock": "0:01",
+   "clock": "1 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 34.45,
+   "t": 33.38,
    "pre": false,
    "title": "Then the alerts start",
    "say": "Each alert is on a different application. This is when people would start getting paged.",
    "chapter": "Detect",
-   "clock": "0:08",
+   "clock": "7 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 40.23,
+   "t": 37.16,
    "pre": false,
    "title": "One problem, not dozens",
-   "say": "7 applications are failing. The agent works out they are the same problem and keeps one case.",
+   "say": "6 applications are failing. The agent works out they are the same problem and keeps one case.",
    "chapter": "Detect",
-   "clock": "0:14",
+   "clock": "10 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 55.76,
+   "t": 58.39,
    "pre": false,
    "title": "How bad is it?",
-   "say": "Claude reads the logs and the application catalog, and sizes it up.",
+   "say": "Gemini reads the logs and the application catalog, and sizes it up.",
    "chapter": "Triage",
-   "clock": "0:30",
+   "clock": "32 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 64.77,
+   "t": 72.39,
    "pre": false,
-   "title": "It opens the incident",
+   "title": "It opens the parent incident",
    "say": "Priority is set, and it goes straight to the team that owns the suspect application.",
    "chapter": "Mobilize",
-   "clock": "0:39",
+   "clock": "46 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 73.38,
+   "t": 76.73,
+   "pre": false,
+   "title": "Every affected system is on the record",
+   "say": "The incident lists all 36 applications it touches, not just the one it is filed against.",
+   "chapter": "Mobilize",
+   "clock": "50 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 80.02,
    "pre": false,
    "title": "Tickets about the same problem are grouped under it",
-   "say": "Branch staff called the help desk about this too. Their 2 tickets now sit under this one incident.",
+   "say": "Branch staff called the help desk about this too. Their 3 tickets now sit under this one incident.",
    "chapter": "Mobilize",
-   "clock": "0:47",
+   "clock": "53 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 79.27,
+   "t": 83.83,
+   "pre": false,
+   "title": "One chat, named for the incident",
+   "say": "The name starts with the incident number and says what is wrong, so anyone can find it.",
+   "chapter": "Mobilize",
+   "clock": "57 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 87.07,
    "pre": false,
    "title": "It brings in the right people",
    "say": "8 people in one Teams channel, each told why they are there.",
    "chapter": "Mobilize",
-   "clock": "0:53",
+   "clock": "1 min 00 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 86.7,
+   "t": 91.33,
    "pre": false,
    "title": "And briefs them",
    "say": "One message: impact, timeline, the leading suspect and links to the evidence.",
    "chapter": "Mobilize",
-   "clock": "1:00",
+   "clock": "1 min 05 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 95.87,
+   "t": 96.71,
+   "pre": false,
+   "title": "It turns the chat into a call",
+   "say": "Everyone is prompted to join. Recording, transcription and the Facilitator are already on.",
+   "chapter": "Mobilize",
+   "clock": "1 min 10 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 100.55,
+   "pre": false,
+   "title": "It drafts the incident communication",
+   "say": "The email that tells GRP_CIM_Tech_P1 what is down. The agent drafts it; a person sends it.",
+   "chapter": "Mobilize",
+   "clock": "1 min 14 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 105.68,
    "pre": false,
    "title": "It finds the cause",
-   "say": "Claude read the diffs and the code, and names the change responsible.",
+   "say": "Gemini read the diffs and the code, and names the change responsible.",
    "chapter": "Root cause",
-   "clock": "1:10",
+   "clock": "1 min 19 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 106.12,
+   "t": 111.92,
    "pre": false,
    "title": "This is the change",
    "say": "It passed review, and the service it changed never returned an error itself.",
    "chapter": "Root cause",
-   "clock": "1:20",
+   "clock": "1 min 25 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 116.8,
+   "t": 133.04,
    "pre": false,
    "title": "It writes the fix",
    "say": "A merge request with the fix, explaining the cause and the evidence.",
    "chapter": "Fix",
-   "clock": "1:31",
+   "clock": "1 min 46 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 123.88,
+   "t": 137.27,
+   "pre": false,
+   "title": "And posts it where everyone is looking",
+   "say": "The cause, the evidence and the fix go into the chat, with the owners called out by name.",
+   "chapter": "Fix",
+   "clock": "1 min 51 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 141.03,
    "pre": false,
    "title": "Your turn: merge it",
    "say": "This decision stays with a person. The agent cannot merge, on purpose.",
    "chapter": "Fix",
-   "clock": "1:38",
+   "clock": "1 min 54 s",
    "needsYou": true,
    "error": ""
   },
   {
-   "t": 128.76,
+   "t": 145.87,
    "event": "merge_click"
   },
   {
-   "t": 131.81,
+   "t": 149.13,
    "pre": false,
    "title": "Merged",
    "say": "This decision stays with a person. The agent cannot merge, on purpose.",
    "chapter": "Fix",
-   "clock": "1:46",
+   "clock": "2 min 02 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 134.57,
+   "t": 150.67,
    "pre": false,
    "title": "It ships the fix to production",
    "say": "An emergency change request, raised by the agent and promoted by the release system.",
    "chapter": "Ship",
-   "clock": "1:48",
+   "clock": "2 min 04 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 141.86,
+   "t": 154.7,
    "pre": false,
    "title": "Then checks it actually worked",
-   "say": "Errors on the affected applications: 805 a minute before the fix, 112 now.",
+   "say": "Errors on the affected applications: 977 a minute before the fix, 140 now.",
    "chapter": "Recover",
-   "clock": "1:51",
+   "clock": "2 min 08 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 167.43,
+   "t": 184.16,
    "pre": false,
    "title": "All clear",
-   "say": "The agent tells the channel it is fixed, and writes up the resolution.",
+   "say": "The agent tells the chat it is fixed. Now the paperwork, which it also does.",
    "chapter": "Recover",
-   "clock": "1:51",
+   "clock": "2 min 37 s",
    "needsYou": false,
    "error": ""
   },
   {
-   "t": 174.46,
+   "t": 227.97,
+   "pre": false,
+   "title": "It fills out the incident",
+   "say": "The Resolution section: cause code, the change that caused it, the change that fixed it, the outage window and the impact.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 232.99,
+   "pre": false,
+   "title": "One update closes every caller ticket",
+   "say": "Resolving the parent resolved the 3 tickets under it, each with the same resolution for its caller.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 236.22,
+   "pre": false,
+   "title": "It opens the problem record",
+   "say": "What happened, why, and what stops a repeat, tied to the incident and the changes.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 241.22,
+   "pre": false,
+   "title": "Ready for the 8 AM stand-up",
+   "say": "The problem is already on the agenda for the daily problem stand-up.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 245.46,
+   "pre": false,
+   "title": "The chat takes the problem number",
+   "say": "Renamed, so the conversation, the recording and the transcript are found from the problem too.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 248.69,
+   "pre": false,
+   "title": "And drafts the all-clear",
+   "say": "The same email, now marked restored, with when it started, when it ended and how long it lasted.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 252.43,
+   "pre": false,
+   "title": "With the impact, the cause and what was done",
+   "say": "Written in plain language from what the agent found. A person reviews it and presses send.",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 256.67,
    "pre": false,
    "title": "First error to fixed",
    "say": "The agent did the legwork. A person made the one decision that mattered.",
-   "chapter": "Recover",
-   "clock": "1:51",
+   "chapter": "Close out",
+   "clock": "3 min 08 s",
    "needsYou": false,
    "error": ""
   }

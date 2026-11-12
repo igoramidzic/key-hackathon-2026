@@ -1,13 +1,17 @@
 import { URLS } from '@sim/contracts';
 import {
   type AppTier,
+  CAUSE_CODES,
+  type CauseCode,
   CHANGE_STATES,
   CHANGE_TYPES,
   type ChangeState,
   type ChangeType,
   CLOSE_CODES,
   type CloseCode,
+  COMMUNICATION_KINDS,
   CONTACT_TYPES,
+  type CommunicationKind,
   type ContactType,
   createServiceNowClient,
   INCIDENT_CATEGORIES,
@@ -17,7 +21,9 @@ import {
   type IncidentState,
   LINK_TYPES,
   type LinkType,
+  PROBLEM_STATES,
   type Priority,
+  type ProblemState,
 } from '@sim/contracts/servicenow';
 import { defineTool, type McpServerSpec, paginationShape, READ_ONLY, WRITE } from '@sim/mcp-kit';
 import { z } from 'zod';
@@ -26,12 +32,16 @@ import {
   appRow,
   changeFull,
   changeRow,
+  communicationFull,
+  communicationRow,
   dependencyGraph,
   groupFull,
   groupRow,
   incidentFull,
   incidentRow,
   journalRow,
+  problemFull,
+  problemRow,
   userFull,
   userRow,
 } from './format';
@@ -51,7 +61,10 @@ Data model
 - Parent and child incidents: when several incidents are really the same problem (several bankers calling about one outage, duplicates from monitoring), make one the parent and attach the rest as children: create_incident with child_incidents, or link_child_incidents later. One level only: a parent cannot be a child and a child cannot have children. Caller-visible comments on the parent are copied to its open children, and resolving or closing the parent resolves or closes its children with the same resolution. To find candidates: list_incidents with active, opened_after, contact_type ["phone","email","chat"] and relationship "standalone".
 - Change requests (CHG0030001, ...) are how code reaches production. Merging an MR to main only deploys it to QV. A change request lists merged MRs of one application (keybank/<TLA>00 projects) and a planned_start; KBR (KeyBank Release, user svc_kbr) promotes every scheduled change once its planned start passes: it rolls the merge commits out to production, tags them kbr-<CHG>, notes each MR and closes the change (or sends it back to new with a note if an MR is not merged). States: new (draft) → scheduled → implement → closed, or canceled.
 - For root cause, list_change_requests with app_tla and implemented_after shows what actually went to production and when; recent changes on the failing app or its upstream apps are prime suspects. To ship a fix: after a human merges the fix MR, create_change_request (type emergency, planned_start "now", related_incidents) so KBR promotes it.
-- Writes act as svc_incident_auto (Incident Automation) unless you pass opened_by / updated_by / author / requested_by.
+- Resolution section of an incident: besides close_code and close_notes, an incident records affected_cis (other applications hit, as TLAs, next to its own app), outage_start and service_restored_at (outage_duration_minutes is derived from them), cause_code (${CAUSE_CODES.join(', ')}), caused_by_change and resolved_by_change (CHG numbers), root_cause, and client_impact / employee_impact in plain business language. Fill them in with update_incident as the facts become known: affected_cis and outage_start early, the rest once service is back. None of them is required to resolve.
+- Problems (PRB0040001, ...) investigate one or more incidents once service is back: what happened, why, and what stops it happening again. Every new problem goes on the agenda of the next daily problem stand-up at 8:00 AM Eastern (standup_date, a YYYY-MM-DD Eastern date), where incidents that hit operations or customers are reviewed. After resolving such an incident, create_problem with incidents, root_cause, mitigation_plan, action_items and the impact; each incident then shows the PRB in its problem field. An incident has one problem: check list_problems (incident) before creating, and use update_problem to add to an existing one. list_problems with standup "next" is the upcoming agenda. States: open → root_cause_analysis → fix_in_progress → resolved → closed.
+- Critical Incident Communications (CIC0050001, ...) are the emails to the internal distribution group for the incident's priority (GRP_CIM_Tech_P1, GRP_CIM_Tech_P2, ...): kind new announces an active incident, update follows up, restored says service is back. draft_incident_communication only writes the draft: a person (the Communication Specialist) reviews and sends it from ServiceNow, and there is no tool that sends. Drafting the same kind again while it is unsent replaces that draft; once sent it is final and a new draft gets a new number. Share the draft's web_url with the incident channel so it gets reviewed.
+- Writes act as svc_incident_auto (Incident Automation) unless you pass opened_by / updated_by / author / requested_by / drafted_by.
 - Every record has a web_url you can paste into Teams or elsewhere.`;
 
 const stateEnum = z.enum(INCIDENT_STATES as [IncidentState, ...IncidentState[]]);
@@ -103,6 +116,22 @@ const incidentList = (what: string) =>
     .max(100)
     .describe(`${what}: incident numbers, e.g. ["INC0010205","INC0010207"].`);
 const contactTypeEnum = z.enum(CONTACT_TYPES as [ContactType, ...ContactType[]]);
+const causeCodeEnum = z.enum(CAUSE_CODES as [CauseCode, ...CauseCode[]]);
+const affectedCisShape = z
+  .array(tlaShape)
+  .max(50)
+  .describe(
+    'Affected CIs: the other applications the incident affects, as TLAs, e.g. ["OLB","MBL"] (typically the downstream apps that are failing too). Do not repeat the incident\'s own app_tla.',
+  );
+const whenShape = (what: string) =>
+  z
+    .string()
+    .min(1)
+    .describe(
+      `${what}: an ISO 8601 time ("2026-11-12T14:05:00Z"), "now", or how long ago ("15m", "2h").`,
+    );
+const changeRefShape = (what: string) =>
+  z.string().min(1).describe(`${what}: a change request number, e.g. "CHG0030042".`);
 
 export const spec: McpServerSpec = {
   name: 'servicenow',
@@ -210,7 +239,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'get_incident', {
       title: 'Get incident',
       description:
-        'Full incident: fields, caller, assignment, resolution, related links (Teams channel, merge requests, alerts, log queries), parent_incident and child_incidents, and the journal (work notes, comments and system field changes, oldest first).',
+        'Full incident: fields, caller, assignment, resolution (close_code, close_notes), affected_cis (TLAs of the other affected applications), the Resolution section (outage_start, service_restored_at, outage_duration_minutes, cause_code, caused_by_change, resolved_by_change, root_cause, client_impact, employee_impact), problem (the PRB that investigates it), communications (Critical Incident Communications drafted or sent, oldest first), related links (Teams channel, merge requests, alerts, log queries), parent_incident and child_incidents, and the journal (work notes, comments and system field changes, oldest first).',
       input: { number: numberShape },
       annotations: READ_ONLY,
       run: async ({ number }) => incidentFull(await api.getIncident(number)),
@@ -219,7 +248,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'create_incident', {
       title: 'Create incident',
       description:
-        'Open a new incident (state new). Set app_tla to the affected application so the incident is tied to its CI. assignment_group is NOT inferred from the app: pass it explicitly (e.g. the app support group id from get_app). Priority is derived from impact × urgency (P1 = 1/1, P2 = 1/2 or 2/1, P3 = 1/3, 2/2 or 3/1, P4 = 2/3 or 3/2, P5 = 3/3). Check list_incidents for an existing open incident on the app first to avoid duplicates. To group existing incidents that are the same problem (e.g. several bankers calling in), pass child_incidents: the new incident becomes their parent. Or pass parent_incident to attach the new one to an existing parent. Returns the full incident including number and web_url.',
+        'Open a new incident (state new). Set app_tla to the affected application so the incident is tied to its CI. assignment_group is NOT inferred from the app: pass it explicitly (e.g. the app support group id from get_app). Priority is derived from impact × urgency (P1 = 1/1, P2 = 1/2 or 2/1, P3 = 1/3, 2/2 or 3/1, P4 = 2/3 or 3/2, P5 = 3/3). Check list_incidents for an existing open incident on the app first to avoid duplicates. To group existing incidents that are the same problem (e.g. several bankers calling in), pass child_incidents: the new incident becomes their parent. Or pass parent_incident to attach the new one to an existing parent. affected_cis lists the other applications that are hit and outage_start when the service started to degrade (both can also be set later with update_incident). Returns the full incident including number and web_url.',
       input: {
         short_description: z
           .string()
@@ -255,6 +284,10 @@ export const spec: McpServerSpec = {
           .string()
           .optional()
           .describe('Attach the new incident as a child of this open parent, e.g. "INC0010204".'),
+        affected_cis: affectedCisShape.optional(),
+        outage_start: whenShape(
+          'When the service started to degrade (first errors in the logs or the alert time), if already known',
+        ).optional(),
       },
       annotations: WRITE,
       run: async (args) =>
@@ -264,7 +297,7 @@ export const spec: McpServerSpec = {
     defineTool(server, 'update_incident', {
       title: 'Update incident',
       description:
-        'Change incident fields and, in the same call, add a work note, a customer-visible comment and related links. Only the fields you pass change; each change is recorded as a system journal entry ("State changed from New to In Progress"). Changing impact or urgency recalculates priority. To resolve: state "resolved" plus close_code and close_notes; on a parent this also resolves its open children with the same resolution, and a comment on a parent is copied to its open children. parent_incident attaches the incident to a parent (null detaches it). Reassigning to another group clears an assignee who is not a member. Returns the full updated incident.',
+        'Change incident fields and, in the same call, add a work note, a customer-visible comment and related links. Only the fields you pass change; each change is recorded as a system journal entry ("State changed from New to In Progress"). Changing impact or urgency recalculates priority. To resolve: state "resolved" plus close_code and close_notes; on a parent this also resolves its open children with the same resolution, and a comment on a parent is copied to its open children. parent_incident attaches the incident to a parent (null detaches it). Reassigning to another group clears an assignee who is not a member. Also fills in the Affected CIs and the Resolution section as the facts become known: affected_cis, outage_start, service_restored_at (outage_duration_minutes is derived), cause_code, caused_by_change, resolved_by_change, root_cause, client_impact and employee_impact; none is required to resolve, and null clears one. Reopening a resolved incident clears service_restored_at. Returns the full updated incident.',
       input: {
         number: numberShape,
         state: stateEnum
@@ -322,6 +355,60 @@ export const spec: McpServerSpec = {
           .nullable()
           .optional()
           .describe('Parent incident number to attach this incident to, or null to detach it.'),
+        affected_cis: affectedCisShape
+          .optional()
+          .describe(
+            'Replaces the Affected CIs list: the other applications the incident affects, as TLAs, e.g. ["OLB","MBL"]. [] empties it.',
+          ),
+        outage_start: whenShape('When the service started to degrade')
+          .nullable()
+          .optional()
+          .describe(
+            'When the service started to degrade: ISO 8601 ("2026-11-12T14:05:00Z"), "now" or how long ago ("25m"); null clears it.',
+          ),
+        service_restored_at: whenShape('When the service was confirmed back to normal')
+          .nullable()
+          .optional()
+          .describe(
+            'When the service was confirmed back to normal: ISO 8601, "now" or how long ago ("5m"); null clears it. With outage_start it gives outage_duration_minutes.',
+          ),
+        cause_code: causeCodeEnum
+          .nullable()
+          .optional()
+          .describe(`What caused the incident: ${CAUSE_CODES.join(', ')}; null clears it.`),
+        caused_by_change: changeRefShape('The change request that caused the incident')
+          .nullable()
+          .optional()
+          .describe(
+            'The change request that caused the incident, e.g. "CHG0030041" (must exist); null clears it.',
+          ),
+        resolved_by_change: changeRefShape('The change request that fixed the incident')
+          .nullable()
+          .optional()
+          .describe(
+            'The change request that fixed the incident, e.g. "CHG0030042" (must exist); null clears it.',
+          ),
+        root_cause: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            'Root cause in a few sentences: what broke, why, and the evidence (MR, change, log lines); null clears it.',
+          ),
+        client_impact: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            'Impact to clients in plain business language, e.g. "Customers could not log in to mobile banking for 40 minutes."; null clears it.',
+          ),
+        employee_impact: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            'Impact to employees in plain business language, e.g. "Branch tellers could not look up customer profiles."; null clears it.',
+          ),
         updated_by: userKey('Who makes the change (default svc_incident_auto)').optional(),
       },
       annotations: WRITE,
@@ -374,6 +461,360 @@ export const spec: McpServerSpec = {
       run: async ({ parent, ...body }) =>
         incidentFull(
           await api.linkChildren(parent, { ...body, updated_by: body.updated_by ?? BOT }),
+        ),
+    });
+
+    // ---------------------------------------------------------------------
+    // Problems (the daily 8:00 AM problem stand-up)
+    // ---------------------------------------------------------------------
+
+    const problemNumberShape = z
+      .string()
+      .min(1)
+      .describe('Problem number, e.g. "PRB0040003" (a sys_id also works).');
+    const problemStateEnum = z.enum(PROBLEM_STATES as [ProblemState, ...ProblemState[]]);
+    const priorityShape = z
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)])
+      .describe('Problem priority, 1 (Critical) to 5 (Planning).');
+    const problemText = {
+      root_cause: 'Root cause: what broke and why, with the evidence (MR, change request, logs).',
+      workaround: 'Workaround that restores service while the permanent fix is pending.',
+      mitigation_plan:
+        'Mitigation/Repair plan: what was done to restore service, and what is left to do.',
+      action_items:
+        'Follow-up actions that stop it happening again, one per line with an owner, e.g. "- Add a contract test for the profile API (CIF team)".',
+      vendor: 'Vendor involved, if any, e.g. "Fiserv".',
+      client_impact:
+        'Impact to clients in plain business language (copied to the stand-up agenda).',
+      employee_impact:
+        'Impact to employees in plain business language (copied to the stand-up agenda).',
+    };
+
+    defineTool(server, 'list_problems', {
+      title: 'List problems',
+      description:
+        'Search problem records. Use it to check whether an incident already has a problem before creating one (incident), to see the agenda of the next 8:00 AM Eastern problem stand-up (standup "next"), or to look for earlier problems on an app (app_tla) when a failure looks familiar. Returns compact rows (number, state, priority, incident_priority, short_description, app_tla, cause_code, chronic, proactive, assignment_group, assigned_to, problem_coordinator, incidents, standup_date, opened_at, updated_at, web_url), newest first, plus total and next_cursor. get_problem has the root cause, plans and journal.',
+      input: {
+        state: z
+          .array(problemStateEnum)
+          .optional()
+          .describe(
+            'Only these states: open, root_cause_analysis, fix_in_progress, resolved, closed. Example: ["open","root_cause_analysis"].',
+          ),
+        active: z
+          .boolean()
+          .optional()
+          .describe(
+            'true = still being worked (open, root_cause_analysis, fix_in_progress); false = resolved or closed.',
+          ),
+        app_tla: tlaShape.optional(),
+        incident: z
+          .string()
+          .optional()
+          .describe('Only the problem that investigates this incident, e.g. "INC0010204".'),
+        standup: z
+          .string()
+          .optional()
+          .describe(
+            'Only problems on the agenda of one stand-up: "next" (the upcoming 8:00 AM Eastern stand-up), "today", or a date like "2026-11-13".',
+          ),
+        query: z
+          .string()
+          .optional()
+          .describe(
+            'Free text over number, short description, description, root cause, app and incident numbers (all words must match), e.g. "connection pool".',
+          ),
+        opened_after: z
+          .string()
+          .optional()
+          .describe('Only problems opened after this time: relative ("24h", "30d") or ISO 8601.'),
+        ...paginationShape,
+      },
+      annotations: READ_ONLY,
+      run: async ({ query, ...args }) => {
+        const page = await api.listProblems({ ...args, q: query });
+        return {
+          total: page.total,
+          next_cursor: page.next_cursor,
+          items: page.items.map(problemRow),
+        };
+      },
+    });
+
+    defineTool(server, 'get_problem', {
+      title: 'Get problem',
+      description:
+        'Full problem record: state, priority, incident_priority (highest priority among its incidents), application, cause_code, root_cause, workaround, mitigation_plan, action_items, change_request (the fix) and caused_by_change (CHG numbers), vendor, client_impact and employee_impact, chronic/proactive flags, assignment group, assignee and problem coordinator, standup_date (the 8:00 AM Eastern stand-up it is on the agenda for, or null), the incidents it investigates (related_incidents, oldest first) and the journal.',
+      input: { number: problemNumberShape },
+      annotations: READ_ONLY,
+      run: async ({ number }) => problemFull(await api.getProblem(number)),
+    });
+
+    defineTool(server, 'create_problem', {
+      title: 'Create problem',
+      description:
+        'Open a problem record to investigate one or more incidents after service is back: what happened, why, and what stops it happening again. By default it goes on the agenda of the next daily problem stand-up (8:00 AM Eastern), where incidents that hit operations or customers are reviewed, so write it for that audience: root_cause, mitigation_plan, action_items, client_impact and employee_impact. Each incident in incidents gets its problem field set and a journal entry. An incident has one problem: creating a second one for an incident fails and names the existing PRB (check list_problems with incident first, then update_problem). Defaults: app_tla = the first incident\'s application, priority = the highest priority among the incidents (else 3), cause_code = "Under investigation", assignment_group = the application\'s support group, problem_coordinator = the Major Incident Management on-call. Returns the full problem including number, standup_date and web_url.',
+      input: {
+        short_description: z
+          .string()
+          .min(1)
+          .max(160)
+          .describe(
+            'One-line summary of the underlying problem, e.g. "CIF - naming strategy change broke customer profile lookups".',
+          ),
+        description: z
+          .string()
+          .optional()
+          .describe('What happened: timeline, symptoms, how it was detected and restored.'),
+        incidents: incidentList('Incidents this problem investigates').max(50).optional(),
+        app_tla: tlaShape
+          .optional()
+          .describe(
+            'Application (configuration item) at fault, e.g. "CIF". Default: the first incident\'s application.',
+          ),
+        priority: priorityShape
+          .optional()
+          .describe(
+            'Problem priority, 1 (Critical) to 5 (Planning). Default: the highest priority among the incidents, else 3.',
+          ),
+        cause_code: causeCodeEnum
+          .optional()
+          .describe(`What caused it: ${CAUSE_CODES.join(', ')}. Default "Under investigation".`),
+        root_cause: z.string().optional().describe(problemText.root_cause),
+        workaround: z.string().optional().describe(problemText.workaround),
+        mitigation_plan: z.string().optional().describe(problemText.mitigation_plan),
+        action_items: z.string().optional().describe(problemText.action_items),
+        change_request: changeRefShape('The change request that fixed it').optional(),
+        caused_by_change: changeRefShape('The change request that caused it').optional(),
+        vendor: z.string().optional().describe(problemText.vendor),
+        client_impact: z.string().optional().describe(problemText.client_impact),
+        employee_impact: z.string().optional().describe(problemText.employee_impact),
+        chronic: z
+          .boolean()
+          .optional()
+          .describe('true when the same failure keeps coming back (default false).'),
+        proactive: z
+          .boolean()
+          .optional()
+          .describe('true when opened before any incident happened (default false).'),
+        assignment_group: groupKey(
+          'Group that owns the investigation (default: the application support group)',
+        ).optional(),
+        assigned_to: userKey('Person who owns the investigation').optional(),
+        problem_coordinator: userKey(
+          'Problem coordinator (default: the Major Incident Management on-call primary)',
+        ).optional(),
+        standup: z
+          .boolean()
+          .optional()
+          .describe(
+            'Put it on the agenda of the next 8:00 AM Eastern problem stand-up (default true); false keeps it off.',
+          ),
+        opened_by: userKey('Who opens it (default svc_incident_auto)').optional(),
+      },
+      annotations: WRITE,
+      run: async (args) =>
+        problemFull(await api.createProblem({ ...args, opened_by: args.opened_by ?? BOT })),
+    });
+
+    defineTool(server, 'update_problem', {
+      title: 'Update problem',
+      description:
+        'Change a problem record and, in the same call, add a work note. Only the fields you pass change; each change is recorded as a system journal entry. Use it to record the root cause and plans as the investigation progresses, move the state (open → root_cause_analysis → fix_in_progress → resolved → closed), link the fix (change_request), attach more incidents (add_incidents; an incident already on another problem is refused), or put it on / take it off the next 8:00 AM Eastern stand-up (standup). null clears a text or reference field. Returns the full updated problem.',
+      input: {
+        number: problemNumberShape,
+        state: problemStateEnum
+          .optional()
+          .describe(
+            'open, root_cause_analysis (cause being investigated), fix_in_progress (cause known, permanent fix under way), resolved (fix in production), closed (reviewed and done).',
+          ),
+        short_description: z.string().min(1).max(160).optional().describe('New one-line summary.'),
+        description: z.string().optional().describe('Replaces the description.'),
+        priority: priorityShape.optional(),
+        cause_code: causeCodeEnum.optional().describe(`What caused it: ${CAUSE_CODES.join(', ')}.`),
+        root_cause: z.string().nullable().optional().describe(problemText.root_cause),
+        workaround: z.string().nullable().optional().describe(problemText.workaround),
+        mitigation_plan: z.string().nullable().optional().describe(problemText.mitigation_plan),
+        action_items: z.string().nullable().optional().describe(problemText.action_items),
+        change_request: changeRefShape('The change request that fixed it (null clears it)')
+          .nullable()
+          .optional(),
+        caused_by_change: changeRefShape('The change request that caused it (null clears it)')
+          .nullable()
+          .optional(),
+        vendor: z.string().nullable().optional().describe(problemText.vendor),
+        client_impact: z.string().nullable().optional().describe(problemText.client_impact),
+        employee_impact: z.string().nullable().optional().describe(problemText.employee_impact),
+        chronic: z.boolean().optional().describe('true when the same failure keeps coming back.'),
+        proactive: z.boolean().optional().describe('true when opened before any incident.'),
+        assignment_group: groupKey('Group that owns the investigation (null clears it)')
+          .nullable()
+          .optional(),
+        assigned_to: userKey('Person who owns the investigation (null clears it)')
+          .nullable()
+          .optional(),
+        problem_coordinator: userKey('Problem coordinator (null clears it)').nullable().optional(),
+        add_incidents: incidentList('More incidents this problem investigates').max(50).optional(),
+        standup: z
+          .boolean()
+          .optional()
+          .describe(
+            'true = put it on the next 8:00 AM Eastern stand-up; false = take it off the agenda.',
+          ),
+        work_note: z.string().optional().describe('Internal work note to add.'),
+        updated_by: userKey('Who makes the change (default svc_incident_auto)').optional(),
+      },
+      annotations: WRITE,
+      run: async ({ number, ...body }) =>
+        problemFull(
+          await api.updateProblem(number, { ...body, updated_by: body.updated_by ?? BOT }),
+        ),
+    });
+
+    // ---------------------------------------------------------------------
+    // Critical Incident Communications (automation drafts, a person sends)
+    // ---------------------------------------------------------------------
+
+    const communicationKindEnum = z.enum(
+      COMMUNICATION_KINDS as [CommunicationKind, ...CommunicationKind[]],
+    );
+    const communicationNumberShape = z
+      .string()
+      .min(1)
+      .describe('Critical Incident Communication number, e.g. "CIC0050001".');
+
+    defineTool(server, 'list_incident_communications', {
+      title: 'List incident communications',
+      description:
+        'List Critical Incident Communications: the emails about an incident to the internal distribution groups (GRP_CIM_Tech_P1, ...). Use it to see what has already been drafted or sent for an incident before drafting another, or to find drafts still waiting for a person to send (state "draft"). Returns compact rows (number, incident, kind, state, subject, to, priority, drafted_at, sent_at, web_url), newest first, plus total and next_cursor. get_incident_communication has the full email.',
+      input: {
+        incident: z
+          .string()
+          .optional()
+          .describe('Only communications for this incident, e.g. "INC0010204".'),
+        state: z
+          .enum(['draft', 'sent'])
+          .optional()
+          .describe('draft (waiting for a person to review and send) or sent.'),
+        kind: communicationKindEnum
+          .optional()
+          .describe(
+            'new (announces an active incident), update (follow-up) or restored (service is back).',
+          ),
+        ...paginationShape,
+      },
+      annotations: READ_ONLY,
+      run: async (args) => {
+        const page = await api.listCommunications(args);
+        return {
+          total: page.total,
+          next_cursor: page.next_cursor,
+          items: page.items.map(communicationRow),
+        };
+      },
+    });
+
+    defineTool(server, 'get_incident_communication', {
+      title: 'Get incident communication',
+      description:
+        'Full Critical Incident Communication by CIC number, everything the email shows: subject, from, to (distribution group), state (draft or sent), title, start, resolved and duration_minutes (restored only), systems_impacted (TLAs), description, client_impact, employee_impact, cause, resolution_activities, incident_manager, communication_specialist, technology_owners, who drafted it and, once a person sent it, sent_by and sent_at.',
+      input: { number: communicationNumberShape },
+      annotations: READ_ONLY,
+      run: async ({ number }) => communicationFull(await api.getCommunication(number)),
+    });
+
+    defineTool(server, 'draft_incident_communication', {
+      title: 'Draft incident communication',
+      description:
+        'Draft a Critical Incident Communication for an incident: the email to the internal distribution group for its priority (GRP_CIM_Tech_P1, GRP_CIM_Tech_P2, ...). This only writes the draft; it does NOT send anything. A person (the Communication Specialist) reviews and sends it from ServiceNow, and no tool sends, so say "drafted for review", never "sent", and share the returned web_url. kind: new announces an active incident, update follows up, restored says service is back (subject NEW/RESTORED when nothing was sent before). Drafting the same kind again while that draft is unsent replaces it in place (same number); once sent it is final and a new draft gets a new number. Write for business readers: plain language, no stack traces. Defaults come from the incident: title = its short description, systems_impacted = its app and affected CIs, start = its outage_start (else opened_at), resolved = its service_restored_at (else now), client_impact / employee_impact = the incident\'s own, incident_manager / communication_specialist = the Major Incident Management on-call primary / secondary, technology_owners = the application owner. A work note with the link is added to the incident. Returns the full draft including number, subject, to, state "draft" and web_url.',
+      input: {
+        incident: numberShape.describe(
+          'Incident the communication is about, e.g. "INC0010204" (a sys_id also works).',
+        ),
+        kind: communicationKindEnum.describe(
+          'new (announces an active incident), update (follow-up while it is still active) or restored (service is back).',
+        ),
+        description: z
+          .string()
+          .min(1)
+          .describe(
+            'Body of the email in plain business language: what is happening (or happened), who is affected and what is being done. No stack traces or internal jargon.',
+          ),
+        title: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe(
+            'Headline shown after the incident number in the subject, e.g. "Customer profile lookups failing". Default: the incident\'s short description.',
+          ),
+        systems_impacted: z
+          .array(tlaShape)
+          .max(50)
+          .optional()
+          .describe(
+            'Applications impacted, as TLAs, e.g. ["CIF","OLB","MBL"]. Default: the incident\'s app and affected CIs.',
+          ),
+        start: whenShape(
+          "When the incident started (default: the incident's outage_start, else when it was opened)",
+        ).optional(),
+        resolved: whenShape(
+          "restored only: when service was restored (default: the incident's service_restored_at, else now)",
+        ).optional(),
+        client_impact: z
+          .string()
+          .optional()
+          .describe(
+            'Impact to clients, e.g. "Customers could not view their profile in online and mobile banking." Default: the incident\'s client_impact.',
+          ),
+        employee_impact: z
+          .string()
+          .optional()
+          .describe(
+            'Impact to employees, e.g. "Bankers could not look up customer profiles." Default: the incident\'s employee_impact.',
+          ),
+        cause: z
+          .string()
+          .optional()
+          .describe(
+            'Cause in one or two plain sentences, once known (usually on update or restored).',
+          ),
+        resolution_activities: z
+          .string()
+          .optional()
+          .describe(
+            'What was done, or is being done, to restore service, e.g. "The change was reverted through an emergency change request."',
+          ),
+        incident_manager: userKey(
+          'Incident manager named in the email (default: the Major Incident Management on-call primary)',
+        ).optional(),
+        communication_specialist: userKey(
+          'Communication specialist who reviews and sends it (default: the Major Incident Management on-call secondary)',
+        ).optional(),
+        technology_owners: z
+          .array(z.string().min(1))
+          .max(20)
+          .optional()
+          .describe(
+            'Technology owners named in the email, as usernames, e.g. ["dwhitfield"]. Default: the owner of the incident\'s application.',
+          ),
+        to: z
+          .string()
+          .min(1)
+          .max(80)
+          .optional()
+          .describe(
+            'Distribution group. Default: GRP_CIM_Tech_P<priority> for the incident\'s priority, e.g. "GRP_CIM_Tech_P1".',
+          ),
+        drafted_by: userKey('Who drafts it (default svc_incident_auto)').optional(),
+      },
+      annotations: WRITE,
+      run: async ({ incident, ...body }) =>
+        communicationFull(
+          await api.draftCommunication(incident, {
+            ...body,
+            drafted_by: body.drafted_by ?? BOT,
+          }),
         ),
     });
 
