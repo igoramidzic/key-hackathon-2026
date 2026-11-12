@@ -73,6 +73,13 @@ const EnvSchema = z.object({
 
   AGENT_DRY_RUN: bool(false),
   AGENT_AUTO_RESOLVE: bool(false),
+  /**
+   * true: the emergency change is left as a draft and its link is posted in the chat, so a person
+   * reviews (and edits) it and promotes it in ServiceNow. false: the agent schedules it itself.
+   */
+  AGENT_CHANGE_REVIEW: bool(false),
+  /** false: no Critical Incident Communication drafts (the NEW and the RESTORED email). */
+  AGENT_COMMUNICATIONS: bool(true),
   AGENT_DATA_DIR: z.string().min(1).optional(),
   AGENT_IDENTITY: z.string().min(1).default('svc_incident_auto'),
   /** Personas used only when the CMDB can't name anyone (AGENT-GUIDE §3). */
@@ -123,6 +130,8 @@ export interface AgentConfig {
   llm: { mode: 'claude' | 'off'; model: string; deepModel: string; reason: string };
   dryRun: boolean;
   autoResolve: boolean;
+  changeReview: boolean;
+  communications: boolean;
   dataDir: string;
   identity: string;
   fallback: { commander: string; mim: string; serviceDesk: string };
@@ -195,6 +204,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     llm: { mode, model: e.AGENT_MODEL, deepModel: e.AGENT_MODEL_DEEP, reason },
     dryRun: e.AGENT_DRY_RUN,
     autoResolve: e.AGENT_AUTO_RESOLVE,
+    changeReview: e.AGENT_CHANGE_REVIEW,
+    communications: e.AGENT_COMMUNICATIONS,
     dataDir: path.resolve(e.AGENT_DATA_DIR ?? path.join(PACKAGE_DIR, '.data')),
     identity: e.AGENT_IDENTITY,
     fallback: {

@@ -206,7 +206,7 @@ export function fixReady(c: Case, mentions: string[]): Message {
     body: [
       `**Fix ready for review:** ${md(`${mr.project}!${mr.iid}`, mr.web_url)}${fix ? ` "${fix.title}"` : ''}`,
       fix ? `Strategy: ${fix.strategy} (${fix.justification})` : '',
-      `${mentions.map((m) => `@${m}`).join(' ')} please review and click **Merge** in GitLab. Merging deploys to QV; I'll raise the emergency change to production right after.`,
+      `${mentions.map((m) => `@${m}`).join(' ')} please review and click **Merge** in GitLab. Merging deploys to QV; I'll prepare the emergency change to production right after.`,
     ]
       .filter(Boolean)
       .join('\n'),
@@ -215,11 +215,26 @@ export function fixReady(c: Case, mentions: string[]): Message {
   };
 }
 
-export function changeRaised(c: Case): Message {
+export function changeRaised(c: Case, mentions: string[] = []): Message {
   return {
-    body: `**Merged.** Emergency change ${md(c.change!.number, c.change!.web_url)} raised to promote ${c.fix_mr ? md(`${c.fix_mr.project}!${c.fix_mr.iid}`, c.fix_mr.web_url) : 'the fix'} to production now. KBR will pick it up within seconds.`,
-    mentions: [],
-    importance: 'normal',
+    body: [
+      `**Merged. Emergency change created:** ${md(c.change!.number, c.change!.web_url)} promotes ${c.fix_mr ? md(`${c.fix_mr.project}!${c.fix_mr.iid}`, c.fix_mr.web_url) : 'the fix'} to production.`,
+      `${mentions.length ? `${mentions.map((m) => `@${m}`).join(' ')} please` : 'Please'} review it in ServiceNow and edit anything that needs changing. KBR picks it up from there.`,
+    ].join('\n'),
+    mentions,
+    importance: importanceFor(c),
+  };
+}
+
+/** The change is drafted, not scheduled: a person reviews it and promotes it. */
+export function changeForReview(c: Case, mentions: string[]): Message {
+  return {
+    body: [
+      `**Merged. Emergency change drafted for review:** ${md(c.change!.number, c.change!.web_url)} promotes ${c.fix_mr ? md(`${c.fix_mr.project}!${c.fix_mr.iid}`, c.fix_mr.web_url) : 'the fix'} to production.`,
+      `${mentions.length ? `${mentions.map((m) => `@${m}`).join(' ')} please` : 'Please'} open it in ServiceNow, check or edit the details, and click **Promote now**. Nothing goes to production until you do.`,
+    ].join('\n'),
+    mentions,
+    importance: importanceFor(c),
   };
 }
 

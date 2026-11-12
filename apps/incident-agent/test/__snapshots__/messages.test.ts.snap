@@ -39,10 +39,13 @@ Not invited yet (ask and I'll add them): dgreen (backup on-call for CIF)."
 exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 1`] = `
 "**Fix ready for review:** [keybank/CIF00/customer-profile-api!10](http://gl.test/mr/10) "Revert snake_case (INC0010234)"
 Strategy: revert (the change is self-contained)
-@jdoe @kstreich please review and click **Merge** in GitLab. Merging deploys to QV; I'll raise the emergency change to production right after."
+@jdoe @kstreich please review and click **Merge** in GitLab. Merging deploys to QV; I'll prepare the emergency change to production right after."
 `;
 
-exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 2`] = `"**Merged.** Emergency change [CHG0030090](http://sn.test/change_requests/CHG0030090) raised to promote [keybank/CIF00/customer-profile-api!10](http://gl.test/mr/10) to production now. KBR will pick it up within seconds."`;
+exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 2`] = `
+"**Merged. Emergency change created:** [CHG0030090](http://sn.test/change_requests/CHG0030090) promotes [keybank/CIF00/customer-profile-api!10](http://gl.test/mr/10) to production.
+Please review it in ServiceNow and edit anything that needs changing. KBR picks it up from there."
+`;
 
 exports[`message templates (snapshots) > fix, change, promotion, recovery, resolution, callers, failure 3`] = `"**KBR promoted [CHG0030090](http://sn.test/change_requests/CHG0030090) to production** at 19:30 UTC. Watching the error rate to confirm recovery."`;
 

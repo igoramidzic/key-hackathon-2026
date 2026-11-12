@@ -47,7 +47,7 @@ button { font: inherit; color: inherit; }
 .hud { position: absolute; left: 0; right: 0; top: 0; height: 44px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; background: var(--paper); border-bottom: 1px solid var(--line); font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; z-index: 5; }
 .hud span { display: inline-flex; align-items: center; gap: 10px; white-space: pre; }
 .hud b { color: var(--ink); font-weight: 600; }
-.hud .mark { width: 18px; height: 18px; color: var(--ink); }
+.hud .mark { flex: none; width: 20px; height: 20px; color: var(--ink); --blip: 4px; }
 .capband { position: absolute; left: 0; right: 0; bottom: 0; height: 100px; display: grid; place-items: center; background: var(--card); border-top: 1px solid var(--line); z-index: 6; }
 .caption { max-width: 1060px; font: 500 20px/1.35 var(--sans); text-align: center; text-wrap: balance; opacity: 0; transition: opacity .2s; }
 .caption.on { opacity: 1; }
@@ -59,6 +59,22 @@ button { font: inherit; color: inherit; }
 h1, h2, h3 { font-family: var(--sans); margin: 0; text-wrap: balance; }
 h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025em; margin-top: 8px; }
 .mark { display: block; }
+/* The mark: a radar. Rings and cross-hairs in the current colour, a sweep that circles, and red
+   blips that light as the sweep reaches them. The only thing here that moves by itself. */
+.radar { position: relative; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; --blip: 10px; }
+.radar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; opacity: .4;
+  background:
+    linear-gradient(currentColor, currentColor) 50% 0 / 1px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) 0 50% / 100% 1px no-repeat,
+    radial-gradient(circle closest-side, transparent 0 33%, currentColor 33% calc(33% + 1px), transparent calc(33% + 1px) 66%, currentColor 66% calc(66% + 1px), transparent calc(66% + 1px)); }
+.radar .sweep { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 72%, color-mix(in srgb, currentColor 60%, transparent) 100%); animation: sweep 4.5s linear infinite; }
+.radar .blip { position: absolute; width: var(--blip); height: var(--blip); margin: calc(var(--blip) / -2) 0 0 calc(var(--blip) / -2); border-radius: 50%; background: #e5484d; opacity: 0; animation: blip 4.5s linear infinite; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+@keyframes blip { 0% { opacity: 0; transform: scale(.4); } 2% { opacity: 1; transform: scale(1.5); } 8% { opacity: 1; transform: scale(1); } 60% { opacity: 0; transform: scale(1); } 100% { opacity: 0; } }
+/* product logos in the diagrams */
+.lg { display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; }
+.lg svg { display: block; width: 100%; height: 100%; }
+.lg.lg-key, .node .lg.lg-key { width: 40px; height: 18px; }
 /* *marked* words: an analyst's highlighter */
 .hl b { font-weight: 600; color: var(--ink); background: var(--mark); padding: 1px 3px; margin: 0 -1px; }
 
@@ -82,8 +98,9 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 .verbs span { font: 600 24px var(--sans); padding: 5px 24px 5px 0; margin-right: 24px; border-right: 1px solid var(--line); }
 .verbs span:last-child { border-right: 0; }
 .verbs i { font: 500 13px var(--mono); font-style: normal; color: var(--muted); margin-right: 10px; }
-.emblem { width: 300px; height: 300px; background: var(--ink); color: var(--paper); display: grid; place-items: center; }
-.emblem .mark { width: 150px; height: 150px; }
+.emblem { width: 300px; height: 300px; color: var(--ink); display: grid; place-items: center; }
+.emblem .mark { width: 280px; height: 280px; box-shadow: inset 0 0 0 2px currentColor; --blip: 13px; }
+.emblem .radar .sweep { background: conic-gradient(from 0deg, transparent 0 68%, color-mix(in srgb, currentColor 34%, transparent) 100%); }
 [data-scene="open"] .stamp { left: 660px; top: 120px; }
 
 /* ---------- scene: prob ---------- */
@@ -112,10 +129,14 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 /* ---------- scene: now ---------- */
 .now { display: grid; grid-template-columns: 1fr 300px; gap: 36px; margin-top: 22px; }
 .relay { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); }
-.leg { display: grid; grid-template-columns: 150px 1fr auto; gap: 18px; align-items: center; padding: 10px 18px; min-height: 60px; border-bottom: 1px solid var(--line); }
+.leg { display: grid; grid-template-columns: 150px 1fr auto; gap: 18px; align-items: center; padding: 8px 18px; min-height: 56px; border-bottom: 1px solid var(--line); }
 .leg:last-child { border-bottom: 0; }
 .leg .t { font: 500 21px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .leg .what { font-size: 20px; font-weight: 500; }
+.leg .what span { display: block; }
+.leg .what span + span { margin-top: 3px; }
+.leg .what small { display: block; font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 3px 0; }
+h2 .p1 { display: inline-block; vertical-align: 7px; margin-right: 14px; padding: 5px 10px 4px; background: var(--red); color: #fff; font: 600 17px var(--mono); letter-spacing: .06em; }
 .leg.bounce .t, .leg.bounce .what { color: var(--red); }
 .elapsed { align-self: start; padding: 24px; border: 1px solid var(--line); background: var(--card); }
 .elapsed .lbl { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
@@ -126,58 +147,64 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 .now-wrap .stamp { right: 64px; bottom: 150px; }
 
 /* ---------- scene: cost (one sheet from the file) ---------- */
-.paper { position: relative; margin-top: 36px; padding: 32px 40px 34px; background: var(--card); border: 1px solid var(--line); }
+.paper { position: relative; margin-top: 28px; padding: 28px 40px 30px; background: var(--card); border: 1px solid var(--line); }
 .paper header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--ink); padding-bottom: 14px; font: 500 13px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .redact { display: inline-block; width: 110px; height: 13px; background: var(--ink); vertical-align: -2px; margin: 0 10px; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 52px 0 48px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 40px 0 36px; }
 .stat { padding-left: 28px; border-left: 1px solid var(--line); }
 .stat:first-child { padding-left: 0; border-left: 0; }
-.stat .n { font: 600 90px/1 var(--sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stat .n small { font-size: 38px; font-weight: 500; letter-spacing: 0; margin-left: 3px; color: var(--muted); }
-.stat p { margin: 12px 0 0; font: 500 14px var(--mono); color: var(--muted); }
+.stat .n { font: 600 112px/1 var(--sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat .n small { font-size: 44px; font-weight: 500; letter-spacing: 0; margin-left: 3px; color: var(--muted); }
+.stat p { margin: 14px 0 0; font: 500 19px var(--sans); color: var(--muted); }
+.footnote { margin: 14px 2px 0; font: 400 14px var(--mono); color: var(--muted); }
 .typed { font-size: 22px; font-weight: 500; border-top: 1px solid var(--line); padding-top: 24px; }
 .paper .stamp { right: 36px; bottom: 24px; }
 
-/* ---------- scene: impl ---------- */
-.impl { display: grid; grid-template-columns: 216px 1fr; gap: 32px; margin-top: 22px; }
-.badge { background: var(--card); border: 1px solid var(--line); padding: 14px 16px 16px; align-self: start; }
-.badge .top { display: flex; justify-content: space-between; font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.avatar { height: 132px; margin: 12px 0 14px; background: var(--ink); color: var(--paper); display: grid; place-items: center; }
-.avatar .mark { width: 72px; height: 72px; }
-.badge h3 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 12px; }
-.badge dl { margin: 0; display: grid; gap: 2px; font-size: 13.5px; line-height: 1.35; }
-.badge dt { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
-.badge dd { margin: 0; }
-.right { position: relative; min-height: 440px; }
-.arch { display: grid; grid-template-columns: 240px 34px 240px 34px 1fr; align-items: center; }
-.col { display: flex; flex-direction: column; gap: 8px; }
-.col .hd { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
-.box { padding: 11px 14px; border: 1px solid var(--line); background: var(--card); }
-.box b { display: block; font-size: 18px; font-weight: 600; }
-.box span { font: 400 13px var(--mono); color: var(--muted); }
-.box.agent { border-color: var(--ink); background: var(--ink); color: #fff; text-align: center; padding: 30px 14px; }
-.box.agent b { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px; }
-.box.agent span { color: #b9b7b0; }
-.arrow { height: 1.5px; background: var(--ink); position: relative; }
-.arrow::after { content: ""; position: absolute; right: -1px; top: -4.5px; border: 5px solid transparent; border-left: 7px solid var(--ink); border-right: 0; }
-.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.tools .box { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.tools .box span { font-size: 15px; }
-.flow { display: flex; gap: 6px; align-items: center; margin-top: 28px; white-space: nowrap; }
-.flow .st { font: 600 14.5px var(--sans); padding: 7px 10px; background: var(--card); border: 1px solid var(--line); }
+/* ---------- scene: impl (watch -> trigger -> orchestrator <-> sub-agents -> outcome) ---------- */
+.orch { position: relative; height: 356px; margin-top: 22px; }
+.orch > * { position: absolute; }
+.orch svg.wires { left: 0; top: 0; width: 1152px; height: 356px; overflow: visible; }
+.wires path { fill: none; stroke-width: 1.5; }
+.wires .out { stroke: var(--ink); }
+.wires .back { stroke: var(--green); }
+.wires .trig { stroke: var(--red); stroke-width: 2; }
+.watch { left: 0; top: 78px; width: 250px; height: 200px; padding: 16px 18px; background: var(--card); border: 1px solid var(--line); }
+.watch .hd, .subs-hd { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.watch h3 { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 600; margin: 10px 0 2px; }
+.watch p { margin: 0 0 12px; font-size: 15px; color: var(--muted); }
+.watch code { display: block; font: 400 13px/1.75 var(--mono); color: var(--muted); white-space: nowrap; }
+.watch code.err { color: var(--red); font-weight: 600; }
+.trigger { left: 262px; top: 134px; width: 116px; text-align: center; font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--red); }
+.brain { left: 390px; top: 78px; width: 250px; height: 200px; padding: 22px 20px; background: var(--ink); color: #fff; display: flex; flex-direction: column; justify-content: center; }
+.brain .mark { flex: none; width: 44px; height: 44px; margin-bottom: 14px; --blip: 5px; }
+.brain b { font-size: 25px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.brain span { margin-top: 8px; font-size: 15px; line-height: 1.35; color: #b9b7b0; }
+.subs-hd { left: 760px; top: 0; }
+.sub-agent { left: 760px; width: 392px; height: 72px; padding: 0 16px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); }
+.sub-agent b { display: block; font-size: 18px; font-weight: 600; }
+.sub-agent span.d { font-size: 14px; color: var(--muted); }
+.sub-agent .sys { display: flex; align-items: center; gap: 8px; font: 500 14px var(--sans); white-space: nowrap; }
+.mcp { font: 600 10.5px var(--mono); letter-spacing: .1em; padding: 3px 6px 2px; border: 1px solid var(--line); color: var(--muted); background: var(--paper); text-transform: uppercase; white-space: nowrap; }
+.wire-key { left: 652px; width: 96px; text-align: center; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.wire-key.out { top: 22px; color: var(--ink); }
+.wire-key.back { top: 322px; color: var(--green); }
+.flow { display: flex; gap: 6px; align-items: center; margin-top: 18px; white-space: nowrap; }
+.flow .lead { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.flow .st { font: 600 16px var(--sans); padding: 8px 12px; background: var(--card); border: 1px solid var(--line); }
 .flow .st.human { background: var(--mark); border-color: var(--ink); }
 .flow .sep { color: var(--muted); font: 500 13px var(--mono); }
-.note { margin-top: 16px; font-size: 16px; color: var(--muted); }
-.range { position: absolute; inset: 0; background: var(--paper); }
-.range h3 { font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
-.range p { font-size: 19px; color: var(--muted); margin: 0 0 24px; max-width: 760px; line-height: 1.45; }
+/* ---------- scene: sim (the training ground) ---------- */
+.arrow { height: 1.5px; background: var(--ink); position: relative; }
+.arrow::after { content: ""; position: absolute; right: -1px; top: -4.5px; border: 5px solid transparent; border-left: 7px solid var(--ink); border-right: 0; }
+.range { margin-top: 30px; }
+.range p { font-size: 21px; color: var(--muted); margin: 0 0 28px; max-width: 820px; line-height: 1.45; }
 .tiles { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border: 1px solid var(--line); }
-.tile { padding: 20px 18px; border-left: 1px solid var(--line); }
+.tile { padding: 26px 20px; border-left: 1px solid var(--line); }
 .tile:first-child { border-left: 0; }
-.tile b { display: block; font: 600 50px/1.05 var(--sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.tile span { font: 500 13px var(--mono); color: var(--muted); }
+.tile b { display: block; font: 600 60px/1.05 var(--sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.tile span { font: 500 14px var(--mono); color: var(--muted); }
 .traps { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-.traps .chip { font: 500 15px var(--sans); padding: 7px 12px; color: var(--ink); background: var(--card); }
+.traps .chip { font: 500 17px var(--sans); padding: 9px 14px; color: var(--ink); background: var(--card); }
 
 /* ---------- scene: demo (a recording of the real guided demo, cut to the narration) ---------- */
 [data-scene="demo"] { padding: 0; }
@@ -186,34 +213,56 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 .live-tag { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: grid; place-items: center; font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); z-index: 6; pointer-events: none; }
 [data-scene="demo"] .result { inset: 44px 0 100px; }
 .result { position: absolute; inset: 0; z-index: 4; background: var(--paper); display: grid; place-items: center; text-align: center; }
-.result .big { display: inline-block; font: 600 150px/1 var(--sans); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
-.result .big small { font-size: .3em; font-weight: 500; letter-spacing: 0; color: var(--muted); margin: 0 .5em 0 .18em; }
-.result .big small:last-child { margin-right: 0; }
-.result p { font-size: 24px; margin: 10px 0 18px; }
-.result .vs { font: 500 16px var(--mono); color: var(--muted); }
+.result .pre { font: 500 14px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 22px; }
+.cuts { display: grid; grid-auto-flow: column; grid-auto-columns: 500px; }
+.cut { padding: 6px 0; border-left: 1px solid var(--line); }
+.cut:first-child { border-left: 0; }
+.cut .nm { font: 600 22px var(--sans); }
+.cut .big { font: 600 92px/1.1 var(--sans); letter-spacing: -.05em; font-variant-numeric: tabular-nums; white-space: nowrap; margin: 10px 0 12px; }
+.cut .big small { font-size: .32em; font-weight: 500; letter-spacing: 0; color: var(--muted); margin: 0 .45em 0 .18em; }
+.cut .big small:last-child { margin-right: 0; }
+.cut .was { font: 500 17px var(--mono); color: var(--muted); }
+.cut .was b { font-weight: 600; color: var(--ink); }
+.cut .less { display: inline-block; margin-top: 16px; padding: 5px 12px; font: 600 17px var(--sans); color: var(--green); border: 1px solid var(--green); background: var(--card); }
+.cut .yr { margin-top: 14px; font: 500 16px var(--mono); color: var(--muted); }
+.cut .yr b { font-weight: 600; color: var(--ink); }
+.year { display: inline-flex; align-items: baseline; gap: 12px; margin-top: 26px; padding: 14px 22px; background: var(--card); border: 1px solid var(--ink); border-left: 5px solid var(--green); font-size: 22px; font-weight: 500; }
+.year small { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--green); }
+.year b { font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.live-note { position: absolute; right: 18px; top: 9px; display: flex; align-items: center; gap: 6px; }
+.live-note .lead { font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.live-note .src { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; font: 500 14px var(--sans); background: var(--card); border: 1px solid var(--line); white-space: nowrap; }
+.live-note .src .lg { width: 17px; height: 17px; }
 
-/* ---------- scene: prod ---------- */
-.pipe { display: grid; align-items: stretch; margin-top: 24px; }
-.pipe .arrow { align-self: center; }
-.gbox { padding: 14px 12px; border: 1px solid var(--line); background: var(--card); min-height: 116px; }
-.gbox small { display: block; font: 500 11px var(--mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
-.gbox b { display: block; font-size: 18px; font-weight: 600; line-height: 1.2; }
-.gbox span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 6px; line-height: 1.3; }
-.gbox.key { border-color: var(--ink); background: var(--ink); color: #fff; }
-.gbox.key small, .gbox.key span { color: #b9b7b0; }
-.guards { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+/* ---------- scene: prod (everything connects to the agent) ---------- */
+.hub { position: relative; height: 312px; margin-top: 22px; }
+.hub > * { position: absolute; }
+.hub svg.wires { left: 0; top: 0; width: 1152px; height: 312px; overflow: visible; }
+.node { left: 0; width: 372px; height: 66px; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); }
+.node b { flex: 1; font-size: 18px; font-weight: 600; line-height: 1.15; }
+.node .lg { width: 28px; height: 28px; }
+.mcp.have { color: var(--green); border-color: var(--green); background: var(--card); }
+.core { left: 456px; top: 66px; width: 240px; height: 180px; background: var(--ink); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.core .lg { width: 40px; height: 40px; margin-bottom: 12px; }
+.core b { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.core span { margin-top: 6px; font-size: 15px; color: #b9b7b0; }
+.acts { left: 780px; top: 66px; width: 372px; height: 180px; padding: 18px 18px 0; background: var(--card); border: 1px solid var(--line); }
+.acts .top { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.acts .top b { font-size: 18px; font-weight: 600; }
+.acts .top .lg { width: 28px; height: 28px; }
+.acts .row { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 17px; font-weight: 600; }
+.acts .row span.d { font-weight: 400; font-size: 15px; color: var(--muted); white-space: nowrap; }
+.hub .lbl { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ready { display: flex; align-items: center; gap: 14px; margin-top: 20px; padding: 16px 20px; background: var(--card); border: 1px solid var(--ink); border-left: 5px solid var(--green); font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.ready small { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--green); white-space: nowrap; }
+.guards { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .guards .chip { font: 400 15px var(--sans); color: var(--muted); background: var(--card); padding: 7px 12px; }
 .guards .chip b { color: var(--ink); font-weight: 600; }
-.phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
-.phase { padding: 14px 18px 16px; background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--ink); }
-.phase small { font: 500 11px var(--mono); letter-spacing: .14em; color: var(--muted); }
-.phase b { display: block; font-size: 27px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; }
-.phase span { font-size: 16px; color: var(--muted); }
 
 /* ---------- scene: next ---------- */
-.missions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
-.mission { background: var(--card); border: 1px solid var(--line); padding: 0 20px 22px; min-height: 250px; }
-.mission::before { content: attr(data-tab); display: block; margin: 0 -20px 18px; padding: 10px 20px 9px; border-bottom: 1px solid var(--line); font: 500 11px var(--mono); letter-spacing: .14em; color: var(--muted); }
+.missions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 44px; }
+.mission { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--ink); padding: 24px 22px 26px; min-height: 300px; }
+.mission i { display: block; font: 500 13px var(--mono); font-style: normal; color: var(--muted); margin-bottom: 14px; }
 .mission b { display: block; font-size: 25px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin-bottom: 12px; }
 .mission span { font-size: 16.5px; line-height: 1.45; color: var(--muted); }
 .also { margin-top: 22px; font-size: 15px; line-height: 1.9; color: var(--muted); }
@@ -253,6 +302,8 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 
 @media (prefers-reduced-motion: reduce) {
   .cue, .cue.rd::after, .stamp, .scene { transition-duration: .01s; }
+  .radar .sweep { animation: none; }
+  .radar .blip { animation: none; opacity: 1; }
 }
 </style>
 
@@ -280,8 +331,8 @@ h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025
 
 <script>
 // Both blocks are written by build.py from content.yaml. Edit that file, not these.
-const TL = /*TIMELINE*/{"duration":297.95,"voice":"bm_george","scenes":[{"id":"open","title":"Briefing","s":0.0,"e":16.65},{"id":"prob","title":"The problem","s":16.65,"e":39.83},{"id":"now","title":"Today: manual","s":39.83,"e":74.75},{"id":"cost","title":"The cost","s":74.75,"e":90.17},{"id":"impl","title":"The agent","s":90.17,"e":125.64},{"id":"demo","title":"Live case","s":125.64,"e":248.77},{"id":"prod","title":"Path to production","s":248.77,"e":275.41},{"id":"next","title":"What's next","s":275.41,"e":288.43},{"id":"end","title":"Close","s":288.43,"e":297.95}],"beats":{"o1":{"s":0.8,"e":4.58,"text":"Good evening. This is your briefing on Operation NightWatch."},"o2":{"s":4.88,"e":15.95,"text":"The target: production incidents. The asset: an AI agent that spots the trouble, files the report, and assembles the right team, before anyone picks up a phone."},"p1":{"s":17.45,"e":24.09,"text":"Seven minutes past two in the morning. A routine change ships at a bank that runs four hundred applications."},"p2":{"s":24.39,"e":28.64,"text":"Within a minute, online banking, mobile, and payments begin to fail."},"p3":{"s":28.94,"e":36.56,"text":"Alerts fire from every direction. But the service that caused it looks perfectly healthy. It is still answering every request."},"p4":{"s":36.86,"e":39.13,"text":"Nobody knows where to look, and the clock is running."},"n1":{"s":40.63,"e":43.58,"text":"Today, a critical incident is a manual relay."},"n2":{"s":43.88,"e":51.06,"text":"Incident Management hears about it from a page, a monitor, a Teams chat, an email, or the incident phone line."},"n3":{"s":51.36,"e":59.58,"text":"They gather teams to judge impact and urgency, set the priority, then build a Teams chat, publish what is known, and start a recorded call."},"n4":{"s":59.88,"e":66.11,"text":"Corporate incident response is engaged, communications go out, and only then does the hunt for the cause really begin."},"n5":{"s":66.41,"e":74.05,"text":"Once service is restored, the paperwork starts: the ServiceNow record, a problem record, and the post-incident summary."},"c2":{"s":75.55,"e":82.67,"text":"Over the last three months, a priority one incident took an average of one hour and forty-eight minutes to resolve for the applications it hit."},"c3":{"s":82.97,"e":89.47,"text":"Priority two took close to three hours. Every one of those minutes costs the bank revenue and customers."},"i1":{"s":90.97,"e":92.28,"text":"Enter NightWatch."},"i2":{"s":92.58,"e":98.41,"text":"It watches the live log stream, the alert feeds, and new ServiceNow incidents around the clock."},"i3":{"s":98.71,"e":107.41,"text":"When something breaks, it runs the critical incident process itself, with fifty-nine tools across logs, ServiceNow, GitLab, and Teams."},"i4":{"s":107.71,"e":115.81,"text":"It finds the cause, mobilizes the right people, proposes the fix, and does the paperwork. A human always makes the final call."},"i7":{"s":116.11,"e":124.94,"text":"To train it safely, we built a simulated bank: four hundred applications, twelve hundred people, and failures with decoys planted along the way."},"d1":{"s":126.44,"e":129.78,"text":"Let's watch it work, in a real run on the simulated bank."},"d2":{"s":130.08,"e":135.99,"text":"A change ships. Errors start in online banking, then mobile, then payments."},"d3":{"s":136.29,"e":142.4,"text":"Three seconds after the first error, NightWatch has noticed. The alerts that page people come later."},"d4":{"s":142.7,"e":150.25,"text":"Six applications are failing. It works out they are one problem, keeps one case, and sizes up the damage."},"d5":{"s":150.55,"e":161.99,"text":"It opens the parent incident in ServiceNow: priority one, assigned to the owning team, every affected system listed. Help desk tickets about the same outage go underneath it."},"d6":{"s":162.29,"e":169.93,"text":"It stands up the Teams chat, named with the incident number and what is wrong, and adds eight people. Each is told why they are there."},"d7":{"s":170.23,"e":179.45,"text":"It posts the issue, then turns the chat into a call: everyone is prompted to join, with recording, transcription and the facilitator already on."},"d8":{"s":179.75,"e":187.92,"text":"And it drafts the critical incident communication for the priority one distribution list. A person reviews it and presses send."},"d9":{"s":188.22,"e":199.37,"text":"Seventy-two seconds in, it names the cause. A change renamed every field in the customer profile. It passed review, and the service never returned an error itself."},"d10":{"s":199.67,"e":208.37,"text":"It writes the fix as a merge request and posts the solution in the chat. The one decision that matters stays with a person, who clicks merge."},"d11":{"s":208.67,"e":213.77,"text":"NightWatch raises the emergency change, the release goes out, and the errors drain away."},"d12":{"s":214.07,"e":223.3,"text":"Once it is resolved, it posts the resolution in Teams and fills out the incident: cause code, the change that caused it, the change that fixed it, and the impact."},"d13":{"s":223.6,"e":227.31,"text":"Resolving the parent closes every caller's ticket in one update."},"d14":{"s":227.61,"e":233.46,"text":"It opens the problem record, ready for tomorrow's 8 AM stand-up, and renames the chat with the problem number."},"d15":{"s":233.76,"e":240.46,"text":"Then it drafts the all-clear: start, end, duration, impact and cause."},"d16":{"s":240.76,"e":248.07,"text":"In this run: root cause in seventy-two seconds, and recovery confirmed three minutes and eight seconds after the first error."},"g2":{"s":249.57,"e":260.03,"text":"Google Gemini does the reasoning. It reads production through the GCP and Kibana MCP servers, and the code through GitLab and the KeyBank Codebase Analyst."},"g4":{"s":260.33,"e":266.25,"text":"Microsoft Studio connects it to Teams and ServiceNow, so it works where the incident team already works."},"g5":{"s":266.55,"e":274.71,"text":"We roll out in three phases: shadow mode, co-pilot with a human approving each action, then autonomy for the patterns it has proven."},"x2":{"s":276.21,"e":287.73,"text":"Next: automatic phone calls to on-call support off hours. The same playbook for non-production. Risk scoring on changes before they merge. And a memory of every past case."},"e1":{"s":289.23,"e":296.07,"text":"NightWatch. Faster detection, the right people, a clear root cause. And critical services back sooner."},"e2":{"s":296.37,"e":297.25,"text":"End of briefing."}}}/*END*/;
-const C = /*CONTENT*/{"hud":"Operation *NightWatch*","player":{"start":"Start briefing","replay":"Replay briefing"},"scenes":{"open":{"kicker":"Mission briefing · Hackathon 2026","title":["Operation","NightWatch"],"lede":{"at":"o2@0.28","text":"An AI agent that spots the incident, files the report and assembles the right team."},"verbs":[{"at":"o2@0.42","text":"Detect"},{"at":"o2@0.56","text":"Report"},{"at":"o2@0.68","text":"Assemble"}],"stamp":{"at":"o1@0.55","text":"Classified"}},"prob":{"kicker":"File 01 // The problem","clock":{"start":"02:07:00","speed":"4"},"sub":"A routine change ships to production.","alerts":[{"at":"p3","level":"CRITICAL","text":"Online Banking: 5xx error rate 38.4%"},{"at":"p3@0.12","level":"CRITICAL","text":"Mobile Banking: 5xx error rate 27.9%"},{"at":"p3@0.24","level":"MAJOR","text":"Payments: failed payment rate 21.6%"}],"question":{"at":"p4","text":"Where do you look?"},"estate":{"total":"400","failing":"36","labelled":[{"at":"p2@0.3","text":"Online Banking"},{"at":"p2@0.52","text":"Mobile"},{"at":"p2@0.68","text":"Payments"}],"spread":["p2@0.8","p3@0.5"],"culprit":{"at":"p3@0.4","text":"200 OK · looks healthy"},"legend":{"total":"applications","failing":"failing","cause":"*1* cause, still green"}}},"now":{"kicker":"File 02 // Current state","headline":"Today it is a manual relay","steps":[{"at":"n2","time":"00:10","text":"Incident Management is made aware","tool":"Page · NOC · monitor · phone"},{"at":"n3@0.05","time":"00:22","text":"Gather teams, set impact, urgency and priority","tool":"CIC"},{"at":"n3@0.5","time":"00:32","text":"Create the Teams chat, publish the issue, start a recorded call","tool":"Teams"},{"at":"n4","time":"00:40","text":"Engage CIR, send the Critical Incident Communication","tool":"ServiceNow + email"},{"at":"n4@0.6","time":"01:05","text":"Find the cause, record Cause Identified","tool":"Logs + GitLab"},{"at":"n5@0.08","time":"01:48","text":"Restore the service, then the record, problem record and summary","tool":"ServiceNow"}],"elapsed":{"at":"n1@0.5","label":"Elapsed","note":{"at":"n4.e","text":"The service is still down."}},"stamp":{"at":"n5@0.6","text":"All manual"}},"cost":{"kicker":"File 03 // What it costs","subject":"P1 and P2 incidents, August to October","exhibit":"Exhibit A · average time to resolve","stats":[{"at":"c2@0.45","value":"1h 48m","label":"P1 · impacted CIs"},{"at":"c2@0.9","value":"1h 18m","label":"P1 · causing CIs"},{"at":"c3","value":"2h 52m","label":"P2 · impacted CIs"},{"at":"c3@0.3","value":"3h 23m","label":"P2 · causing CIs"}],"line":{"at":"c3@0.55","text":"Every minute a CI is down costs the bank revenue and customers."},"stamp":{"at":"c3.e-0.3","text":"Too slow"}},"impl":{"kicker":"File 04 // The asset","headline":"NightWatch","badge":{"at":"i1","role":"Field agent","number":"No. 0001","name":"NightWatch","fields":[["Alias","svc_incident_auto"],["Shift","24 / 7"],["Clearance","Read, write, draft. Never merge, delete or send."]]},"signals":{"at":"i2","heading":"Signals","items":[{"title":"Live log stream","sub":"every entry, in order"},{"title":"Alert feeds","sub":"Moogsoft alerts"},{"title":"ServiceNow incidents","sub":"new calls, emails and chats"}]},"agent":{"at":"i1@0.4","title":"The agent","sub":"detection rules + LLM reasoning"},"tools":{"at":"i3@0.5","heading":"59 tools over MCP","items":[{"at":"i3@0.74","name":"Logs","count":"9"},{"at":"i3@0.80","name":"ServiceNow","count":"24"},{"at":"i3@0.88","name":"GitLab","count":"14"},{"at":"i3@0.95","name":"Teams","count":"12"}]},"flow":[{"at":"i4@0.02","text":"Find the cause"},{"at":"i4@0.22","text":"Mobilize people"},{"at":"i4@0.40","text":"Propose fix"},{"at":"i4@0.55","text":"Paperwork"},{"at":"i4@0.72","text":"Human approves","style":"human"}],"note":{"at":"i4@0.74","text":"The agent has *no merge tool, no delete tool and no send button*. People stay in command."},"range":{"at":"i7","title":"The training ground: a simulated bank","text":"Mock Cloud Logging, ServiceNow, GitLab and Teams with seeded data. The agent sees only what an engineer on shift would see.","tiles":[{"at":"i7@0.36","value":"400","label":"applications"},{"at":"i7@0.50","value":"1,199","label":"people"},{"at":"i7@0.56","value":"51","label":"support groups"},{"at":"i7@0.62","value":"776","label":"code repositories"},{"at":"i7@0.68","value":"5","label":"incident scenarios"}],"chips":{"at":"i7@0.8","items":["Decoy merges in every case","The culprit stays green","Background noise never stops"]}}},"demo":{"live":{"recording":"live/run.mp4","video":"live.mp4","keep_top":"0.8","tag":"Recorded run · real UIs · scenario cif-snake-case-cascade at 4x","cuts":[{"show":"A routine change ships"},{"at":"d2","show":"Errors appear"},{"at":"d3","show":"Then the alerts start"},{"at":"d4","show":"One problem, not dozens","skip":"6"},{"at":"d4@0.6","show":"How bad is it?"},{"at":"d5","show":"It opens the parent incident"},{"at":"d5@0.42","show":"Every affected system is on the record"},{"at":"d5@0.66","show":"Tickets about the same problem are grouped under it"},{"at":"d6","show":"One chat, named for the incident"},{"at":"d6@0.55","show":"It brings in the right people"},{"at":"d7","show":"And briefs them"},{"at":"d7@0.3","show":"It turns the chat into a call"},{"at":"d8","show":"It drafts the incident communication"},{"at":"d9","show":"It finds the cause"},{"at":"d9@0.4","show":"This is the change"},{"at":"d10","show":"It writes the fix"},{"at":"d10@0.3","show":"And posts it where everyone is looking"},{"at":"d10@0.58","from_event":"merge_click","skip":"-4","take":"7.5"},{"at":"d11","show":"It ships the fix to production"},{"at":"d11@0.5","show":"Then checks it actually worked","skip":"14"},{"at":"d12","show":"All clear"},{"at":"d12@0.3","show":"It fills out the incident","skip":"1.6"},{"at":"d13","show":"One update closes every caller ticket"},{"at":"d14","show":"It opens the problem record"},{"at":"d14@0.4","show":"Ready for the 8 AM stand-up"},{"at":"d14@0.7","show":"The chat takes the problem number"},{"at":"d15","show":"And drafts the all-clear"},{"at":"d15@0.45","show":"With the impact, the cause and what was done"},{"at":"d16","show":"First error to fixed"}]},"result":{"at":"d16@0.62","big":"3 min 08 s","text":"from first error to recovery confirmed, in this recorded run","versus":"Today's P1 average: *1 h 48 min* to resolve"}},"prod":{"kicker":"File 06 // Path to production","headline":"Built on the bank's own stack","pipeline":[{"at":"g2@0.3","tag":"Signals","title":"GCP + Kibana","sub":"GCP MCP, Kibana MCP"},{"at":"g2","tag":"Agent","title":"Google Gemini","sub":"NightWatch's reasoning","style":"key"},{"at":"g2@0.62","tag":"Code","title":"GitLab","sub":"GitLab MCP"},{"at":"g2@0.78","tag":"Code knowledge","title":"KeyBank Codebase Analyst","sub":"What the code does, who changed it"},{"at":"g4","tag":"People","title":"Microsoft Studio","sub":"Teams chat and calls"},{"at":"g4@0.4","tag":"Record","title":"ServiceNow","sub":"Incidents, changes, problems"}],"guards":[{"at":"g4@0.6","name":"Human","text":"makes the final call"},{"at":"g4@0.75","name":"No merge, no delete","text":"by design"},{"at":"g4@0.9","name":"Every action","text":"written to the incident record"}],"phases":[{"at":"g5@0.22","tag":"PHASE 1","title":"Shadow","text":"Observes and drafts. Changes nothing."},{"at":"g5@0.38","tag":"PHASE 2","title":"Co-pilot","text":"Acts once a human approves."},{"at":"g5@0.7","tag":"PHASE 3","title":"Autonomy","text":"Runs the patterns it has proven."}]},"next":{"kicker":"File 07 // Next missions","headline":"Only the first mission","missions":[{"at":"x2@0.04","tab":"MISSION A","title":"Off-hours phone calls","text":"Call the on-call support person automatically when nobody is watching chat."},{"at":"x2@0.3","tab":"MISSION B","title":"Non-production","text":"The same playbook, minus the ServiceNow steps, for lower environments."},{"at":"x2@0.52","tab":"MISSION C","title":"Change risk scoring","text":"Flag a risky merge before it ships, using the dependency graph."},{"at":"x2@0.72","tab":"MISSION D","title":"Case memory","text":"Every solved incident makes the next diagnosis faster."}],"also":{"at":"x2@0.92","text":"*Also on the board:* one-click approval to send a communication · a post-incident summary written from the call transcript"}},"end":{"kicker":"Operation NightWatch","title":["Agent","NightWatch"],"outcomes":[{"at":"e1@0.2","text":"Faster detection"},{"at":"e1@0.36","text":"The right people"},{"at":"e1@0.5","text":"A clear root cause"}],"line":{"at":"e1@0.7","text":"And critical services back sooner."},"stamp":{"at":"e2@0.3","text":"End of briefing"}}}}/*END*/;
+const TL = /*TIMELINE*/{"duration":296.23,"voice":"bm_george","scenes":[{"id":"open","title":"Briefing","s":0.0,"e":16.84},{"id":"prob","title":"The problem","s":16.84,"e":40.03},{"id":"now","title":"Today: manual","s":40.03,"e":75.08},{"id":"cost","title":"The cost","s":75.08,"e":89.7},{"id":"impl","title":"How it works","s":89.7,"e":119.47},{"id":"sim","title":"Training ground","s":119.47,"e":129.81},{"id":"demo","title":"Live case","s":129.81,"e":242.66},{"id":"prod","title":"Path to production","s":242.66,"e":269.37},{"id":"next","title":"Future enhancements","s":269.37,"e":286.72},{"id":"end","title":"Close","s":286.72,"e":296.23}],"beats":{"o1":{"s":0.8,"e":4.58,"text":"Good evening. This is your briefing on Operation NightWatch."},"o2":{"s":4.88,"e":16.14,"text":"The target: production incidents. The asset: an AI agent that spots the trouble, files the report, assembles the right team, and finds the fix, before anyone picks up a phone."},"p1":{"s":17.64,"e":24.29,"text":"Seven minutes past two in the morning. A routine change ships at a bank that runs four hundred applications."},"p2":{"s":24.59,"e":28.83,"text":"Within a minute, online banking, mobile, and payments begin to fail."},"p3":{"s":29.13,"e":36.75,"text":"Alerts fire from every direction. But the service that caused it looks perfectly healthy. It is still answering every request."},"p4":{"s":37.05,"e":39.33,"text":"Nobody knows where to look, and the clock is running."},"n1":{"s":40.83,"e":43.97,"text":"Today, a priority one incident is a manual relay."},"n2":{"s":44.27,"e":50.26,"text":"Incident Management hears about it from a page, a monitor, an email, or the incident phone line."},"n3":{"s":50.56,"e":54.75,"text":"They open a parent incident in ServiceNow and bring any child incidents under it."},"n4":{"s":55.05,"e":61.22,"text":"They gather teams to set impact, urgency and priority, while standing up a Teams chat and a recorded call."},"n5":{"s":61.52,"e":70.01,"text":"Corporate incident response is engaged and the critical incident communication goes out. Only then does the hunt for the cause really begin."},"n6":{"s":70.31,"e":74.38,"text":"On average, service is back an hour and eighteen minutes after it went down."},"c2":{"s":75.88,"e":82.46,"text":"Over the last three months, a priority one incident took an average of one hour and eighteen minutes to resolve."},"c3":{"s":82.76,"e":89.0,"text":"Priority two took well over three hours. Every one of those minutes costs the bank revenue and customers."},"i2":{"s":90.5,"e":95.81,"text":"NightWatch reads the production logs constantly, looking for a trigger: the first sign of an error."},"i3":{"s":96.11,"e":102.02,"text":"That trigger starts the orchestrator agent, which plans the investigation and sends out sub-agents."},"i4":{"s":102.32,"e":107.75,"text":"Each sub-agent asks one system for what it needs, through that system's MCP server."},"i5":{"s":108.05,"e":117.07,"text":"Their findings flow back up to the orchestrator. It names the cause, proposes the fix, and briefs the right people. A human makes the final call."},"i7":{"s":120.27,"e":129.11,"text":"To train it safely, we built a simulated bank: four hundred applications, twelve hundred people, and failures with decoys planted along the way."},"d1":{"s":130.61,"e":133.95,"text":"Let's watch it work, in a real run on the simulated bank."},"d2":{"s":135.35,"e":143.31,"text":"A change ships, and errors start to climb in the logs. NightWatch notices within seconds, before anyone is paged."},"d4":{"s":144.71,"e":150.22,"text":"It works out that every failing application is the same problem, and rates it priority one."},"d5":{"s":151.62,"e":158.93,"text":"It opens the parent incident in ServiceNow, assigned to the team that owns it. Help desk tickets about the same outage go underneath."},"d6":{"s":160.33,"e":167.24,"text":"It stands up the Teams chat, named for the incident, and brings in the right people. Each is told why they are there."},"d7":{"s":168.64,"e":171.84,"text":"It posts the briefing, and turns the chat into a recorded call."},"d9":{"s":173.24,"e":181.19,"text":"Then it looks for the cause. It checks GitLab for recent changes, rules out the ones that don't fit, and names the one that does."},"d8":{"s":182.59,"e":189.5,"text":"That change renamed every field in the customer profile. It passed review, and never returned an error itself."},"d10":{"s":190.9,"e":197.07,"text":"It suggests a fix, written as a merge request. A person decides, and clicks merge."},"d11":{"s":198.47,"e":204.85,"text":"It creates the emergency change in ServiceNow and posts the link in the chat, for a person to review and edit."},"d12":{"s":206.25,"e":209.05,"text":"The release goes out, and the errors drain away."},"d13":{"s":210.45,"e":220.66,"text":"Then the paperwork. It checks the merge and the change request to know when service is back, then fills out the resolution from the call recording, the chat messages, and everything else it gathered."},"d14":{"s":222.06,"e":225.83,"text":"And it opens the problem record, ready for tomorrow's 8 AM stand-up."},"d16":{"s":227.23,"e":233.08,"text":"Based on our estimate, NightWatch cuts the time to resolve priority one and priority two incidents in half."},"d17":{"s":234.48,"e":241.26,"text":"At twenty priority ones and ninety priority twos a year, that is about a hundred and sixty-five hours of outage avoided."},"g2":{"s":243.46,"e":248.72,"text":"The path to production runs on what KeyBank already has. Google Gemini does the reasoning."},"g3":{"s":249.02,"e":258.48,"text":"It reads production through the GCP and Kibana MCP servers, and the code through GitLab and the recently launched KeyBank Codebase Analyst."},"g4":{"s":258.78,"e":264.82,"text":"Microsoft Copilot Studio connects it to Teams and ServiceNow, where the incident team already works."},"g5":{"s":265.12,"e":268.17,"text":"Everything we need to go to production is already in place."},"x2":{"s":270.17,"e":286.02,"text":"Once the basics are in place, future enhancements widen the scope. Automatic phone calls to on-call support off hours. The same playbook for non-production. Drafting the critical incident communication emails. And a memory of every past case."},"e1":{"s":287.52,"e":294.35,"text":"NightWatch. Faster detection, the right people, a clear root cause. And critical services back sooner."},"e2":{"s":294.65,"e":295.53,"text":"End of briefing."}}}/*END*/;
+const C = /*CONTENT*/{"hud":"Operation *NightWatch*","player":{"start":"Start briefing","replay":"Replay briefing"},"scenes":{"open":{"kicker":"Mission briefing · Hackathon 2026","title":["Operation","NightWatch"],"lede":{"at":"o2@0.28","text":"An AI agent that spots the incident, files the report, assembles the right team and finds the fix."},"verbs":[{"at":"o2@0.4","text":"Detect"},{"at":"o2@0.52","text":"Report"},{"at":"o2@0.62","text":"Assemble"},{"at":"o2@0.74","text":"Remediate"}],"stamp":{"at":"o1@0.55","text":"Classified"}},"prob":{"kicker":"File 01 // The problem","clock":{"start":"02:07:00","speed":"4"},"sub":"A routine change ships to production.","alerts":[{"at":"p3","level":"CRITICAL","text":"Online Banking: 5xx error rate 38.4%"},{"at":"p3@0.12","level":"CRITICAL","text":"Mobile Banking: 5xx error rate 27.9%"},{"at":"p3@0.24","level":"MAJOR","text":"Payments: failed payment rate 21.6%"}],"question":{"at":"p4","text":"Where do you look?"},"estate":{"total":"400","failing":"36","labelled":[{"at":"p2@0.3","text":"Online Banking"},{"at":"p2@0.52","text":"Mobile"},{"at":"p2@0.68","text":"Payments"}],"spread":["p2@0.8","p3@0.5"],"culprit":{"at":"p3@0.4","text":"200 OK · looks healthy"},"legend":{"total":"applications","failing":"failing","cause":"*1* cause, still green"}}},"now":{"kicker":"File 02 // Current state","badge":"P1","headline":"Today, a critical incident is a manual relay","steps":[{"at":"n2","time":"00:10","text":"Incident Management is made aware","tool":"Page · NOC · monitor · phone"},{"at":"n3","time":"00:20","text":"Open the parent incident, link child incidents","tool":"ServiceNow"},{"at":"n4","time":"00:30","text":"Gather teams, set the priority","also":"Open the Teams chat and a recorded call","tool":"Teams"},{"at":"n5","time":"00:35","text":"Engage CIR, send the incident communication","tool":"CIC · email"},{"at":"n5@0.62","time":"00:55","text":"Find the cause","tool":"Logs + GitLab"},{"at":"n6@0.1","time":"01:18","text":"Restore service, then write it all up","tool":"ServiceNow"}],"elapsed":{"at":"n1@0.5","label":"Elapsed","note":{"at":"n5.e","text":"The service is still down."}},"stamp":{"at":"n6@0.7","text":"All manual"}},"cost":{"kicker":"File 03 // What it costs","subject":"P1 and P2 incidents, August to October","exhibit":"Exhibit A · average time to resolve","stats":[{"at":"c2@0.5","value":"1h 18m","label":"Priority 1 incidents"},{"at":"c3","value":"3h 23m","label":"Priority 2 incidents"}],"line":{"at":"c3@0.5","text":"Every minute an application is down costs the bank revenue and customers."},"footnote":{"at":"c3@0.5","text":"Measured on the application that caused the incident. The applications it impacted took 1 h 48 min (P1) and 2 h 52 min (P2)."},"stamp":{"at":"c3.e-0.3","text":"Too slow"}},"impl":{"kicker":"File 04 // How it works","headline":"One orchestrator, a team of sub-agents","watch":{"at":"i2","heading":"Always watching","logo":"gcloud","title":"Production logs","sub":"every entry, as it is written","lines":["12:04:07  payments-api  200 OK","12:04:07  mobile-bff  200 OK"],"error":{"at":"i2@0.72","text":"12:04:08  online-banking  500"}},"trigger":{"at":"i3@0.08","text":"Trigger event"},"agent":{"at":"i3@0.25","title":"Orchestrator agent","sub":"Plans the investigation, delegates, decides what happens next"},"subagents":{"at":"i3@0.7","heading":"Sub-agents, one per system","ask":"asks","answer":"findings","items":[{"at":"i3@0.78","back_at":"i5@0.02","name":"Logs sub-agent","gets":"errors, traces, blast radius","logo":"gcloud","system":"Cloud Logging"},{"at":"i4@0.05","back_at":"i5@0.08","name":"Code sub-agent","gets":"recent changes and diffs","logo":"gitlab","system":"GitLab"},{"at":"i4@0.33","back_at":"i5@0.14","name":"Records sub-agent","gets":"owners, changes, incidents","logo":"servicenow","system":"ServiceNow"},{"at":"i4@0.62","back_at":"i5@0.2","name":"People sub-agent","gets":"who to bring in, and where","logo":"teams","system":"Teams"}]},"flow_lead":"Then the orchestrator","flow":[{"at":"i5@0.3","text":"Names the cause"},{"at":"i5@0.45","text":"Proposes the fix"},{"at":"i5@0.6","text":"Briefs the right people"},{"at":"i5@0.8","text":"A human makes the final call","style":"human"}]},"sim":{"kicker":"File 05 // The training ground","headline":"A simulated bank","text":"Mock Cloud Logging, ServiceNow, GitLab and Teams with seeded data. The agent sees only what an engineer on shift would see.","tiles":[{"at":"i7@0.36","value":"400","label":"applications"},{"at":"i7@0.50","value":"1,199","label":"people"},{"at":"i7@0.56","value":"51","label":"support groups"},{"at":"i7@0.62","value":"776","label":"code repositories"},{"at":"i7@0.68","value":"5","label":"incident scenarios"}],"chips":{"at":"i7@0.8","items":["Decoy merges in every case","The culprit stays green","Background noise never stops"]}},"demo":{"live":{"recording":"live/run.mp4","video":"live.mp4","keep_top":"1.0","max_speed":"1.15","notes":[{"at":"d13@0.12","off":"d13@0.46","lead":"Knows when","items":[{"logo":"gitlab","text":"Fix merged"},{"logo":"servicenow","text":"Change deployed"},{"logo":"gcloud","text":"Errors gone"}]},{"at":"d13@0.5","off":"d14","lead":"Filled in from","items":[{"logo":"teams","text":"Call recording"},{"logo":"teams","text":"Chat messages"},{"logo":"gcloud","text":"Logs"},{"logo":"gitlab","text":"Code changes"},{"logo":"servicenow","text":"Change requests"}]}],"tag":"Recorded run · real UIs · scenario cif-snake-case-cascade at 4x","cuts":[{"show":"A normal afternoon","skip":"2"},{"at":"d2","show":"Errors appear"},{"at":"d4","show":"How bad is it?"},{"at":"d5","show":"It opens the parent incident","skip":"1"},{"at":"d5@0.66","show":"Tickets about the same problem are grouped under it","keep":"end"},{"at":"d6","show":"One chat, with the right people in it"},{"at":"d7","show":"And briefs them","skip":"1"},{"at":"d9","show":"It finds the cause"},{"at":"d8","show":"This is the change","skip":"1"},{"at":"d10","show":"Your turn: merge it","keep":"end"},{"at":"d11","show":"It creates the change request and links it in the chat","skip":"1"},{"at":"d11@0.56","show":"The change request, open to review and edit","skip":"1"},{"at":"d12","show":"Then checks it actually worked","keep":"end"},{"at":"d13","show":"It fills out the incident","skip":"1"},{"at":"d14","show":"It opens the problem record"}]},"result":{"at":"d16@0.05","label":"Estimated time to resolve, with NightWatch","today":"Today:","text":"50% less","drop_at":"d16@0.42","items":[{"name":"Priority 1 incidents","from":"01:18","to":"00:39","per_year":"20 a year","saved":"13 hours saved"},{"name":"Priority 2 incidents","from":"03:23","to":"01:42","per_year":"90 a year","saved":"152 hours saved"}],"year":{"at":"d17@0.1","total_at":"d17@0.5","label":"Over a year","total":"165 hours","text":"of outage avoided"}}},"prod":{"kicker":"File 06 // Path to production","headline":"Everything it needs is already at Key","agent":{"at":"g2@0.55","logo":"gemini","title":"NightWatch","sub":"reasoning by Google Gemini"},"reads_label":"reads","acts_label":"acts","reads":[{"at":"g3@0.14","logo":"gcloud","name":"Google Cloud Logging","badge":"MCP"},{"at":"g3@0.26","logo":"kibana","name":"Kibana","badge":"MCP"},{"at":"g3@0.5","logo":"gitlab","name":"GitLab","badge":"MCP"},{"at":"g3@0.66","logo":"key","name":"KeyBank Codebase Analyst","badge":"Just launched","style":"have"}],"acts":{"at":"g4","logo":"microsoft","name":"Microsoft Copilot Studio","items":[{"logo":"teams","name":"Teams","text":"chat and calls"},{"logo":"servicenow","name":"ServiceNow","text":"incidents and changes"}]},"ready":{"at":"g5","tag":"Ready today","text":"Nothing new to buy or build before production."},"guards":[{"at":"g5@0.5","name":"A human","text":"makes the final call"},{"at":"g5@0.65","name":"No merge, no delete","text":"by design"},{"at":"g5@0.8","name":"Every action","text":"written to the incident record"}]},"next":{"kicker":"File 07 // Future enhancements","headline":"Once the basics are in, the scope can grow","items":[{"at":"x2@0.3","title":"Off-hours phone calls","text":"Call the on-call support person automatically when nobody is watching chat."},{"at":"x2@0.5","title":"Non-production","text":"The same playbook, minus the ServiceNow steps, for lower environments."},{"at":"x2@0.66","title":"CIC email drafts","text":"Draft the Critical Incident Communication emails for internal communications. A person sends them."},{"at":"x2@0.86","title":"Case memory","text":"Every solved incident makes the next diagnosis faster."}]},"end":{"kicker":"Operation NightWatch","title":["Agent","NightWatch"],"outcomes":[{"at":"e1@0.2","text":"Faster detection"},{"at":"e1@0.36","text":"The right people"},{"at":"e1@0.5","text":"A clear root cause"}],"line":{"at":"e1@0.7","text":"And critical services back sooner."},"stamp":{"at":"e2@0.3","text":"End of briefing"}}}}/*END*/;
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -313,14 +364,22 @@ function at(spec) {
   return t;
 }
 function rng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
-const heading = (s) => `<div class="kicker">${esc(s.kicker)}</div>${s.headline ? `<h2>${esc(s.headline)}</h2>` : ''}`;
+const heading = (s) => `<div class="kicker">${esc(s.kicker)}</div>${s.headline ? `<h2>${s.badge ? `<span class="p1">${esc(s.badge)}</span>` : ''}${esc(s.headline)}</h2>` : ''}`;
 const stamp = (o, cls = '', style = '') => (o && o.text ? `<div class="stamp ${cls}"${style ? ` style="${style}"` : ''}${on(o)}>${esc(o.text)}</div>` : '');
-// The NightWatch mark: a crescent moon.
-let marks = 0;
-const mark = () => { const id = `mk${marks++}`; return `<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><mask id="${id}"><rect width="100" height="100" fill="#fff"/><circle cx="65" cy="37" r="31" fill="#000"/></mask><circle cx="50" cy="50" r="36" fill="currentColor" mask="url(#${id})"/></svg>`; };
+// Product marks used in the diagrams (svgporn "logos" set, CC0, as in packages/ui; the rest are drawn here).
+const LOGOS = {"gitlab": "<svg viewBox=\"0 0 256 247\" aria-hidden=\"true\"><path fill=\"#e24329\" d=\"m251.845 97.642l-.328-.986l-34.85-90.903c-.657-1.808-1.972-3.287-3.616-4.274Q210.586 0 207.627 0c-1.973 0-3.78.822-5.26 1.973a8.73 8.73 0 0 0-3.124 4.767l-23.506 71.999H80.56l-23.506-72c-.493-1.808-1.644-3.451-3.123-4.766C52.45.822 50.643 0 48.67 0s-3.781.329-5.425 1.48c-1.644.986-2.96 2.465-3.617 4.273L4.781 96.656l-.33.986c-10.355 26.959-1.479 57.37 21.535 74.794h.328c0 .164 53.096 39.944 53.096 39.944l26.3 19.89l15.946 12c3.78 2.96 9.205 2.96 12.986 0l15.945-12l26.3-19.89l53.424-39.944c23.014-17.425 31.726-47.835 21.37-74.794z\"/><path fill=\"#fc6d26\" d=\"m251.845 97.642l-.328-.986c-17.26 3.616-33.205 10.85-46.849 21.04c-.164 0-41.424 31.398-76.602 57.863a18377 18377 0 0 0 48.657 36.821l53.424-39.944c23.013-17.425 31.726-47.835 21.37-74.794z\"/><path fill=\"#fca326\" d=\"m79.245 212.38l26.301 19.89l15.945 12c3.78 2.96 9.206 2.96 12.986 0l15.945-12l26.301-19.89s-22.684-17.095-48.657-36.82c-26.136 19.725-48.82 36.82-48.82 36.82\"/><path fill=\"#fc6d26\" d=\"M51.465 117.697c-13.644-10.192-29.589-17.589-46.849-21.04l-.329.985c-10.356 26.959-1.479 57.37 21.534 74.794h.33c0 .164 53.094 39.944 53.094 39.944s22.685-17.095 48.821-36.82c-35.013-26.466-76.272-57.699-76.601-57.863\"/><\/svg>", "teams": "<svg viewBox=\"0 0 256 239\" aria-hidden=\"true\"><defs><linearGradient id=\"SVGCo9xpmZW\" x1=\"17.372%\" x2=\"82.628%\" y1=\"-6.51%\" y2=\"106.51%\"><stop offset=\"0%\" stop-color=\"#5a62c3\"/><stop offset=\"50%\" stop-color=\"#4d55bd\"/><stop offset=\"100%\" stop-color=\"#3940ab\"/><\/linearGradient><path id=\"SVGhJCUgeMn\" d=\"M136.93 64.476v12.8a32.7 32.7 0 0 1-5.953-.952a38.7 38.7 0 0 1-26.79-22.742h21.848c6.008.022 10.872 4.887 10.895 10.894\"/><\/defs><path fill=\"#5059c9\" d=\"M178.563 89.302h66.125c6.248 0 11.312 5.065 11.312 11.312v60.231c0 22.96-18.613 41.574-41.573 41.574h-.197c-22.96.003-41.576-18.607-41.579-41.568V95.215a5.91 5.91 0 0 1 5.912-5.913\"/><circle cx=\"223.256\" cy=\"50.605\" r=\"26.791\" fill=\"#5059c9\"/><circle cx=\"139.907\" cy=\"38.698\" r=\"38.698\" fill=\"#7b83eb\"/><path fill=\"#7b83eb\" d=\"M191.506 89.302H82.355c-6.173.153-11.056 5.276-10.913 11.449v68.697c-.862 37.044 28.445 67.785 65.488 68.692c37.043-.907 66.35-31.648 65.489-68.692v-68.697c.143-6.173-4.74-11.296-10.913-11.449\"/><path d=\"M142.884 89.302v96.268a10.96 10.96 0 0 1-6.787 10.062c-1.3.55-2.697.833-4.108.833H76.68c-.774-1.965-1.488-3.93-2.084-5.953a72.5 72.5 0 0 1-3.155-21.076v-68.703c-.143-6.163 4.732-11.278 10.895-11.43z\" opacity=\".1\"/><path d=\"M136.93 89.302v102.222c0 1.411-.283 2.808-.833 4.108a10.96 10.96 0 0 1-10.062 6.787H79.48c-1.012-1.965-1.965-3.93-2.798-5.954a59 59 0 0 1-2.084-5.953a72.5 72.5 0 0 1-3.155-21.076v-68.703c-.143-6.163 4.732-11.278 10.895-11.43z\" opacity=\".2\"/><path d=\"M136.93 89.302v90.315c-.045 5.998-4.896 10.85-10.895 10.895H74.597a72.5 72.5 0 0 1-3.155-21.076v-68.703c-.143-6.163 4.732-11.278 10.895-11.43z\" opacity=\".2\"/><path d=\"M130.977 89.302v90.315c-.046 5.998-4.897 10.85-10.895 10.895H74.597a72.5 72.5 0 0 1-3.155-21.076v-68.703c-.143-6.163 4.732-11.278 10.895-11.43z\" opacity=\".2\"/><path d=\"M142.884 58.523v18.753c-1.012.06-1.965.12-2.977.12s-1.965-.06-2.977-.12a32.7 32.7 0 0 1-5.953-.952a38.7 38.7 0 0 1-26.791-22.742a33 33 0 0 1-1.905-5.954h29.708c6.007.023 10.872 4.887 10.895 10.895\" opacity=\".1\"/><use href=\"#SVGhJCUgeMn\" opacity=\".2\"/><use href=\"#SVGhJCUgeMn\" opacity=\".2\"/><path d=\"M130.977 64.476v11.848a38.7 38.7 0 0 1-26.791-22.743h15.896c6.008.023 10.872 4.888 10.895 10.895\" opacity=\".2\"/><path fill=\"url(#SVGCo9xpmZW)\" d=\"M10.913 53.581h109.15c6.028 0 10.914 4.886 10.914 10.913v109.151c0 6.027-4.886 10.913-10.913 10.913H10.913C4.886 184.558 0 179.672 0 173.645V64.495C0 58.466 4.886 53.58 10.913 53.58\"/><path fill=\"#fff\" d=\"M94.208 95.125h-21.82v59.416H58.487V95.125H36.769V83.599h57.439z\"/><\/svg>", "gcloud": "<svg viewBox=\"0 0 256 206\" aria-hidden=\"true\"><path fill=\"#ea4335\" d=\"m170.252 56.819l22.253-22.253l1.483-9.37C153.437-11.677 88.976-7.496 52.42 33.92C42.267 45.423 34.734 59.764 30.717 74.573l7.97-1.123l44.505-7.34l3.436-3.513c19.797-21.742 53.27-24.667 76.128-6.168z\"/><path fill=\"#4285f4\" d=\"M224.205 73.918a100.25 100.25 0 0 0-30.217-48.722l-31.232 31.232a55.52 55.52 0 0 1 20.379 44.037v5.544c15.35 0 27.797 12.445 27.797 27.796c0 15.352-12.446 27.485-27.797 27.485h-55.671l-5.466 5.934v33.34l5.466 5.231h55.67c39.93.311 72.553-31.494 72.864-71.424a72.3 72.3 0 0 0-31.793-60.453\"/><path fill=\"#34a853\" d=\"M71.87 205.796h55.593V161.29H71.87a27.3 27.3 0 0 1-11.399-2.498l-7.887 2.42l-22.409 22.253l-1.952 7.574c12.567 9.489 27.9 14.825 43.647 14.757\"/><path fill=\"#fbbc05\" d=\"M71.87 61.426C31.94 61.663-.237 94.227.001 134.158a72.3 72.3 0 0 0 28.222 56.88l32.248-32.246c-13.99-6.322-20.208-22.786-13.887-36.776s22.786-20.208 36.775-13.888a27.8 27.8 0 0 1 13.887 13.888l32.248-32.248A72.22 72.22 0 0 0 71.87 61.427\"/><\/svg>", "kibana": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#f04e98\" d=\"M2.625 0v21.591L21.375 0z\"/><path fill=\"#00bfb3\" d=\"M13.489 12.47L3.477 24h17.522a18.755 18.755 0 0 0-7.51-11.53z\"/><\/svg>", "gemini": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#4c8df6\" d=\"M12 1c.6 5.9 5.1 10.4 11 11-5.9.6-10.4 5.1-11 11-.6-5.9-5.1-10.4-11-11 5.9-.6 10.4-5.1 11-11z\"/><\/svg>", "microsoft": "<svg viewBox=\"0 0 23 23\" aria-hidden=\"true\"><path fill=\"#f25022\" d=\"M1 1h10v10H1z\"/><path fill=\"#7fba00\" d=\"M12 1h10v10H12z\"/><path fill=\"#00a4ef\" d=\"M1 12h10v10H1z\"/><path fill=\"#ffb900\" d=\"M12 12h10v10H12z\"/><\/svg>", "servicenow": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\" fill=\"none\" stroke=\"#62d84e\" stroke-width=\"5\"/><\/svg>", "key": "<svg viewBox=\"165 0 85.5 38\" aria-hidden=\"true\"><path fill=\"#cc0000\" d=\"M194.52,22.77c-0.85,0.01-1.67-0.24-2.36-0.73l-1.29,1.22c0.48,0.61,0.75,1.35,0.77,2.12 c0,2.13-1.73,3.86-3.86,3.86c-2.13,0-3.86-1.73-3.86-3.86c-0.01-0.76,0.24-1.51,0.69-2.12l-1.29-1.22 c-0.67,0.44-1.44,0.7-2.24,0.73c-1.02,0.02-2-0.36-2.73-1.07c-0.72-0.74-1.13-1.74-1.13-2.77c0-2.13,1.73-3.86,3.86-3.86 c0.84,0.02,1.66,0.31,2.32,0.83l1.29-1.24c-0.46-0.68-0.7-1.49-0.69-2.31c0-2.13,1.73-3.86,3.86-3.86c1.03-0.01,2.02,0.4,2.75,1.13 c0.71,0.72,1.11,1.7,1.1,2.72c-0.02,0.83-0.29,1.64-0.77,2.31l1.29,1.24c0.66-0.56,1.5-0.85,2.36-0.81 c2.12-0.21,4.01,1.33,4.23,3.46s-1.33,4.01-3.46,4.23c-0.26,0.03-0.51,0.03-0.77,0 M246.07,14.2h-40.24 c-0.63-1.2-1.48-2.26-2.52-3.13c-1.56-1.35-3.64-1.92-5.66-1.56l-0.35,0.08l0.04-0.37c0.24-2.1-0.46-4.2-1.93-5.73 c-3.71-4.2-10.12-4.6-14.32-0.89c-0.31,0.28-0.61,0.57-0.89,0.89c-1.4,1.56-2.08,3.64-1.89,5.73l0.06,0.37l-0.36-0.08 c-2.07-0.35-4.18,0.22-5.79,1.56c-4.26,3.55-4.84,9.89-1.29,14.15c0.39,0.47,0.82,0.9,1.29,1.29c1.61,1.35,3.72,1.92,5.79,1.56 l0.36-0.07l-0.05,0.37c-0.19,2.09,0.49,4.16,1.89,5.73c3.71,4.2,10.13,4.59,14.33,0.88c0.31-0.27,0.6-0.57,0.88-0.88 c1.47-1.52,2.17-3.62,1.93-5.73L197.3,28l0.36,0.07c2.02,0.36,4.1-0.22,5.66-1.56c1.25-1.16,2.2-2.6,2.77-4.21h20.51 c1.16-0.06,2.16,0.83,2.22,1.99c0,0.03,0,0.06,0,0.09c0,1.21-0.99,2.18-2.19,2.18c-0.01,0-0.02,0-0.03,0h-1.87V37.5h8.16v-8.73 c0-1.2,0.97-2.17,2.17-2.18c0.02,0,0.03,0,0.05,0c1.25-0.04,2.31,0.92,2.39,2.17v8.78h8.07V26.61h-1.8 c-1.2,0.03-2.19-0.91-2.23-2.11c0-0.02,0-0.03,0-0.05c0.01-1.17,0.97-2.12,2.14-2.11c0.03,0,0.06,0,0.09,0H246 c2.22,0.01,4.04-1.78,4.05-4.01c0-0.01,0-0.01,0-0.02c0-2.24-1.81-4.06-4.05-4.07\"/><\/svg>"};
+const logo = (k) => (LOGOS[k] ? `<span class="lg lg-${k}">${LOGOS[k]}</span>` : '');
+// The NightWatch mark: a radar. The sweep circles; a blip lights up as the sweep passes it.
+// `blips` are [angle in degrees clockwise from the top, distance from the centre 0..1].
+const SWEEP = 4.5;
+const mark = (blips = [[62, 0.55]]) => `<span class="mark radar" aria-hidden="true"><i class="sweep"></i>${blips.map(([deg, r]) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return `<i class="blip" style="left:${(50 + Math.cos(a) * r * 50).toFixed(1)}%;top:${(50 + Math.sin(a) * r * 50).toFixed(1)}%;animation-delay:${((deg / 360 - 1) * SWEEP).toFixed(2)}s"></i>`;
+}).join('')}</span>`;
 
 /* ================= scene templates: content.yaml -> markup ================= */
 const COLS = 25;
+const DROP = 1.8;   // seconds the result numbers take to fall from today's figure to the estimate
 const T = {
   open: (s) => `
     <div class="open"><div>
@@ -329,7 +388,7 @@ const T = {
       <p class="lede cue"${on(s.lede)}>${rich(s.lede.text)}</p>
       <div class="verbs">${list(s.verbs).map((v, i) => `<span class="cue rd"${on(v)}><i>${pad(i + 1)}</i>${esc(v.text)}</span>`).join('')}</div>
     </div>
-    <div class="emblem">${mark()}</div></div>
+    <div class="emblem">${mark([[48, 0.62], [128, 0.4], [205, 0.74], [292, 0.5]])}</div></div>
     ${stamp(s.stamp)}`,
 
   prob: (s) => `
@@ -352,7 +411,7 @@ const T = {
   now: (s) => `
     ${heading(s)}
     <div class="now">
-      <div class="relay">${list(s.steps).map((p) => `<div class="leg${p.style === 'bounce' ? ' bounce' : ''} cue"${on(p)}><span class="t">${esc(hmin(secs(String(p.time).replace('+', ''))))}</span><span class="what">${esc(p.text)}</span><span class="chip">${esc(p.tool)}</span></div>`).join('')}</div>
+      <div class="relay">${list(s.steps).map((p) => `<div class="leg${p.style === 'bounce' ? ' bounce' : ''} cue"${on(p)}><span class="t">${esc(hmin(secs(String(p.time).replace('+', ''))))}</span><span class="what"><span>${esc(p.text)}</span>${p.also ? `${p.joiner ? `<small>${esc(p.joiner)}</small>` : ''}<span>${esc(p.also)}</span>` : ''}</span><span class="chip">${esc(p.tool)}</span></div>`).join('')}</div>
       <div class="elapsed cue fade"${on(s.elapsed)}>
         <div class="lbl">${esc(s.elapsed.label)}</div><div class="num"><b id="elapsed-h">0</b><span id="elapsed-hu">hours</span></div><div class="num"><b id="elapsed-m">0</b><span id="elapsed-mu">minutes</span></div>
         <p class="cue fade"${on(s.elapsed.note)}>${esc(s.elapsed.note.text)}</p>
@@ -367,55 +426,97 @@ const T = {
       <div class="stats" style="grid-template-columns:repeat(${list(s.stats).length},1fr)">${list(s.stats).map((x, i) => `<div class="stat cue"${on(x)}><div class="n" data-stat="${i}"></div><p>${esc(x.label)}</p></div>`).join('')}</div>
       <div class="typed cue fade"${on(s.line)}><span>${esc(s.line.text)}</span></div>
       ${stamp(s.stamp)}
-    </div>`,
+    </div>
+    ${s.footnote ? `<p class="footnote cue fade"${on(s.footnote)}>${esc(s.footnote.text)}</p>` : ''}`,
 
-  impl: (s) => `
+  impl: (s) => {
+    // Sub-agent rows sit on the right; each is wired to the orchestrator twice: the request going
+    // out (ink) and the findings coming back (green).
+    const rows = list(s.subagents.items), top = (i) => 26 + i * 84, mid = (i) => top(i) + 36;
+    const fan = (i) => 178 + (i - (rows.length - 1) / 2) * 16;   // where each wire leaves the orchestrator
+    const head = (x, y, dir, cls) => `<path class="${cls}" style="fill:currentColor;stroke:none" d="M${x} ${y}l${-9 * dir} -4.5v9z"/>`;
+    const wires = rows.map((x, i) => {
+      const y0 = fan(i), y1 = mid(i);
+      const out = `M640 ${y0 - 4}C700 ${y0 - 4} 700 ${y1 - 5} 752 ${y1 - 5}`;
+      const back = `M760 ${y1 + 5}C700 ${y1 + 5} 700 ${y0 + 4} 649 ${y0 + 4}`;
+      return `<g class="cue fade" style="color:var(--ink)"${on(x)} data-lag="0.25"><path class="out" d="${out}"/>${head(760, y1 - 5, 1, 'out')}</g>
+        <g class="cue fade" style="color:var(--green)" data-on="${esc(x.back_at)}"><path class="back" d="${back}"/>${head(640, y0 + 4, -1, 'back')}</g>`;
+    }).join('');
+    return `
     ${heading(s)}
-    <div class="impl">
-      <div class="badge cue"${on(s.badge)}>
-        <div class="top"><span>${esc(s.badge.role)}</span><span>${esc(s.badge.number)}</span></div>
-        <div class="avatar">${mark()}</div><h3>${esc(s.badge.name)}</h3>
-        <dl>${list(s.badge.fields).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <div class="orch">
+      <svg class="wires" viewBox="0 0 1152 356" aria-hidden="true">
+        <g class="cue fade" style="color:var(--red)"${on(s.trigger)}><path class="trig" d="M250 178H380"/>${head(390, 178, 1, 'trig')}</g>
+        ${wires}
+      </svg>
+      <div class="watch cue"${on(s.watch)}>
+        <div class="hd">${esc(s.watch.heading)}</div>
+        <h3>${logo(s.watch.logo)}${esc(s.watch.title)}</h3><p>${esc(s.watch.sub)}</p>
+        ${list(s.watch.lines).map((l) => `<code>${esc(l)}</code>`).join('')}
+        <code class="err cue fade"${on(s.watch.error)}>${esc(s.watch.error.text)}</code>
       </div>
-      <div class="right">
-        <div class="arch">
-          <div class="col cue"${on(s.signals)}><div class="hd">${esc(s.signals.heading)}</div>${list(s.signals.items).map((x) => `<div class="box"><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}</div>
-          <div class="arrow cue fade"${after(s.signals, s.agent)}></div>
-          <div class="col cue"${on(s.agent)}><div class="hd">&nbsp;</div><div class="box agent"><b>${esc(s.agent.title)}</b><span>${esc(s.agent.sub)}</span></div></div>
-          <div class="arrow cue fade"${after(s.agent, s.tools)}></div>
-          <div class="col"><div class="hd cue fade"${on(s.tools)}>${esc(s.tools.heading)}</div>
-            <div class="tools">${list(s.tools.items).map((x) => `<div class="box cue"${on(x)}><b>${esc(x.name)}</b><span>${esc(x.count)}</span></div>`).join('')}</div></div>
-        </div>
-        <div class="flow">${list(s.flow).map((x, i) => `${i ? `<span class="sep cue fade"${on(x)}>&rarr;</span>` : ''}<span class="st${x.style === 'human' ? ' human' : ''} cue"${on(x)}>${esc(x.text)}</span>`).join('')}</div>
-        <div class="note hl cue fade"${on(s.note)}>${rich(s.note.text)}</div>
-        <div class="range cue fade"${on(s.range)}>
-          <h3>${esc(s.range.title)}</h3><p>${esc(s.range.text)}</p>
-          <div class="tiles" style="grid-template-columns:repeat(${list(s.range.tiles).length},1fr)">${list(s.range.tiles).map((x) => `<div class="tile cue"${on(x)}><b>${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div>
-          <div class="traps cue"${on(s.range.chips)}>${list(s.range.chips.items).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
-        </div>
-      </div>
+      <div class="trigger cue fade"${on(s.trigger)}>${esc(s.trigger.text)}</div>
+      <div class="brain cue"${on(s.agent)}>${mark()}<b>${esc(s.agent.title)}</b><span>${esc(s.agent.sub)}</span></div>
+      <div class="subs-hd cue fade"${on(s.subagents)}>${esc(s.subagents.heading)}</div>
+      ${rows.map((x, i) => `<div class="sub-agent cue" style="top:${top(i)}px"${on(x)}><div><b>${esc(x.name)}</b><span class="d">${esc(x.gets)}</span></div><div class="sys">${logo(x.logo)}${esc(x.system)}<span class="mcp">${esc(x.via || 'MCP')}</span></div></div>`).join('')}
+      <div class="wire-key out cue fade"${on(rows[0])}>${esc(s.subagents.ask)} &rarr;</div>
+      <div class="wire-key back cue fade" data-on="${esc(rows[0] ? rows[0].back_at : '')}">&larr; ${esc(s.subagents.answer)}</div>
+    </div>
+    <div class="flow"><span class="lead cue fade"${on(list(s.flow)[0])}>${esc(s.flow_lead)}</span>${list(s.flow).map((x, i) => `${i ? `<span class="sep cue fade"${on(x)}>&rarr;</span>` : ''}<span class="st${x.style === 'human' ? ' human' : ''} cue"${on(x)}>${esc(x.text)}</span>`).join('')}</div>`;
+  },
+
+  sim: (s) => `
+    ${heading(s)}
+    <div class="range">
+      <p>${esc(s.text)}</p>
+      <div class="tiles" style="grid-template-columns:repeat(${list(s.tiles).length},1fr)">${list(s.tiles).map((x) => `<div class="tile cue"${on(x)}><b>${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div>
+      <div class="traps cue"${on(s.chips)}>${list(s.chips.items).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
     </div>`,
 
   demo: (s) => {
     const R = s.result;
+    // Notes sit in the empty right half of the recorded page's header: where a fact comes from.
+    const notes = list(s.live.notes).map((n) => `<div class="live-note cue fade"${on(n)}${n.off ? ` data-off="${esc(n.off)}"` : ''}><span class="lead">${esc(n.lead)}</span>${list(n.items).map((x) => `<span class="src">${logo(x.logo)}${esc(x.text)}</span>`).join('')}</div>`).join('');
     return `
-    <div class="live"><video id="live" src="${esc(s.live.video)}" muted playsinline preload="auto"></video><img id="liveimg" alt="" hidden></div>
+    <div class="live"><video id="live" src="${esc(s.live.video)}" muted playsinline preload="auto"></video><img id="liveimg" alt="" hidden>${notes}</div>
     <div class="live-tag">${esc(s.live.tag)}</div>
-    <div class="result cue fade"${on(R)}><div><div class="big cue rd"${on(R)}>${units(R.big)}</div><p>${esc(R.text)}</p><div class="vs hl">${rich(R.versus)}</div></div></div>`;
+    <div class="result cue fade"${on(R)}><div>
+      <div class="pre">${esc(R.label)}</div>
+      <div class="cuts">${list(R.items).map((x, i) => `<div class="cut"><div class="nm">${esc(x.name)}</div><div class="big" data-cut="${i}"></div><div class="was">${esc(R.today)} <b>${esc(hmin(secs(x.from)))}</b></div><div class="less cue fade" data-on="${esc(R.drop_at)}" data-lag="${DROP}">${esc(R.text)}</div>${R.year && x.per_year ? `<div class="yr cue fade"${on(R.year)}>${esc(x.per_year)} &rarr; <b>${esc(x.saved)}</b></div>` : ''}</div>`).join('')}</div>
+      ${R.year ? `<div class="year cue" data-on="${esc(R.year.total_at)}"><small>${esc(R.year.label)}</small><b>${esc(R.year.total)}</b> ${esc(R.year.text)}</div>` : ''}
+    </div></div>`;
   },
 
-  prod: (s) => `
+  prod: (s) => {
+    // Everything connects to the agent: what it reads on the left (arrows in), where it acts on
+    // the right (arrow out).
+    const src = list(s.reads), top = (i) => i * 82, mid = (i) => top(i) + 33;
+    const head = (x, y) => `<path style="fill:var(--ink)" d="M${x} ${y}l-9 -4.5v9z"/>`;
+    const fan = (i) => 156 + (i - (src.length - 1) / 2) * 18;
+    return `
     ${heading(s)}
-    <div class="pipe" style="grid-template-columns:${list(s.pipeline).map((x) => (x.style === 'key' ? '1.15fr' : '1fr')).join(' 26px ')}">
-      ${list(s.pipeline).map((x, i, all) => `${i ? `<div class="arrow cue fade"${after(all[i - 1], x)}></div>` : ''}<div class="gbox${x.style === 'key' ? ' key' : ''} cue"${on(x)}><small>${esc(x.tag)}</small><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}
+    <div class="hub">
+      <svg class="wires" viewBox="0 0 1152 312" aria-hidden="true">
+        ${src.map((x, i) => `<g class="cue fade"${after(x, s.agent)}><path class="out" d="M372 ${mid(i)}C420 ${mid(i)} 410 ${fan(i)} 447 ${fan(i)}"/>${head(456, fan(i))}</g>`).join('')}
+        <g class="cue fade"${after(s.acts, s.agent)}><path class="out" d="M696 156H771"/>${head(780, 156)}</g>
+      </svg>
+      ${src.map((x, i) => `<div class="node cue" style="top:${top(i)}px"${on(x)}>${logo(x.logo)}<b>${esc(x.name)}</b><span class="mcp${x.style === 'have' ? ' have' : ''}">${esc(x.badge)}</span></div>`).join('')}
+      <div class="core cue"${on(s.agent)}>${logo(s.agent.logo)}<b>${esc(s.agent.title)}</b><span>${esc(s.agent.sub)}</span></div>
+      <div class="lbl cue fade" style="left:384px;top:6px;width:70px;text-align:center"${after(src[0], s.agent)}>${esc(s.reads_label)}</div>
+      <div class="lbl cue fade" style="left:703px;top:128px;width:70px;text-align:center"${after(s.acts, s.agent)}>${esc(s.acts_label)}</div>
+      <div class="acts cue"${on(s.acts)}>
+        <div class="top">${logo(s.acts.logo)}<b>${esc(s.acts.name)}</b></div>
+        ${list(s.acts.items).map((x) => `<div class="row">${logo(x.logo)}${esc(x.name)}<span class="d">${esc(x.text)}</span></div>`).join('')}
+      </div>
     </div>
-    <div class="guards">${list(s.guards).map((g) => `<span class="chip cue"${on(g)}><b>${esc(g.name)}</b> ${esc(g.text)}</span>`).join('')}</div>
-    <div class="phases" style="grid-template-columns:repeat(${list(s.phases).length},1fr)">${list(s.phases).map((p) => `<div class="phase cue"${on(p)}><small>${esc(p.tag)}</small><b>${esc(p.title)}</b><span>${esc(p.text)}</span></div>`).join('')}</div>`,
+    <div class="ready cue"${on(s.ready)}><small>${esc(s.ready.tag)}</small>${esc(s.ready.text)}</div>
+    <div class="guards">${list(s.guards).map((g) => `<span class="chip cue"${on(g)}><b>${esc(g.name)}</b> ${esc(g.text)}</span>`).join('')}</div>`;
+  },
 
   next: (s) => `
     ${heading(s)}
-    <div class="missions" style="grid-template-columns:repeat(${list(s.missions).length},1fr)">${list(s.missions).map((m) => `<div class="mission cue" data-tab="${esc(m.tab)}"${on(m)}><b>${esc(m.title)}</b><span>${esc(m.text)}</span></div>`).join('')}</div>
-    <div class="also hl cue fade"${on(s.also)}>${rich(s.also.text)}</div>`,
+    <div class="missions" style="grid-template-columns:repeat(${list(s.items).length},1fr)">${list(s.items).map((m, i) => `<div class="mission cue"${on(m)}><i>${pad(i + 1)}</i><b>${esc(m.title)}</b><span>${esc(m.text)}</span></div>`).join('')}</div>
+    ${s.also ? `<div class="also hl cue fade"${on(s.also)}>${rich(s.also.text)}</div>` : ''}`,
 
   end: (s) => `
     <div class="end">
@@ -457,7 +558,11 @@ const SETUP = {
   cost(s, st) {
     st.stats = list(s.stats).map((x, i) => ({ el: $(`[data-stat="${i}"]`), t: at(x.at), parts: String(x.value).split(/(\d[\d,]*(?:\.\d+)?)/).filter((p) => p !== '') }));
   },
-  demo(s, st) { st.v = $('#live'); st.img = $('#liveimg'); },
+  demo(s, st) {
+    st.v = $('#live'); st.img = $('#liveimg');
+    st.dropAt = at(s.result.drop_at);
+    st.cuts = list(s.result.items).map((x, i) => ({ el: $(`[data-cut="${i}"]`), from: secs(x.from), to: secs(x.to), shown: null }));
+  },
 };
 
 const DRAW = {
@@ -491,6 +596,9 @@ const DRAW = {
     }
   },
   demo(t, sc, s, st) {
+    // The result: each figure starts at today's average and falls to the estimate.
+    const k = ease((t - st.dropAt) / DROP);
+    for (const c of st.cuts) { const v = Math.round(c.from + (c.to - c.from) * k); if (v !== c.shown) { c.shown = v; c.el.innerHTML = units(hmin(v)); } }
     // The clip starts with the scene and is exactly as long as it.
     const v = st.v, target = Math.max(0, t - sc.s);
     if (window.__liveFrame) { v.hidden = true; st.img.hidden = false; window.__liveFrame(st.img, target); return; }   // render.py

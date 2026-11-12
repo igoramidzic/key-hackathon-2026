@@ -4,6 +4,7 @@
  * work running in the background.
  */
 import { cn, SystemLogo } from '@sim/ui';
+import type { CSSProperties } from 'react';
 import type { AgentEvent, CaseView, NativeView } from './types';
 
 /** Time since the first error, with its units spelled out: "56 s", "2 min 21 s", "1 h 05 min". */
@@ -139,26 +140,86 @@ function Triage({ view }: { view: CaseView | null }) {
   );
 }
 
+/** `--d` is when (seconds after the panel opens) a part of the root-cause story appears. */
+const delay = (s: number) => ({ '--d': `${s}s` }) as CSSProperties;
+
+/**
+ * The investigation, played in order rather than shown all at once: the recent changes it pulled
+ * from GitLab, the ones it ruled out, the one it blames, what that change broke, and the fix.
+ */
 function RootCause({ view }: { view: CaseView | null }) {
   const culprit = view?.records?.culprit;
   const h = view?.hypothesis;
   if (!culprit || !h) return <Waiting />;
+  const fix = view?.records?.fix;
   const ref = [culprit.change?.number, culprit.merge_request && `!${culprit.merge_request.iid}`]
     .filter(Boolean)
     .join(' · ');
+  const apps = (view?.apps ?? []).filter((t) => t !== culprit.tla);
+  const ruled = h.ruled_out.slice(0, 3).map((line) => {
+    const cut = line.indexOf(': ');
+    return cut > 0 ? { ref: line.slice(0, cut), why: line.slice(cut + 2) } : { ref: line, why: '' };
+  });
+  const cause = {
+    ref: ref || culprit.tla,
+    why: culprit.merge_request?.title ?? `A change to ${culprit.tla}`,
+  };
+  // The cause sits among the others, as it did when the agent first listed them.
+  const rows = [
+    ...ruled.slice(0, 1).map((x) => ({ ...x, cause: false })),
+    { ...cause, cause: true },
+    ...ruled.slice(1).map((x) => ({ ...x, cause: false })),
+  ];
+  const listed = 0.8 + rows.length * 0.6; // every row is on screen
+  const verdict = listed + 1.2; // the others are ruled out
+  const named = verdict + 1.2; // the cause is named
+  const broke = named + 1.4;
+  const fixAt = broke + 2.2;
   return (
-    <div className="demo-panel">
-      <span className="demo-badge">
-        {culprit.tla} · {ref} · {pct(culprit.confidence)} confident
-      </span>
-      <h2>{culprit.merge_request?.title ?? `A change to ${culprit.tla}`}</h2>
-      <p className="demo-lede is-clamped">{h.text}</p>
-      {h.ruled_out.length > 0 && (
-        <p className="demo-panel-note">
-          Ruled out: {h.ruled_out.length} other change{h.ruled_out.length === 1 ? '' : 's'} that
-          shipped around the same time.
-        </p>
-      )}
+    <div className="demo-panel demo-cause">
+      <div className="demo-chain">
+        <div>
+          <small>
+            <SystemLogo system="gitlab" className="size-4" />
+            Recent changes, checked in GitLab
+          </small>
+          <ul className="demo-changes">
+            {rows.map((x, i) => (
+              <li
+                key={x.ref}
+                className={x.cause ? 'is-cause' : 'is-out'}
+                style={{
+                  ...delay(0.8 + i * 0.6),
+                  ['--v' as string]: `${x.cause ? named : verdict}s`,
+                }}
+              >
+                <code>{x.ref}</code>
+                <span>{x.why}</span>
+                <em>{x.cause ? `The cause · ${pct(culprit.confidence)} sure` : 'Ruled out'}</em>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <i aria-hidden="true" className="demo-step" style={delay(broke)}>
+          broke
+        </i>
+        <div className="demo-step" style={delay(broke)}>
+          <small>Applications that depend on it</small>
+          <b>{apps.length}</b>
+          <div className="demo-tiles">
+            {apps.slice(0, 12).map((tla, i) => (
+              <span key={tla} style={{ animationDelay: `${broke + 0.3 + i * 0.08}s` }}>
+                {tla}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="demo-fix demo-step" style={delay(fixAt)}>
+        <small>Suggested fix</small>
+        <strong>{fix ? fix.title : 'Working out a fix…'}</strong>
+        {fix && <span>{fix.strategy === 'revert' ? 'Revert the change' : 'Fix forward'}</span>}
+      </div>
     </div>
   );
 }
@@ -175,16 +236,12 @@ function Recap({ view, onsetMs }: { view: CaseView | null; onsetMs: number | nul
       label: 'People briefed in one chat, call recording',
       at: ms['announce:briefing'] ?? ms.assembled,
     },
-    { label: 'Incident communication drafted', at: ms.communication_new },
     { label: 'Root cause found', at: ms.root_cause },
     { label: 'Fix ready for review', at: ms.fix_proposed },
     { label: 'Fix merged', at: r.fix_mr?.merged_at ?? ms.shipping, human: true },
     { label: 'Fix in production', at: promoted ?? r.change?.deployed_at },
     { label: 'Recovery confirmed', at: ms['announce:recovered'] ?? r.verification?.healthy_since },
-    {
-      label: 'Resolution, problem record and all-clear written',
-      at: ms.communication_restored ?? ms.problem_opened,
-    },
+    { label: 'Resolution and problem record written', at: ms.problem_opened },
   ].filter((s) => s.at);
   const stats = (
     [

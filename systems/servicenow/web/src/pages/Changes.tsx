@@ -277,6 +277,7 @@ export function ChangeDetail() {
       <Button
         size="sm"
         disabled={busy}
+        data-demo="promote-button"
         onClick={() => update.mutate({ planned_start: 'now', state: 'scheduled' })}
       >
         {busy && <Loader2 className="animate-spin" data-icon="inline-start" />}

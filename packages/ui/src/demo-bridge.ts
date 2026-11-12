@@ -30,7 +30,17 @@ export interface DemoTarget {
 
 export type DemoCommand =
   | { simDemo: true; cmd: 'go'; url: string }
-  | { simDemo: true; cmd: 'spot'; seq: number; targets: DemoTarget[]; dim?: boolean }
+  | {
+      simDemo: true;
+      cmd: 'spot';
+      seq: number;
+      targets: DemoTarget[];
+      dim?: boolean;
+      /** false: scroll the targets into view but draw nothing (the whole page stays readable). */
+      mark?: boolean;
+      /** Show the page untouched for this long (ms) before the spotlight fades in. */
+      settle?: number;
+    }
   | { simDemo: true; cmd: 'click'; target: DemoTarget; unless?: DemoTarget }
   | { simDemo: true; cmd: 'clear' };
 
@@ -50,17 +60,18 @@ interface Box {
 
 const MAX_MATCHES = 12;
 const STYLE = `
-.sim-demo-layer{position:fixed;inset:0;z-index:2147483000;pointer-events:none;font-family:"Geist Variable",ui-sans-serif,system-ui,sans-serif}
-.sim-demo-dim{position:absolute;inset:0;background:rgb(24 24 27 / .42);backdrop-filter:blur(1.5px);-webkit-backdrop-filter:blur(1.5px);opacity:0;transition:opacity .4s ease}
+.sim-demo-layer{position:fixed;inset:0;z-index:2147483000;pointer-events:none;font-family:"Geist Variable",ui-sans-serif,system-ui,sans-serif;opacity:0;transition:opacity .3s ease}
+.sim-demo-layer.on{opacity:1;transition:opacity .7s ease}
+.sim-demo-dim{position:absolute;inset:0;background:rgb(24 24 27 / .4);backdrop-filter:blur(1.5px);-webkit-backdrop-filter:blur(1.5px);opacity:0}
 .sim-demo-dim.on{opacity:1}
-.sim-demo-ring{position:absolute;box-shadow:0 0 0 2px #fff,0 0 0 4px #18181b;animation:sim-demo-in .3s ease both;transition:left .2s ease,top .2s ease,width .2s ease,height .2s ease}
-.sim-demo-ring.click{box-shadow:0 0 0 2px #fff,0 0 0 5px #15803d;animation:sim-demo-in .3s ease both,sim-demo-press 1.4s ease-in-out .3s infinite}
-.sim-demo-tag{position:absolute;transform:translateY(-100%);margin-top:-12px;white-space:nowrap;background:#18181b;color:#fff;font-weight:500;font-size:13px;line-height:1;padding:7px 10px;animation:sim-demo-in .3s ease both}
+.sim-demo-ring{position:absolute;box-shadow:0 0 0 2px #fff,0 0 0 4px #18181b}
+.sim-demo-ring.click{box-shadow:0 0 0 2px #fff,0 0 0 5px #15803d;animation:sim-demo-press 1.4s ease-in-out .3s infinite}
+.sim-demo-tag{position:absolute;transform:translateY(-100%);margin-top:-12px;white-space:nowrap;background:#18181b;color:#fff;font-weight:500;font-size:13px;line-height:1;padding:7px 10px}
 .sim-demo-tag.below{transform:none;margin-top:12px}
 .sim-demo-tag.click{background:#15803d;font-size:14px;font-weight:600;padding:8px 12px}
 @keyframes sim-demo-in{from{opacity:0}to{opacity:1}}
 @keyframes sim-demo-press{50%{box-shadow:0 0 0 2px #fff,0 0 0 5px #15803d,0 0 0 12px rgb(21 128 61 / .25)}}
-@media (prefers-reduced-motion:reduce){.sim-demo-ring,.sim-demo-tag{animation:none}}
+@media (prefers-reduced-motion:reduce){.sim-demo-ring{animation:none}}
 `;
 
 const norm = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -128,6 +139,15 @@ export function installDemoBridge(): void {
   let targets: DemoTarget[] = [];
   let seq = 0;
   let wantDim = true;
+  let wantMark = true;
+  let settleMs = 0;
+  // A new spotlight waits until the page has stopped moving (it navigated, loaded, scrolled),
+  // then fades in where the elements already are. It never slides across the page.
+  let shown = false;
+  let since = 0;
+  let stableKey = '';
+  let stableSince = 0;
+  const STABLE_MS = 450;
   let userScrolled = false;
   let lastScroll = 0;
   let lastFound = -1;
@@ -220,7 +240,24 @@ export function installDemoBridge(): void {
       }
     }
     const boxes = targets.length ? measure() : [];
-    draw(boxes);
+    const now = Date.now();
+    const key = JSON.stringify(boxes);
+    if (key !== stableKey) {
+      stableKey = key;
+      stableSince = now;
+    }
+    if (!wantMark || boxes.length === 0) {
+      if (shown) {
+        shown = false;
+        layer.classList.remove('on');
+      }
+    } else if (shown) {
+      draw(boxes);
+    } else if (now - since >= settleMs + 350 && now - stableSince >= STABLE_MS) {
+      draw(boxes);
+      shown = true;
+      layer.classList.add('on');
+    }
     if (targets.length && boxes.length !== lastFound) {
       lastFound = boxes.length;
       report({ simDemo: true, type: 'spot', seq, found: boxes.length });
@@ -250,15 +287,22 @@ export function installDemoBridge(): void {
       if (msg.seq !== seq) {
         userScrolled = false;
         lastFound = -1;
+        shown = false;
+        since = Date.now();
+        layer.classList.remove('on');
       }
       targets = msg.targets;
       seq = msg.seq;
       wantDim = msg.dim !== false;
+      wantMark = msg.mark !== false;
+      settleMs = msg.settle ?? 0;
     } else if (msg.cmd === 'click') {
       pendingClick = { target: msg.target, unless: msg.unless, until: Date.now() + 6_000 };
     } else if (msg.cmd === 'clear') {
       targets = [];
       lastFound = -1;
+      shown = false;
+      layer.classList.remove('on');
     }
   });
 

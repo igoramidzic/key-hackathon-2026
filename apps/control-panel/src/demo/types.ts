@@ -162,6 +162,8 @@ export type Pane =
       spots?: DemoTarget[];
       /** Click this first (e.g. open the members panel) unless `unless` is already on screen. */
       click?: { target: DemoTarget; unless?: DemoTarget };
+      /** Show the whole page as it is: `spots` only say where to scroll, nothing is dimmed. */
+      plain?: boolean;
     }
   | { kind: 'native'; view: NativeView };
 

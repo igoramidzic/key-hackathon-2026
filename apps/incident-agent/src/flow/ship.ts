@@ -92,7 +92,7 @@ export async function raiseChange(
             ),
           app_tla: tla,
           merge_requests: [ref],
-          planned_start: 'now',
+          ...(deps.config.changeReview ? {} : { planned_start: 'now' }),
           type: 'emergency',
           description: [
             `Promotes ${mr.web_url} to fix ${c.incident ? `${c.incident.number} (${c.incident.web_url})` : 'a live incident'}.`,
@@ -121,7 +121,9 @@ export async function raiseChange(
       deps,
       c,
       [{ type: 'other', url: c.change!.web_url, title: `Emergency change ${c.change!.number}` }],
-      `Fix ${ref} merged; emergency change ${c.change!.number} raised for KBR to promote now: ${c.change!.web_url}`,
+      deps.config.changeReview
+        ? `Fix ${ref} merged; emergency change ${c.change!.number} drafted for a person to review and promote: ${c.change!.web_url}`
+        : `Fix ${ref} merged; emergency change ${c.change!.number} raised for KBR to promote now: ${c.change!.web_url}`,
     );
   }
   deps.store.event(
@@ -164,6 +166,20 @@ export async function followChange(deps: FlowDeps, c: Case): Promise<ChangeProgr
     return { status: 'deployed', at };
   }
   if (ch.state === 'canceled') return { status: 'canceled' };
+  if (ch.state !== 'new' && c.milestones.change_review && !c.milestones.change_submitted) {
+    c.milestones.change_submitted = isoNow();
+    deps.store.event(c, 'action', `${c.change.number} reviewed and promoted by a person`, {
+      url: c.change.web_url,
+    });
+  }
+  // A draft waiting for its reviewer is not a KBR abort: leave it alone.
+  if (
+    ch.state === 'new' &&
+    c.milestones.change_review &&
+    !c.milestones.change_submitted &&
+    ch.release?.status !== 'failed'
+  )
+    return { status: 'waiting' };
   if (ch.state === 'new') {
     // KBR sent it back. Read why, fix the cause (usually: the MR isn't merged), reschedule.
     const note =

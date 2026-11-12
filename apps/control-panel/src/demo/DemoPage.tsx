@@ -75,6 +75,9 @@ export function DemoPage() {
     const found = PACES.findIndex((p) => p.label.toLowerCase() === want);
     return found >= 0 ? found : 1;
   }, []);
+  // `/demo?present=1` shows only the stage: no chapter bar, no caption, no controls. The recorder
+  // uses it; the keyboard still works (→ next, ← back, space pause).
+  const present = useMemo(() => new URLSearchParams(window.location.search).has('present'), []);
   const history = useRef<number[]>([]);
   const firstReady = useRef<Record<string, number>>({});
   const doneAt = useRef<Record<string, number>>({});
@@ -354,7 +357,7 @@ export function DemoPage() {
         : null;
 
   return (
-    <div className="demo-root">
+    <div className={cn('demo-root', present && 'is-present')}>
       <header className="demo-top">
         <strong>Guided demo</strong>
         <ol>
@@ -377,6 +380,7 @@ export function DemoPage() {
       <Stage
         panes={beat.panes}
         preload
+        present={present}
         native={(which) => <NativePane view={which} caseView={view} onsetMs={onsetMs} />}
       />
 

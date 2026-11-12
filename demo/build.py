@@ -212,6 +212,10 @@ def when(spec: str, beats: dict) -> float:
     return t + float(m.group(4) or 0)
 
 
+GUARD_IN, GUARD_OUT = 0.6, 0.5  # seconds kept clear at the start and end of a recorded step
+FADE_IN = 0.3  # each part of the recording eases in, so a change of screen is not a hard jump
+
+
 def cut_live(live: dict, scene: dict, beats: dict) -> None:
     """Cut the recorded guided-demo run (demo/live/run.mp4) into demo/live.mp4, exactly as long as
     the scene, each part sped up (or held on its last frame) to fill its stretch of the narration."""
@@ -237,15 +241,26 @@ def cut_live(live: dict, scene: dict, beats: dict) -> None:
 
     cuts = live.get("cuts") or []
     keep = float(live.get("keep_top", 1.0))
+    top_speed = float(live.get("max_speed", 1.15))
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     plan = []
     for i, c in enumerate(cuts):
         on = scene["s"] if i == 0 else when(c["at"], beats)
         off = when(cuts[i + 1]["at"], beats) if i + 1 < len(cuts) else scene["e"]
-        a = (marks[c["from_event"]] if "from_event" in c else start_of(c["show"])) + float(c.get("skip", 0))
-        b = a + float(c["take"]) if "take" in c else end_of(c.get("to", c["show"]))
-        plan.append((round(a, 2), round(b - a, 2), round(off - on, 3)))
-    ident = json.dumps([plan, keep, src.stat().st_mtime_ns], sort_keys=True)
+        # The recorder notices a new step up to a quarter second late, and screens cross-fade,
+        # so stay clear of both ends of a step: never show (or freeze on) a half-changed screen.
+        a = (marks[c["from_event"]] if "from_event" in c else start_of(c["show"])) + float(c.get("skip", GUARD_IN))
+        b = a + float(c["take"]) if "take" in c else end_of(c.get("to", c["show"])) - GUARD_OUT
+        have, want = b - a, off - on
+        # Too much footage for its stretch of narration: play it a touch faster at most, then
+        # drop what does not fit (the end of the step, or the start with `keep: end`).
+        fit = want * float(c.get("speed", top_speed))
+        if have > fit:
+            if c.get("keep") == "end":
+                a = b - fit
+            have = fit
+        plan.append((round(a, 2), round(have, 2), round(want, 3)))
+    ident = json.dumps([plan, keep, FADE_IN, src.stat().st_mtime_ns], sort_keys=True)
     stamp = CACHE / "live.key"
     out = HERE / "live.mp4"
     if out.exists() and stamp.exists() and stamp.read_text() == ident:
@@ -257,6 +272,8 @@ def cut_live(live: dict, scene: dict, beats: dict) -> None:
         factor = min(want / have, 1.0)  # never slower than real time; hold the last frame instead
         hold = max(0.0, want - have * factor)
         chain = f"crop=iw:trunc(ih*{keep}/2)*2:0:0,setpts=PTS*{factor:.5f},fps=30,scale=1920:-2:flags=lanczos"
+        if n:
+            chain += f",fade=t=in:st=0:d={FADE_IN}:color=white"
         if hold > 0.02:
             chain += f",tpad=stop_mode=clone:stop_duration={hold:.3f}"
         name = f"{n:02d}.mp4"
@@ -290,6 +307,8 @@ def main() -> None:
     load_env()
     ap = argparse.ArgumentParser()
     ap.add_argument("--video", action="store_true", help="also render demo/briefing.mp4")
+    ap.add_argument("--draft", action="store_true", help="no voice: estimate each line's length, to check layout and timing for free")
+    ap.add_argument("--no-live", action="store_true", help="leave demo/live.mp4 as it is")
     args = ap.parse_args()
 
     try:
@@ -318,19 +337,23 @@ def main() -> None:
 
     for scene_id, scene in content["scenes"].items():
         start = cursor
-        add(silence(lead_in))
+        # A scene may set its own pauses:  pacing: {gap: 0.8, tail: 2}
+        own = scene.get("pacing") or {}
+        s_lead, s_gap, s_tail = (float(own.get(k, d)) for k, d in (("lead_in", lead_in), ("gap", gap), ("tail", tail)))
+        add(silence(s_lead))
         for n, (beat_id, line) in enumerate((scene.get("narration") or {}).items()):
             caption = line["text"] if isinstance(line, dict) else line
             spoken = line.get("say", caption) if isinstance(line, dict) else line
             if beat_id in beats:
                 sys.exit(f"content.yaml: narration beat id '{beat_id}' is used twice; ids must be unique.")
             if n:
-                add(silence(gap))
-            audio = soften(synth(spoken, voice, speed, engine, eleven_cfg))
+                add(silence(s_gap))
+            # A draft spends nothing: silence about as long as the line takes to say.
+            audio = silence(len(caption) * 0.063) if args.draft else soften(synth(spoken, voice, speed, engine, eleven_cfg))
             beats[beat_id] = {"s": round(cursor, 2), "e": round(cursor + len(audio) / RATE, 2), "text": caption}
             words += len(caption.split())
             add(audio)
-        add(silence(tail))
+        add(silence(s_tail))
         scenes.append({"id": scene_id, "title": scene.get("chapter", scene_id), "s": round(start, 2), "e": round(cursor, 2)})
         screens[scene_id] = scene.get("screen") or {}
         print(f"{scene_id:5} {start:6.1f} -> {cursor:6.1f}  ({cursor - start:4.1f}s)")
@@ -346,19 +369,20 @@ def main() -> None:
     if problems:
         print("\nTimings that will never fire (those elements stay hidden):\n" + "\n".join(problems) + "\n")
 
-    track = np.concatenate(parts)
-    track *= 0.89 / max(float(np.abs(track).max()), 1e-6)
-    wav = HERE / "narration.wav"
-    sf.write(wav, track, RATE)
-    subprocess.run(
-        ["afconvert", "-f", "mp4f", "-d", "aac", "-b", "64000", str(wav), str(HERE / "narration.mp4")],
-        check=True,
-    )
-    wav.unlink()
+    if not args.draft:
+        track = np.concatenate(parts)
+        track *= 0.89 / max(float(np.abs(track).max()), 1e-6)
+        wav = HERE / "narration.wav"
+        sf.write(wav, track, RATE)
+        subprocess.run(
+            ["afconvert", "-f", "mp4f", "-d", "aac", "-b", "64000", str(wav), str(HERE / "narration.mp4")],
+            check=True,
+        )
+        wav.unlink()
 
     for scene in scenes:
         live = screens[scene["id"]].get("live")
-        if live:
+        if live and not args.no_live:
             cut_live(live, scene, beats)
 
     timeline = {"duration": round(cursor, 2), "voice": voice, "scenes": scenes, "beats": beats}
@@ -380,7 +404,9 @@ def main() -> None:
         print("Still cut off at an edge after every retake (rewording the line usually fixes it):\n  " + "\n  ".join(ROUGH))
     if cursor > LIMIT:
         print(f"WARNING: {cursor - LIMIT:.0f}s over the five-minute limit. Trim narration or raise `speed`.")
-    if args.video:
+    if args.draft:
+        print("DRAFT: timings are estimates and narration.mp4 is unchanged. Build again without --draft before publishing.")
+    if args.video and not args.draft:
         subprocess.run([sys.executable, str(HERE / "render.py")], check=True)
 
 

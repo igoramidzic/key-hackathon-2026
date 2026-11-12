@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400" font-family="'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif" role="img" aria-label="Cumulative outage hours from P1 and P2 incidents, today and with NightWatch, years 1 to 5">
+<rect width="660" height="400" fill="#ffffff"/>
+<rect x="70" y="12" width="12" height="12" fill="#e3b9b3"/>
+<text x="88" y="22.5" font-size="13" fill="#191919">Today</text>
+<rect x="147.0" y="12" width="12" height="12" fill="#191919"/>
+<text x="165.0" y="22.5" font-size="13" fill="#191919">With NightWatch</text>
+<rect x="298.75" y="12.75" width="10.5" height="10.5" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="3 2"/>
+<text x="316.0" y="22.5" font-size="13" fill="#1c7c4a" font-weight="600">Hours saved</text>
+<line x1="70" x2="648" y1="344.0" y2="344.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="348.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">0</text>
+<line x1="70" x2="648" y1="294.0" y2="294.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="298.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">300</text>
+<line x1="70" x2="648" y1="244.0" y2="244.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="248.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">600</text>
+<line x1="70" x2="648" y1="194.0" y2="194.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="198.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">900</text>
+<line x1="70" x2="648" y1="144.0" y2="144.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="148.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">1,200</text>
+<line x1="70" x2="648" y1="94.0" y2="94.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="98.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">1,500</text>
+<line x1="70" x2="648" y1="44.0" y2="44.0" stroke="#d8d6cf" stroke-width="1"/>
+<text x="60" y="48.0" font-size="12" text-anchor="end" fill="#6c6b66" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">1,800</text>
+<text x="12" y="194.0" transform="rotate(-90 12 194.0)" font-size="12" text-anchor="middle" fill="#6c6b66" letter-spacing=".06em">HOURS OF OUTAGE</text>
+<rect x="86.8" y="288.9" width="38" height="55.1" fill="#e3b9b3"/>
+<text x="105.8" y="281.9" font-size="12" text-anchor="middle" fill="#6c6b66" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">330</text>
+<rect x="130.8" y="316.5" width="38" height="27.5" fill="#191919"/>
+<text x="149.8" y="309.5" font-size="12" text-anchor="middle" fill="#191919" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">165</text>
+<rect x="131.8" y="288.9" width="36" height="5.5" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="149.8" y="281.9" font-size="12" text-anchor="middle" fill="#1c7c4a" font-weight="700" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">−165</text>
+<text x="127.8" y="366.0" font-size="13" text-anchor="middle" fill="#191919" font-weight="500">Year 1</text>
+<rect x="202.4" y="233.8" width="38" height="110.2" fill="#e3b9b3"/>
+<text x="221.4" y="226.8" font-size="12" text-anchor="middle" fill="#6c6b66" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">661</text>
+<rect x="246.4" y="288.9" width="38" height="55.1" fill="#191919"/>
+<text x="265.4" y="281.9" font-size="12" text-anchor="middle" fill="#191919" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">330</text>
+<rect x="247.4" y="233.8" width="36" height="33.1" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="265.4" y="226.8" font-size="12" text-anchor="middle" fill="#1c7c4a" font-weight="700" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">−330</text>
+<text x="243.4" y="366.0" font-size="13" text-anchor="middle" fill="#191919" font-weight="500">Year 2</text>
+<rect x="318.0" y="178.8" width="38" height="165.2" fill="#e3b9b3"/>
+<text x="337.0" y="171.8" font-size="12" text-anchor="middle" fill="#6c6b66" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">992</text>
+<rect x="362.0" y="261.4" width="38" height="82.6" fill="#191919"/>
+<text x="381.0" y="254.4" font-size="12" text-anchor="middle" fill="#191919" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">496</text>
+<rect x="363.0" y="178.8" width="36" height="60.6" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="381.0" y="171.8" font-size="12" text-anchor="middle" fill="#1c7c4a" font-weight="700" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">−496</text>
+<text x="359.0" y="366.0" font-size="13" text-anchor="middle" fill="#191919" font-weight="500">Year 3</text>
+<rect x="433.6" y="123.7" width="38" height="220.3" fill="#e3b9b3"/>
+<text x="452.6" y="116.7" font-size="12" text-anchor="middle" fill="#6c6b66" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">1,322</text>
+<rect x="477.6" y="233.8" width="38" height="110.2" fill="#191919"/>
+<text x="496.6" y="226.8" font-size="12" text-anchor="middle" fill="#191919" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">661</text>
+<rect x="478.6" y="123.7" width="36" height="88.2" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="496.6" y="116.7" font-size="12" text-anchor="middle" fill="#1c7c4a" font-weight="700" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">−661</text>
+<text x="474.6" y="366.0" font-size="13" text-anchor="middle" fill="#191919" font-weight="500">Year 4</text>
+<rect x="549.2" y="68.6" width="38" height="275.4" fill="#e3b9b3"/>
+<text x="568.2" y="61.6" font-size="12" text-anchor="middle" fill="#6c6b66" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">1,652</text>
+<rect x="593.2" y="206.3" width="38" height="137.7" fill="#191919"/>
+<text x="612.2" y="199.3" font-size="12" text-anchor="middle" fill="#191919" font-weight="600" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">826</text>
+<rect x="594.2" y="68.6" width="36" height="115.7" fill="#1c7c4a" fill-opacity=".08" stroke="#1c7c4a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="612.2" y="61.6" font-size="12" text-anchor="middle" fill="#1c7c4a" font-weight="700" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">−826</text>
+<text x="590.2" y="366.0" font-size="13" text-anchor="middle" fill="#191919" font-weight="500">Year 5</text>
+<text x="359.0" y="392" font-size="12" text-anchor="middle" fill="#6c6b66" letter-spacing=".06em">YEARS, ADDED UP</text>
+</svg>

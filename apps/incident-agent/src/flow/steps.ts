@@ -14,6 +14,7 @@ import {
   appsJoined,
   briefing,
   callersGrouped,
+  changeForReview,
   changeRaised,
   communicationDrafted,
   failure,
@@ -25,7 +26,7 @@ import {
   rootCauseUpdate,
 } from '../messages/teams';
 import type { PhaseRunner } from '../phases/runner';
-import { errorMessage, hhmm } from '../util';
+import { errorMessage, hhmm, isoNow } from '../util';
 import { flush, postNow, queue, wasAnnounced } from './announce';
 import { assembleChannel, notInvited, syncMembers, upstreamSuspect } from './assemble';
 import { groupCallers } from './callers';
@@ -354,7 +355,7 @@ export function startCommunication(deps: FlowDeps, ctx: StepContext, c: Case): b
 export function briefed(deps: FlowDeps): StepFn {
   return async (c, ctx) => {
     await startMeeting(deps, c);
-    startCommunication(deps, ctx, c);
+    if (deps.config.communications) startCommunication(deps, ctx, c);
     startDeepRca(deps, ctx, c);
     return { next: 'investigating' };
   };
@@ -482,7 +483,12 @@ export function shipping(deps: FlowDeps): StepFn {
     if (!c.change) {
       await raiseChange(deps, c);
       await flush(deps, c, true);
-      await postNow(deps, c, `change:${c.change!.number}`, changeRaised(c), null);
+      const who = await reviewers(deps, c);
+      if (deps.config.changeReview && c.change!.state === 'new') {
+        c.milestones.change_review = isoNow();
+        deps.store.save(c);
+        await postNow(deps, c, `change:${c.change!.number}`, changeForReview(c, who), null);
+      } else await postNow(deps, c, `change:${c.change!.number}`, changeRaised(c, who), null);
       return poll;
     }
     const progress = await followChange(deps, c);
@@ -526,7 +532,7 @@ export function verifying(deps: FlowDeps): StepFn {
       const { text } = await processText(deps, c, 'restored');
       const { resolved } = await writeResolution(deps, c, text);
       if (await openProblem(deps, c, text)) await renameForProblem(deps, c);
-      await draftCommunication(deps, c, 'restored', text);
+      if (deps.config.communications) await draftCommunication(deps, c, 'restored', text);
       await endMeeting(deps, c);
       if (resolved) await resolveAlerts(deps, c);
       await postNow(deps, c, 'resolution', resolutionMessage(c, resolved), null);

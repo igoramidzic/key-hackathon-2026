@@ -62,9 +62,15 @@ async function main(): Promise<number> {
     {
       cwd: ROOT,
       stdio: 'inherit',
-      // The agent closes the incident itself once recovery is confirmed, so the demo's only
-      // human step is the merge.
-      env: { AGENT_AUTO_RESOLVE: 'true', ...process.env, AGENT_SPEED: String(SPEED) },
+      // The agent closes the incident itself once recovery is confirmed. The demo's human steps
+      // are the merge and promoting the drafted emergency change; drafting Critical Incident
+      // Communications is left out (a later scope increase).
+      env: {
+        AGENT_AUTO_RESOLVE: 'true',
+        AGENT_COMMUNICATIONS: 'false',
+        ...process.env,
+        AGENT_SPEED: String(SPEED),
+      },
     },
   );
   if (OPEN) setTimeout(() => openBrowser(PAGE), 2_500);

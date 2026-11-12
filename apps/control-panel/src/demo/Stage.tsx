@@ -46,18 +46,27 @@ interface Desired {
   pane: Extract<Pane, { kind: 'frame' }> | null;
   goSent: number;
   clickSent: number;
+  /** How long the page is shown untouched before its spotlight fades in (ms). */
+  settle: number;
 }
+
+/** A page just arrived at is shown whole for a moment before anything is dimmed. */
+const SETTLE_NEW_PAGE = 1_800;
+const SETTLE_SAME_PAGE = 700;
 
 export function Stage({
   panes,
   preload,
   native,
+  present = false,
 }: {
   /** What is on stage. One thing at a time: only the first pane is shown. */
   panes: Pane[];
   /** Mount every screen at its home page, so the first visit is instant. */
   preload: boolean;
   native: (view: Extract<Pane, { kind: 'native' }>['view']) => ReactNode;
+  /** Presentation mode: a large "which app is this" strip, for recordings and projectors. */
+  present?: boolean;
 }) {
   const pane = panes[0] ?? null;
   const box = useRef<HTMLDivElement>(null);
@@ -101,7 +110,9 @@ export function Stage({
       cmd: 'spot',
       seq: want.seq,
       targets: pane.spots ?? [],
-      dim: true,
+      dim: !pane.plain,
+      mark: !pane.plain,
+      settle: want.settle,
     });
   });
 
@@ -160,6 +171,7 @@ export function Stage({
         pane: want,
         goSent: sameUrl ? next : -1,
         clickSent: -1,
+        settle: sameUrl ? SETTLE_SAME_PAGE : SETTLE_NEW_PAGE,
       };
       flush.current(screen);
     }
@@ -172,11 +184,11 @@ export function Stage({
   const meta = pane?.kind === 'frame' ? SCREEN_META[pane.screen] : null;
 
   return (
-    <div className="demo-stage">
-      <header className="demo-stage-head">
+    <div className={cn('demo-stage', present && 'is-present')}>
+      <header className="demo-stage-head" key={meta?.name ?? 'agent'}>
         {meta && pane?.kind === 'frame' ? (
           <>
-            <SystemLogo system={meta.logo} className="size-4" />
+            <SystemLogo system={meta.logo} className={present ? 'size-7' : 'size-4'} />
             <strong>{meta.name}</strong>
             {pane.what && <span>{pane.what}</span>}
           </>
