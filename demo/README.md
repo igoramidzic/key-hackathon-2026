@@ -10,6 +10,9 @@ A five-minute narrated, self-playing presentation of the project ("Operation Nig
 | `briefing.html` | The page (layout and styling; its content is filled in by the build) | Only for layout or colours |
 | `narration.mp4` | Voice-over audio, generated | No |
 | `briefing.mp4` | The video, generated | No |
+| `record_live.py` | Records a real run of the guided demo (`/demo`) with a cursor | No |
+| `live/run.mp4`, `live/run.json` | That recording, full length, and when each step started | No, re-record |
+| `live.mp4` | The recording cut to fit the narration, generated | No |
 
 ## Change something
 
@@ -30,6 +33,23 @@ A five-minute narrated, self-playing presentation of the project ("Operation Nig
 
 The build prints the total running time and warns if it goes over five minutes, or if a timing
 points at a narration line that does not exist.
+
+## The live case is a real recording
+
+The "Live case" chapter is not drawn: it plays a recording of the guided demo page working a real
+scenario, with the actual Logs, Moogsoft, ServiceNow, GitLab and Teams screens and a cursor that
+clicks Start and Merge. To record a new run (about three minutes; it resets the simulated bank):
+
+```bash
+pnpm dev                      # terminal 1: the simulated bank
+pnpm demo --no-open           # terminal 2: the incident agent
+uv run demo/record_live.py    # terminal 3: records demo/live/run.mp4 and run.json
+```
+
+Then rebuild. `content.yaml` (`demo` > `screen` > `live` > `cuts`) says which step of the recording
+plays under which narration line; the build speeds each part up to fit. The numbers spoken in that
+chapter (seven applications, eight people, fifty-six seconds, 2:21) come from that run's own recap
+screen, so check them against the new recording and change the narration if they moved.
 
 ## Things worth knowing
 

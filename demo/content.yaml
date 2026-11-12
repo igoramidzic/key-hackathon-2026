@@ -48,10 +48,10 @@ elevenlabs:
                                      #   hpp4J3VqNfWAUOO0d1Us Bella (professional, bright, warm)
                                      #   cgSgspJ2msm6clMCkdW9 Jessica (playful, bright, warm)
                                      #   EXAVITQu4vr4xnSDxMaL Sarah (mature, confident)
-  speed: 1.17 # 1.0 = as recorded. Changing this costs no credits.
+  speed: 1.2 # 1.0 = as recorded. Changing this costs no credits.
   model: eleven_v3                   # most expressive. eleven_multilingual_v2 is steadier.
   settings: {stability: 0.5}         # lower = more emotion and variation, higher = more even
-pacing: {lead_in: 0.9, gap: 0.32, tail: 0.75}   # seconds of silence: scene start / between beats / scene end
+pacing: {lead_in: 0.8, gap: 0.3, tail: 0.7}   # seconds of silence: scene start / between beats / scene end
 
 hud: "Operation *NightWatch*"          # top-left corner of every scene
 player: {start: "Start briefing", replay: "Replay briefing"}
@@ -108,7 +108,7 @@ scenes:
     chapter: "Today: manual"
     narration:
       n1: Here is how a critical incident runs today. Almost every step is manual.
-      n2: Incident Management hears about it from a page, the network operations center, a monitor, a Teams chat, an email, or the incident phone line.
+      n2: Incident Management hears about it from a page, a monitor, a Teams chat, an email, or the incident phone line.
       n3: They gather teams to judge impact and urgency, set the priority, then build a Teams chat, publish what is known, and start a recorded call.
       n4: Corporate incident response is engaged, communications go out, and only then does the hunt for the cause really begin.
       n5:
@@ -223,162 +223,53 @@ scenes:
   # ------------------------------------------------------------------ demo
   demo:
     chapter: Live case
+    # This scene plays a recording of the real guided demo (control panel -> /demo): the actual
+    # Logs, Moogsoft, ServiceNow, GitLab and Teams screens, with the agent working a live scenario.
+    # Re-record with  uv run demo/record_live.py  (see README). Every number spoken here comes from
+    # that run's own recap screen, so after re-recording check them against demo/live/run.json.
     narration:
-      d1: Let's watch it work.
+      d1: Let's watch it work. This is a real run, recorded on the simulated bank.
       d2: A change has just shipped. Errors start in online banking, then mobile, then payments.
-      d3: {text: "Fifty-five seconds in, the first critical alert fires. NightWatch is already on the case.", say: "Fifty-five seconds in, the first critical alert fires. Nightwatch is already on the case."}
-      d4: "Nine applications are failing. The agent walks the dependency graph and finds the one thing they share: the customer information file. A service that still looks green."
+      d3: Three seconds after the first error, NightWatch has noticed. The alerts that would page a person come later.
+      d4: Seven applications are failing, and dozens more feel it. NightWatch works out it is one problem, keeps one case, and sizes up the damage.
+      d6: It opens a priority one incident, assigns the team that owns the customer information file, and groups the help desk tickets about the same outage underneath it.
+      d7: Then it stands up a Teams channel and brings in eight people, from the on-call engineers to the incident commander. Each is told why they are there, and they get one briefing.
       d5:
-        text: "In GitLab, it finds the suspect: a merge request that renamed every field in the customer profile. The pipeline passed. Every consumer broke."
-        say: "In Git Lab, it finds the suspect: a merge request that renamed every field in the customer profile. The pipeline passed. Every consumer broke."
-      d6: It opens a priority one incident, assigns the team that owns the service, and attaches three calls from branch staff reporting the same outage.
-      d7: Then it stands up a Teams channel and brings in the on-call engineers, the incident commander, and the author of the change. Each of them is told exactly why they are there.
-      d8: Finally, it drafts the fix. A human reviews it and clicks merge. The errors drain away, and the case is closed.
-      d9: "From first error to a briefed team with a root cause: under three minutes."
+        text: "Under a minute in, it names the cause in GitLab: a change that renamed every field in the customer profile. It passed review, and the service never returned an error itself."
+        say: "Under a minute in, it names the cause in Git Lab: a change that renamed every field in the customer profile. It passed review, and the service never returned an error itself."
+      d8: It writes the fix as a merge request. The one decision that matters stays with a person, who clicks merge. NightWatch raises the emergency change, the release goes out, and the errors drain away.
+      d9: "In this run: root cause in fifty-six seconds, and recovery confirmed two minutes and twenty-one seconds after the first error."
     screen:
-      kicker: File 05 // Live case
-      headline: The customer profile outage
-      tagline: [Re-enactment on the simulated bank, "scenario: cif-snake-case-cascade"]
-      clock_label: Mission clock
-      clock_prefix: T+
-      # Mission clock: what it reads at each moment of the narration (it glides in between).
-      clock:
-        - [d2, "0:00"]
-        - [d3, "0:52"]
-        - [d3@0.3, "0:55"]                    # <- spoken too (d3)
-        - [d4, "1:10"]
-        - [d5, "1:35"]
-        - [d6, "2:05"]
-        - [d7, "2:30"]
-        - [d7.e, "2:48"]                      # matches `result.big` below
-        - [d8@0.3, "2:48"]
-        - [d8@0.5, "6:50"]                    # a human reviews, then merges
-        - [d8.e, "7:50"]
-      # The six steps on the left. Each one owns a panel (in this order: logs, graph, suspect,
-      # incident, channel, fix) and is active from its first beat to the next step's first beat.
-      steps:
-        - {name: "Detect", beats: [d2, d3], status: "watching the log stream", calls: "logs.tail_logs()  logs.list_alerts()  logs.summarize_errors()"}
-        - {name: "Scope and trace", beats: [d4, d4], status: "tracing dependencies", calls: "servicenow.get_app_dependencies()  servicenow.get_app(\"CIF\")"}
-        - {name: "Find the change", beats: [d5, d5], status: "reviewing recent changes", calls: "gitlab.list_merge_requests()  gitlab.get_merge_request()"}
-        - {name: "Open incident", beats: [d6, d6], status: "filing the incident", calls: "servicenow.create_incident()  servicenow.link_child_incidents()"}
-        - {name: "Assemble team", beats: [d7, d7], status: "assembling the team", calls: "servicenow.get_support_group()  teams.create_channel()  teams.post_message()"}
-        - {name: "Fix and verify", beats: [d8, d8], status: "fix and verify", calls: "gitlab.create_merge_request()  logs.tail_logs()  servicenow.update_incident()"}
-      idle: {before: "standing by", after: case closed}
-
-      logs:
-        app: Cloud Logging · Logs Explorer · production
-        start_time: "02:07:30"                # timestamp of the first error
-        banners:
-          - {at: d3@0.36, head: "MOOGSOFT · CRITICAL · OLB", text: "HTTP 5xx error rate 38.4% (threshold 5%)"}
-          - {at: d3@0.5, head: "MOOGSOFT · CRITICAL · MBL", text: "HTTP 5xx error rate 27.9% (threshold 5%)"}
-          - {at: d3@0.66, head: "NIGHTWATCH · ENGAGED", text: "Grouping errors by app: 9 apps failing since 02:07:30", style: agent}
-        errors:                               # `after` = seconds into the step when this app starts failing
-          - {after: 1.0, tla: "OLB", messages: ["CIF profile response failed schema validation", "profile unavailable: upstream contract violation (502)"]}
-          - {after: 2.6, tla: "MBL", messages: ["customer-profile-api: customerId missing from profile response (502)"]}
-          - {after: 3.8, tla: "PAY", messages: ["Payment rejected: payer verification unavailable (502)", "Unrecognized field \"customer_id\" (class CustomerProfile)"]}
-          - {after: 5.4, tla: "FRD", messages: ["customer feature extraction failed: KeyError 'customerId'"]}
-          - {after: 6.2, tla: "NTF", messages: ["notification dropped: recipient resolution failed"]}
-          - {after: 7.0, tla: "CRD", messages: ["NullPointerException: CustomerProfile.customerId() is null (500)"]}
-          - {after: 7.8, tla: "TLR", messages: ["IllegalStateException: CIF returned profile for null (500)"]}
-        background:                           # healthy traffic. {id} and {ms} are filled with random values
-          - {tla: "CIF", message: "GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=olb-bff"}
-          - {tla: "DEP", message: "GET /v1/accounts/{id}/balances 200 {ms}ms"}
-          - {tla: "ATH", message: "token issued grant=refresh_token"}
-          - {tla: "CIF", message: "GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=pay-api"}
-
-      graph:
-        app: ServiceNow · application dependency graph
-        failing:
-          - [OLB, Online Banking]
-          - [MBL, Mobile Banking]
-          - [PAY, Payments Hub]
-          - [FRD, Fraud Scoring]
-          - [NTF, Notifications]
-          - [CRD, Card Management]
-          - [TLR, Teller Platform]
-          - [DEP, Deposit Accounts]
-          - [BPY, Bill Pay]
-        upstream: {tla: "CIF", name: "Customer Information File"}
-        common: {at: d4@0.5, text: "COMMON UPSTREAM"}
-        green: {at: d4@0.84, text: "200 OK · LOOKS GREEN"}
-        notes: [9 failing apps, 187 callers of CIF]
-        footer: "get_app_dependencies(direction: \"up\") for each failing app"
-
-      suspect:
-        app: GitLab · keybank/CIF00/customer-profile-api
-        state: Merged
-        when: 30 s before the first error
-        pipeline: {at: d5@0.62, text: "Pipeline passed"}
-        title: Adopt enterprise API naming standard (snake_case)
-        diff:
-          at: d5@0.3
-          file: src/main/resources/application.yml
-          removed: "property-naming-strategy: LOWER_CAMEL_CASE"
-          added: "property-naming-strategy: SNAKE_CASE"
-        effect:
-          at: d5@0.48
-          lines: ["Consumers expect [[\"customerId\"]]", "CIF now returns *\"customer_id\"* with 200 OK"]
-        decoys:
-          at: d5@0.7
-          heading: Ruled out
-          items:
-            - {tla: "OLB", title: "Update profile error copy (DCR-482)", why: "Copy only, no logic."}
-            - {tla: "ATH", title: "Bump jose 5.9.3 to 5.9.6", why: "Patch release, unrelated."}
-        stamp: {at: d5@0.8, text: "Suspect"}
-
-      incident:
-        app: ServiceNow · incident
-        number: INC0010204
-        priority: P1 Critical
-        state: In progress
-        opened_by: opened by Incident Automation
-        title: "Customer profile failures across OLB, MBL, PAY after CIF change"
-        fields:
-          - {label: "Application", value: "CIF · Customer Information File"}
-          - {label: "Assignment group", value: "CIF Application Support", at: d6@0.3}
-          - {label: "Contact type", value: "Monitoring"}
-          - {label: "On call", value: "Kristin Streich", at: d6@0.3}
-        children:
-          - {at: d6@0.56, number: "INC0010205", via: "phone", text: "Denver Tech Center: Teller Workstation cannot look up customers"}
-          - {at: d6@0.66, number: "INC0010206", via: "phone", text: "Seattle Capitol Hill: online and mobile banking won't load profiles"}
-          - {at: d6@0.76, number: "INC0010207", via: "chat", text: "Buffalo Elmwood: unable to verify customers at the teller line"}
-
-      channel:
-        app: "Teams · Incident Response · #inc0010204-customer-profile-errors"
-        members:
-          - {at: d7@0.22, name: "Kristin Streich", why: "On-call primary, CIF Application Support"}
-          - {at: d7@0.3, name: "Dominic Green", why: "On-call secondary, CIF Application Support"}
-          - {at: d7@0.4, name: "Dana Whitfield", why: "NOC shift lead, incident commander"}
-          - {at: d7@0.46, name: "Tom Okafor", why: "Major incident manager"}
-          - {at: d7@0.54, name: "Harley Donnelly", why: "CIF developer, author of the change"}
-        messages:                             # style: system = dashed notification, person = a human reply
-          - {at: d7@0.12, from: "Incident Automation", text: "*P1 INC0010204.* Nine apps cannot read customer profiles. Root cause: a CIF merge switched its JSON to snake_case, so [[customerId]] is now [[customer_id]]. CIF itself returns 200. Fix MR is ready for review."}
-          - {at: d7@0.72, style: system, text: "Notification to Kristin Streich: “You've been added to #inc0010204-customer-profile-errors as on-call support for CIF. Here's who else is in the channel…”"}
-          - {at: d7@0.9, style: person, from: "Kristin Streich", text: "On it. Reviewing the fix now."}
-
-      fix:
-        app: GitLab · fix merge request · opened by the agent
-        states: [Open, Merged]
-        label: incident
-        link: links INC0010204
-        title: Revert CIF JSON naming to camelCase
-        diff:
-          file: src/main/resources/application.yml
-          removed: "property-naming-strategy: SNAKE_CASE"
-          added: "property-naming-strategy: LOWER_CAMEL_CASE"
-        button: [Merge, Merged by a human ✓]
-        cursor_at: d8@0.34                    # the cursor starts moving to the button
-        merge_at: d8@0.5                      # the click
-        metric: {label: "Errors per minute", value: "1240"}
-        incident: INC0010204
-        incident_states: [In progress, Resolved]
-        closed_at: d8@0.86
-        stamp: Case closed
-
+      live:
+        recording: live/run.mp4               # made by record_live.py, with live/run.json beside it
+        video: live.mp4                       # what the build cuts from it; do not edit by hand
+        keep_top: 0.8                         # hide the guided demo's own caption bar (bottom 20%)
+        tag: "Recorded run · real UIs · scenario cif-snake-case-cascade at 4x"
+        # Which step of the recorded tour plays from which moment of the narration. `show` is the
+        # step's title in live/run.json. Each part runs until the next one starts and is sped up
+        # to fit (never slowed: it holds its last frame). Optional: `skip` seconds into the step,
+        # `take` seconds of it, `to` a later step to run through, `from_event: merge_click`.
+        cuts:
+          - {show: "A routine change ships"}
+          - {at: d2, show: "Errors appear"}
+          - {at: d3, show: "Then the alerts start"}
+          - {at: d4, show: "One problem, not dozens", skip: 6}
+          - {at: d4@0.6, show: "How bad is it?"}
+          - {at: d6, show: "It opens the incident"}
+          - {at: d6@0.55, show: "Tickets about the same problem are grouped under it"}
+          - {at: d7, show: "It brings in the right people"}
+          - {at: d7@0.6, show: "And briefs them"}
+          - {at: d5, show: "It finds the cause"}
+          - {at: d5@0.45, show: "This is the change"}
+          - {at: d8, show: "It writes the fix"}
+          - {at: d8@0.22, from_event: merge_click, skip: -4, take: 7.5}
+          - {at: d8@0.52, show: "It ships the fix to production"}
+          - {at: d8@0.76, show: "Then checks it actually worked", skip: 14}
+          - {at: d9, show: "First error to fixed"}
       result:
-        at: d9
-        big: "02:48"                          # <- spoken too (d9: "under three minutes")
-        text: from first error to a briefed team with a root cause
+        at: d9@0.62
+        big: "02:21"                          # <- spoken too (d9); from the run's recap screen
+        text: from first error to recovery confirmed, in this recorded run
         versus: "Today's P1 average: *1 h 48 min* to resolve"
 
   # ------------------------------------------------------------------ path to production

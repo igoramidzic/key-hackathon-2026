@@ -1,0 +1,209 @@
+{
+ "duration": 180.66,
+ "beats": [
+  {
+   "t": 3.37,
+   "pre": false,
+   "title": "A bank, and the four tools that run it",
+   "say": "Everything here is simulated: 400 applications, and the systems its IT teams use every day.",
+   "chapter": "Setup",
+   "clock": "",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 10.31,
+   "pre": false,
+   "title": "A normal afternoon",
+   "say": "Logs flow in and nothing is wrong. The agent is learning what normal looks like.",
+   "chapter": "Setup",
+   "clock": "",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 18.48,
+   "pre": false,
+   "title": "A routine change ships",
+   "say": "Changes go to production all day. One of them is about to break something.",
+   "chapter": "Detect",
+   "clock": "",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 27.29,
+   "pre": false,
+   "title": "Errors appear",
+   "say": "Within seconds the agent notices the spike and opens a case. No alert has fired yet.",
+   "chapter": "Detect",
+   "clock": "0:01",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 34.45,
+   "pre": false,
+   "title": "Then the alerts start",
+   "say": "Each alert is on a different application. This is when people would start getting paged.",
+   "chapter": "Detect",
+   "clock": "0:08",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 40.23,
+   "pre": false,
+   "title": "One problem, not dozens",
+   "say": "7 applications are failing. The agent works out they are the same problem and keeps one case.",
+   "chapter": "Detect",
+   "clock": "0:14",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 55.76,
+   "pre": false,
+   "title": "How bad is it?",
+   "say": "Claude reads the logs and the application catalog, and sizes it up.",
+   "chapter": "Triage",
+   "clock": "0:30",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 64.77,
+   "pre": false,
+   "title": "It opens the incident",
+   "say": "Priority is set, and it goes straight to the team that owns the suspect application.",
+   "chapter": "Mobilize",
+   "clock": "0:39",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 73.38,
+   "pre": false,
+   "title": "Tickets about the same problem are grouped under it",
+   "say": "Branch staff called the help desk about this too. Their 2 tickets now sit under this one incident.",
+   "chapter": "Mobilize",
+   "clock": "0:47",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 79.27,
+   "pre": false,
+   "title": "It brings in the right people",
+   "say": "8 people in one Teams channel, each told why they are there.",
+   "chapter": "Mobilize",
+   "clock": "0:53",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 86.7,
+   "pre": false,
+   "title": "And briefs them",
+   "say": "One message: impact, timeline, the leading suspect and links to the evidence.",
+   "chapter": "Mobilize",
+   "clock": "1:00",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 95.87,
+   "pre": false,
+   "title": "It finds the cause",
+   "say": "Claude read the diffs and the code, and names the change responsible.",
+   "chapter": "Root cause",
+   "clock": "1:10",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 106.12,
+   "pre": false,
+   "title": "This is the change",
+   "say": "It passed review, and the service it changed never returned an error itself.",
+   "chapter": "Root cause",
+   "clock": "1:20",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 116.8,
+   "pre": false,
+   "title": "It writes the fix",
+   "say": "A merge request with the fix, explaining the cause and the evidence.",
+   "chapter": "Fix",
+   "clock": "1:31",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 123.88,
+   "pre": false,
+   "title": "Your turn: merge it",
+   "say": "This decision stays with a person. The agent cannot merge, on purpose.",
+   "chapter": "Fix",
+   "clock": "1:38",
+   "needsYou": true,
+   "error": ""
+  },
+  {
+   "t": 128.76,
+   "event": "merge_click"
+  },
+  {
+   "t": 131.81,
+   "pre": false,
+   "title": "Merged",
+   "say": "This decision stays with a person. The agent cannot merge, on purpose.",
+   "chapter": "Fix",
+   "clock": "1:46",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 134.57,
+   "pre": false,
+   "title": "It ships the fix to production",
+   "say": "An emergency change request, raised by the agent and promoted by the release system.",
+   "chapter": "Ship",
+   "clock": "1:48",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 141.86,
+   "pre": false,
+   "title": "Then checks it actually worked",
+   "say": "Errors on the affected applications: 805 a minute before the fix, 112 now.",
+   "chapter": "Recover",
+   "clock": "1:51",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 167.43,
+   "pre": false,
+   "title": "All clear",
+   "say": "The agent tells the channel it is fixed, and writes up the resolution.",
+   "chapter": "Recover",
+   "clock": "1:51",
+   "needsYou": false,
+   "error": ""
+  },
+  {
+   "t": 174.46,
+   "pre": false,
+   "title": "First error to fixed",
+   "say": "The agent did the legwork. A person made the one decision that mattered.",
+   "chapter": "Recover",
+   "clock": "1:51",
+   "needsYou": false,
+   "error": ""
+  }
+ ]
+}

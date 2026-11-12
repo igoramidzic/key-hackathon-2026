@@ -76,27 +76,64 @@ def find_chromium() -> str | None:
     return str(shells[-1]) if shells else None
 
 
-async def worker(browser, html: str, frames: list[int], out: Path, first: int, progress: list[int]):
+# The live-case scene plays demo/live.mp4. Headless Chromium has no H.264 and cannot seek a video
+# frame-exactly anyway, so for the render the page shows that clip's frames as images instead.
+LIVE_HOST = "https://live.invalid/"
+LIVE_JS = """
+void (window.__liveFrame = (img, seconds) => {
+  const n = Math.min(%d, Math.floor(seconds * %d) + 1);
+  const src = '%s' + String(n).padStart(6, '0') + '.jpg';
+  if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; window.__liveReady = img.decode().catch(() => {}); }
+});
+"""
+
+
+def live_frames() -> Path | None:
+    """demo/live.mp4 as numbered JPEGs at the render's frame rate."""
+    clip = HERE / "live.mp4"
+    if not clip.exists():
+        return None
+    out = Path(tempfile.mkdtemp(prefix="briefing-live-"))
+    subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(clip),
+         "-vf", f"fps={FPS}", "-q:v", "2", str(out / "%06d.jpg")],
+        check=True,
+    )  # fmt: skip
+    return out
+
+
+async def worker(browser, html: str, frames: list[int], out: Path, first: int, progress: list[int], live: Path | None):
     page = await browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+    if live:
+        count = len(list(live.glob("*.jpg")))
+
+        async def serve(route):
+            await route.fulfill(path=str(live / route.request.url.rsplit("/", 1)[1]), content_type="image/jpeg")
+
+        await page.route(LIVE_HOST + "*", serve)
     await page.set_content(SKELETON.replace("<!--PAGE-->", html), wait_until="load")
     await page.add_style_tag(content=CAPTURE_CSS)
     await page.evaluate(
-        "Promise.all(['800 40px \"Big Shoulders Display\"','500 16px \"IBM Plex Sans\"',"
-        "'500 16px \"IBM Plex Mono\"','16px \"Special Elite\"'].map(f => document.fonts.load(f)))"
+        "Promise.all(['300 16px \"IBM Plex Sans\"','400 16px \"IBM Plex Sans\"','500 16px \"IBM Plex Sans\"',"
+        "'600 16px \"IBM Plex Sans\"','700 16px \"IBM Plex Sans\"','400 16px \"IBM Plex Mono\"',"
+        "'500 16px \"IBM Plex Mono\"','600 16px \"IBM Plex Mono\"'].map(f => document.fonts.load(f)))"
         ".then(() => document.fonts.ready)"
     )
     await page.evaluate(STEPPER)
+    if live:
+        await page.evaluate(LIVE_JS % (count, FPS, LIVE_HOST))
     # Any start other than t=0 needs the run-up, or the title card is still fading out.
     for f in range(max(0, frames[0] - int(WARMUP * FPS)), frames[0]):
         await page.evaluate("t => window.__frame(t)", f / FPS)
     for f in frames:
-        await page.evaluate("t => window.__frame(t)", f / FPS)
+        await page.evaluate("t => { window.__frame(t); return window.__liveReady; }", f / FPS)
         await page.screenshot(path=str(out / f"{f - first:06d}.jpg"), type="jpeg", quality=93)
         progress[0] += 1
     await page.close()
 
 
 async def capture(html: str, start: int, end: int, out: Path, workers: int) -> None:
+    live = live_frames()
     total = end - start
     size = math.ceil(total / workers)
     chunks = [list(range(a, min(a + size, end))) for a in range(start, end, size)]
@@ -113,9 +150,11 @@ async def capture(html: str, start: int, end: int, out: Path, workers: int) -> N
         exe = find_chromium()
         browser = await pw.chromium.launch(executable_path=exe) if exe else await pw.chromium.launch()
         ticker = asyncio.create_task(report())
-        await asyncio.gather(*(worker(browser, html, c, out, start, progress) for c in chunks))
+        await asyncio.gather(*(worker(browser, html, c, out, start, progress, live) for c in chunks))
         ticker.cancel()
         await browser.close()
+    if live:
+        shutil.rmtree(live, ignore_errors=True)
     print(f"captured {total} frames in {time.time() - t0:.0f}s", flush=True)
 
 

@@ -1,33 +1,31 @@
 <title>Operation Nightwatch Briefing</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap">
 <style>
-/* Layout: a 16:9 "surveillance monitor" stage (1280x720, scaled to fit) over a transport bar.
-   One deliberate dark look: night-shift ops room, amber signal light, manila case files. */
+/* Layout: a 16:9 stage (1280x720, scaled to fit) over a transport bar. Every scene sits in the
+   same frame: a 44px file strip on top, the content, and a 100px caption band at the bottom.
+   One deliberate light look: a printed case file. Paper, ink, hairlines; colour only for status
+   (red failing, green healthy), a highlighter for *marked* words, and the odd red stamp.
+   No glow, no gradients, nothing that moves unless it is the thing being explained. */
 :root {
-  color-scheme: dark;
-  --room: #060a14;      /* page behind the monitor */
-  --ink: #0b1222;       /* stage background */
-  --ink-2: #121b31;     /* panels */
-  --ink-3: #1b2744;     /* raised surfaces */
-  --line: #2b3a5c;
-  --text: #e7edf8;
-  --muted: #93a3c1;
-  --amber: #f2b441;     /* the agent / signal */
-  --red: #ef5350;       /* failing */
-  --green: #3dd6a3;     /* healthy */
-  --blue: #7fb2ff;      /* info */
-  --paper: #e9ddbc;     /* manila case file */
-  --paper-ink: #2a2415;
-  --stamp: #c8372d;
-  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
-  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+  --room: #e9e8e4;      /* page behind the stage */
+  --paper: #f6f5f2;     /* stage background */
+  --card: #ffffff;      /* sheets and boxes */
+  --ink: #191919;       /* text, and NightWatch itself */
+  --muted: #6c6b66;
+  --line: #d8d6cf;      /* hairlines */
+  --soft: #dfddd6;      /* idle squares in the estate grid */
+  --red: #b42318;       /* failing, and stamps */
+  --green: #1c7c4a;     /* healthy */
+  --warn: #8f6200;      /* a "major" alert */
+  --mark: #ffe27a;      /* highlighter */
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --type: "Special Elite", "Courier New", monospace;
 }
 html, body { height: 100%; }
 body {
-  background: var(--room); color: var(--text); font-family: var(--body);
+  background: var(--room); color: var(--ink); font-family: var(--sans);
   padding-block: 20px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -36,344 +34,231 @@ body {
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .player { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); min-width: min(100%, 320px); margin: 0 auto; }
-.screen { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--ink); border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
-.stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden;
-  background:
-    radial-gradient(900px 500px at 78% 8%, rgba(242,180,65,.07), transparent 60%),
-    linear-gradient(rgba(127,178,255,.035) 1px, transparent 1px) 0 0 / 100% 40px,
-    linear-gradient(90deg, rgba(127,178,255,.035) 1px, transparent 1px) 0 0 / 40px 100%,
-    var(--ink);
-}
+.screen { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--paper); border: 1px solid var(--line); }
+.stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; background: var(--paper); }
 .player:fullscreen { max-width: none; background: #000; display: flex; flex-direction: column; justify-content: center; }
-.player:fullscreen .screen { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; border-radius: 0; }
-.player:fullscreen .bar { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; border-radius: 0; }
+.player:fullscreen .screen { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; }
+.player:fullscreen .bar { width: min(100vw, calc((100vh - 58px) * 16 / 9)); margin: 0 auto; }
 
-/* ---------- stage chrome ---------- */
-.hud { position: absolute; left: 28px; right: 28px; top: 20px; display: flex; justify-content: space-between; font: 500 13px var(--mono); letter-spacing: .16em; color: var(--muted); text-transform: uppercase; z-index: 5; }
-.hud b { color: var(--amber); font-weight: 600; }
-.hud .rec::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 8px; animation: blink 1.6s steps(2) infinite; }
-.corner { position: absolute; width: 22px; height: 22px; border: 2px solid rgba(242,180,65,.55); z-index: 5; }
-.corner.tl { left: 12px; top: 12px; border-right: 0; border-bottom: 0; }
-.corner.tr { right: 12px; top: 12px; border-left: 0; border-bottom: 0; }
-.corner.bl { left: 12px; bottom: 12px; border-right: 0; border-top: 0; }
-.corner.br { right: 12px; bottom: 12px; border-left: 0; border-top: 0; }
-.caption { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 1040px; width: max-content; padding: 9px 18px; background: rgba(4,7,14,.82); border-radius: 4px; font: 500 21px/1.35 var(--body); text-align: center; text-wrap: balance; z-index: 6; opacity: 0; transition: opacity .2s; }
+/* ---------- stage frame: file strip on top, caption band at the bottom ---------- */
+.hud { position: absolute; left: 0; right: 0; top: 0; height: 44px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; background: var(--paper); border-bottom: 1px solid var(--line); font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; z-index: 5; }
+.hud span { display: inline-flex; align-items: center; gap: 10px; white-space: pre; }
+.hud b { color: var(--ink); font-weight: 600; }
+.hud .mark { width: 18px; height: 18px; color: var(--ink); }
+.capband { position: absolute; left: 0; right: 0; bottom: 0; height: 100px; display: grid; place-items: center; background: var(--card); border-top: 1px solid var(--line); z-index: 6; }
+.caption { max-width: 1060px; font: 500 20px/1.35 var(--sans); text-align: center; text-wrap: balance; opacity: 0; transition: opacity .2s; }
 .caption.on { opacity: 1; }
-.nocc .caption { display: none; }
+.nocc .capband { display: none; }
 
-.scene { position: absolute; inset: 0; padding: 66px 64px 112px; opacity: 0; visibility: hidden; transition: opacity .55s ease, visibility 0s .55s; }
-.scene.active { opacity: 1; visibility: visible; transition: opacity .55s ease; }
-.kicker { font: 600 14px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--amber); }
-h1, h2 { font-family: var(--display); text-transform: uppercase; margin: 0; line-height: .95; letter-spacing: .01em; text-wrap: balance; }
-h2 { font-size: 54px; font-weight: 800; margin-top: 8px; }
-.cue { opacity: 0; transform: translateY(14px); transition: opacity .45s ease, transform .5s cubic-bezier(.2,.7,.2,1); }
+.scene { position: absolute; inset: 0; padding: 74px 64px 124px; opacity: 0; visibility: hidden; transition: opacity .5s ease, visibility 0s .5s; }
+.scene.active { opacity: 1; visibility: visible; transition: opacity .5s ease; }
+.kicker { font: 500 13px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+h1, h2, h3 { font-family: var(--sans); margin: 0; text-wrap: balance; }
+h2 { font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -.025em; margin-top: 8px; }
+.mark { display: block; }
+/* *marked* words: an analyst's highlighter */
+.hl b { font-weight: 600; color: var(--ink); background: var(--mark); padding: 1px 3px; margin: 0 -1px; }
+
+.cue { opacity: 0; transform: translateY(8px); transition: opacity .4s ease, transform .45s cubic-bezier(.2,.7,.2,1); }
 .cue.on { opacity: 1; transform: none; }
 .cue.fade { transform: none; }
-.stamp { position: absolute; font: 400 44px var(--type); letter-spacing: .08em; text-transform: uppercase; color: var(--stamp); border: 5px solid var(--stamp); border-radius: 8px; padding: 12px 22px 4px; opacity: 0; transform: rotate(-9deg) scale(2.3); transition: opacity .14s, transform .26s cubic-bezier(.2,1.5,.4,1); mix-blend-mode: normal; background: rgba(200,55,45,.06); white-space: nowrap; z-index: 4; }
-.stamp.on { opacity: .95; transform: rotate(-9deg) scale(1); }
-.stamp.green { color: var(--green); border-color: var(--green); background: rgba(61,214,163,.07); }
-.chip { display: inline-flex; align-items: center; gap: 8px; font: 500 14px var(--mono); padding: 5px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--ink-2); color: var(--muted); white-space: nowrap; }
-.pill { display: inline-block; font: 600 13px var(--mono); padding: 3px 9px; border-radius: 99px; letter-spacing: .04em; }
-.pill.red { background: rgba(239,83,80,.16); color: var(--red); border: 1px solid rgba(239,83,80,.5); }
-.pill.green { background: rgba(61,214,163,.14); color: var(--green); border: 1px solid rgba(61,214,163,.45); }
-.pill.amber { background: rgba(242,180,65,.14); color: var(--amber); border: 1px solid rgba(242,180,65,.5); }
-.pill.gray { background: var(--ink-3); color: var(--muted); border: 1px solid var(--line); }
+/* A redaction bar that slides off the words. Used for the few lines that are the point. */
+.cue.rd { position: relative; transform: none; transition: opacity .12s; }
+.cue.rd::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: right; transition: transform .5s cubic-bezier(.65,0,.2,1) .2s; }
+.cue.rd.on::after { transform: scaleX(0); }
+.stamp { position: absolute; font: 600 21px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--red); border: 2.5px solid var(--red); padding: 8px 14px 7px 16px; opacity: 0; transform: rotate(-4deg) scale(1.1); transition: opacity .18s, transform .22s ease-out; white-space: nowrap; z-index: 4; }
+.stamp.on { opacity: 1; transform: rotate(-4deg); }
+.chip { display: inline-flex; align-items: center; gap: 8px; font: 500 13px var(--mono); padding: 5px 10px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); white-space: nowrap; }
 
 /* ---------- scene: open ---------- */
-.open { display: grid; grid-template-columns: 1fr 400px; gap: 40px; align-items: center; height: 100%; }
-.open h1 { font-size: 132px; font-weight: 800; margin: 14px 0 22px; }
-.open h1 span { color: var(--amber); }
-.lede { font-size: 25px; line-height: 1.4; color: var(--text); max-width: 600px; margin: 0 0 26px; }
-.verbs { display: flex; gap: 14px; }
-.verbs span { font: 700 26px var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 8px 18px 6px; border: 2px solid var(--amber); color: var(--amber); border-radius: 4px; }
-.radar { position: relative; width: 380px; height: 380px; border-radius: 50%; border: 2px solid rgba(242,180,65,.55);
-  background: repeating-radial-gradient(circle, transparent 0 46px, rgba(242,180,65,.2) 46px 47px), radial-gradient(circle, rgba(242,180,65,.09), transparent 70%); }
-.radar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(242,180,65,.5), transparent 22%); animation: spin 4.5s linear infinite; }
-.radar::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(242,180,65,.28), rgba(242,180,65,.28)) 50% 0 / 1px 100% no-repeat, linear-gradient(rgba(242,180,65,.28), rgba(242,180,65,.28)) 0 50% / 100% 1px no-repeat; }
-.blip { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 0 rgba(239,83,80,.7); animation: ping 2.2s ease-out infinite; }
-[data-scene="open"] .stamp { left: 590px; top: 138px; }
+.open { display: grid; grid-template-columns: 1fr 300px; gap: 40px; align-items: center; height: 100%; }
+.open h1 { font-size: 124px; font-weight: 300; line-height: .96; letter-spacing: -.045em; margin: 18px 0 30px -6px; }
+.open h1 span { font-weight: 700; }
+.lede { font-size: 24px; line-height: 1.4; max-width: 640px; margin: 0 0 30px; }
+.verbs { display: flex; }
+.verbs span { font: 600 24px var(--sans); padding: 5px 24px 5px 0; margin-right: 24px; border-right: 1px solid var(--line); }
+.verbs span:last-child { border-right: 0; }
+.verbs i { font: 500 13px var(--mono); font-style: normal; color: var(--muted); margin-right: 10px; }
+.emblem { width: 300px; height: 300px; background: var(--ink); color: var(--paper); display: grid; place-items: center; }
+.emblem .mark { width: 150px; height: 150px; }
+[data-scene="open"] .stamp { left: 660px; top: 120px; }
 
 /* ---------- scene: prob ---------- */
 .prob { display: grid; grid-template-columns: 500px 1fr; gap: 48px; height: 100%; }
-.bigclock { font: 600 92px/1 var(--mono); letter-spacing: -.02em; margin: 22px 0 6px; font-variant-numeric: tabular-nums; }
+.bigclock { font: 500 84px/1 var(--mono); letter-spacing: -.03em; margin: 20px 0 8px -3px; font-variant-numeric: tabular-nums; }
 .sub { font-size: 20px; color: var(--muted); margin: 0; }
-.alerts { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
-.alert { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; padding: 10px 14px; background: rgba(239,83,80,.1); border: 1px solid rgba(239,83,80,.5); border-left-width: 5px; border-radius: 4px; font-size: 17px; }
-.alert b { font: 600 13px var(--mono); letter-spacing: .1em; color: var(--red); }
-.alert.major { background: rgba(242,180,65,.09); border-color: rgba(242,180,65,.5); }
-.alert.major b { color: var(--amber); }
-.where { font: 800 40px var(--display); text-transform: uppercase; color: var(--amber); margin-top: 22px; letter-spacing: .03em; }
+.alerts { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
+.alert { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--red); font-size: 17px; }
+.alert b { font: 600 12px var(--mono); letter-spacing: .1em; color: var(--red); }
+.alert.major { border-left-color: var(--warn); }
+.alert.major b { color: var(--warn); }
+.where { font: 600 34px var(--sans); letter-spacing: -.02em; margin-top: 24px; }
 .estate { position: relative; align-self: center; justify-self: center; }
 .dots { position: relative; display: grid; grid-template-columns: repeat(25, 14px); gap: 8px; }
-.dots i { width: 14px; height: 14px; border-radius: 3px; background: #24304d; transition: background .3s, box-shadow .3s; }
-.dots i.bad { background: var(--red); box-shadow: 0 0 12px rgba(239,83,80,.75); }
-.dots i.culprit.lit { background: var(--green); box-shadow: 0 0 0 4px rgba(61,214,163,.25), 0 0 16px rgba(61,214,163,.8); }
-.tag { position: absolute; font: 600 13px var(--mono); padding: 3px 8px; border-radius: 3px; background: var(--red); color: #fff; white-space: nowrap; transform: translate(-50%, -34px); opacity: 0; transition: opacity .3s; z-index: 2; }
+.dots i { width: 14px; height: 14px; background: var(--soft); transition: background .3s; }
+.dots i.bad { background: var(--red); }
+.dots i.culprit.lit { background: var(--green); outline: 2px solid var(--green); outline-offset: 3px; }
+.tag { position: absolute; font: 500 13px var(--mono); padding: 3px 8px; background: var(--ink); color: #fff; white-space: nowrap; transform: translate(-50%, -34px); opacity: 0; transition: opacity .3s; z-index: 2; }
 .tag.on { opacity: 1; }
-.tag.ok { background: var(--green); color: #05241a; transform: translate(-50%, 24px); }
-.estate-legend { display: flex; gap: 26px; margin-top: 22px; font: 500 16px var(--mono); color: var(--muted); }
-.estate-legend b { color: var(--text); font-size: 22px; font-variant-numeric: tabular-nums; }
+.tag.ok { background: var(--green); transform: translate(-50%, 26px); }
+.estate-legend { display: flex; gap: 26px; align-items: baseline; margin-top: 24px; font: 500 15px var(--mono); color: var(--muted); }
+.estate-legend b { color: var(--ink); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .estate-legend .r b { color: var(--red); }
+.estate-legend .cue b { color: var(--green); }
 
 /* ---------- scene: now ---------- */
-.now { display: grid; grid-template-columns: 1fr 320px; gap: 36px; margin-top: 22px; }
-.relay { display: flex; flex-direction: column; gap: 9px; }
-.leg { display: grid; grid-template-columns: 96px 1fr auto; gap: 18px; align-items: center; padding: 11px 18px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 5px; min-height: 58px; }
-.leg .t { font: 600 24px var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
-.leg .what { font-size: 21px; font-weight: 500; }
-.leg.bounce { border-color: rgba(239,83,80,.6); background: rgba(239,83,80,.09); }
-.leg.bounce .t { color: var(--red); }
-.elapsed { align-self: start; padding: 26px 24px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink-2); text-align: center; position: relative; }
-.elapsed .lbl { font: 600 13px var(--mono); letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
-.elapsed .num { font: 600 84px/1.05 var(--mono); font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
-.elapsed .unit { font: 500 14px var(--mono); color: var(--muted); }
-.elapsed p { font-size: 18px; color: var(--text); margin: 18px 0 0; line-height: 1.4; }
-.now-wrap .stamp { right: 54px; bottom: 150px; font-size: 34px; }
+.now { display: grid; grid-template-columns: 1fr 300px; gap: 36px; margin-top: 22px; }
+.relay { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); }
+.leg { display: grid; grid-template-columns: 78px 1fr auto; gap: 18px; align-items: center; padding: 10px 18px; min-height: 60px; border-bottom: 1px solid var(--line); }
+.leg:last-child { border-bottom: 0; }
+.leg .t { font: 500 21px var(--mono); font-variant-numeric: tabular-nums; }
+.leg .what { font-size: 20px; font-weight: 500; }
+.leg.bounce .t, .leg.bounce .what { color: var(--red); }
+.elapsed { align-self: start; padding: 24px; border: 1px solid var(--line); background: var(--card); }
+.elapsed .lbl { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.elapsed .num { font: 500 76px/1.05 var(--mono); letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 8px 0 4px -3px; }
+.elapsed .unit { font: 400 13px var(--mono); color: var(--muted); }
+.elapsed p { font-size: 18px; font-weight: 500; color: var(--red); margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--line); line-height: 1.4; }
+.now-wrap .stamp { right: 64px; bottom: 150px; }
 
-/* ---------- scene: cost (case file) ---------- */
-.paper { position: relative; width: 1090px; margin: 30px auto 0; padding: 34px 46px 30px; background: var(--paper); color: var(--paper-ink); border-radius: 3px; transform: rotate(-1.1deg); box-shadow: 0 24px 60px rgba(0,0,0,.55), 14px 14px 0 -4px #cdbf98; font-family: var(--type); }
-.paper header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--paper-ink); padding-bottom: 12px; font-size: 19px; letter-spacing: .06em; text-transform: uppercase; }
-.redact { display: inline-block; width: 130px; height: 17px; background: var(--paper-ink); vertical-align: -2px; margin: 0 8px; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 30px 0 24px; }
-.stat .n { font: 800 88px/1 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stat .n small { font-size: 44px; font-weight: 700; margin-left: 4px; }
-.stat p { margin: 10px 0 0; font-size: 18px; line-height: 1.35; }
-.typed { font-size: 20px; border-top: 1px dashed rgba(42,36,21,.5); padding-top: 16px; display: flex; justify-content: space-between; gap: 20px; }
-.typed em { font-style: normal; opacity: .65; font-size: 15px; }
-.paper .stamp { right: 56px; bottom: -40px; font-size: 40px; }
+/* ---------- scene: cost (one sheet from the file) ---------- */
+.paper { position: relative; margin-top: 36px; padding: 32px 40px 34px; background: var(--card); border: 1px solid var(--line); }
+.paper header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--ink); padding-bottom: 14px; font: 500 13px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.redact { display: inline-block; width: 110px; height: 13px; background: var(--ink); vertical-align: -2px; margin: 0 10px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 52px 0 48px; }
+.stat { padding-left: 28px; border-left: 1px solid var(--line); }
+.stat:first-child { padding-left: 0; border-left: 0; }
+.stat .n { font: 600 90px/1 var(--sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat .n small { font-size: 38px; font-weight: 500; letter-spacing: 0; margin-left: 3px; color: var(--muted); }
+.stat p { margin: 12px 0 0; font: 500 14px var(--mono); color: var(--muted); }
+.typed { font-size: 22px; font-weight: 500; border-top: 1px solid var(--line); padding-top: 24px; }
+.paper .stamp { right: 36px; bottom: 24px; }
 
 /* ---------- scene: impl ---------- */
-.impl { display: grid; grid-template-columns: 250px 1fr; gap: 34px; margin-top: 22px; }
-.badge { background: var(--paper); color: var(--paper-ink); border-radius: 8px; padding: 16px 18px 18px; font-family: var(--type); box-shadow: 0 16px 40px rgba(0,0,0,.5); align-self: start; }
-.badge .top { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
-.avatar { position: relative; height: 150px; margin: 12px 0; background: #17213a; border-radius: 4px; overflow: hidden; }
-.avatar::before { content: ""; position: absolute; left: 50%; top: 26px; width: 58px; height: 58px; margin-left: -29px; border-radius: 50%; background: var(--amber); }
-.avatar::after { content: ""; position: absolute; left: 50%; top: 94px; width: 136px; height: 110px; margin-left: -68px; border-radius: 68px 68px 0 0; background: var(--amber); }
-.badge h3 { font: 800 30px/1 var(--display); text-transform: uppercase; margin: 0 0 10px; letter-spacing: .02em; }
-.badge dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 14px; }
-.badge dt { opacity: .6; text-transform: uppercase; font-size: 12px; padding-top: 2px; }
+.impl { display: grid; grid-template-columns: 216px 1fr; gap: 32px; margin-top: 22px; }
+.badge { background: var(--card); border: 1px solid var(--line); padding: 14px 16px 16px; align-self: start; }
+.badge .top { display: flex; justify-content: space-between; font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.avatar { height: 132px; margin: 12px 0 14px; background: var(--ink); color: var(--paper); display: grid; place-items: center; }
+.avatar .mark { width: 72px; height: 72px; }
+.badge h3 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 12px; }
+.badge dl { margin: 0; display: grid; gap: 2px; font-size: 13.5px; line-height: 1.35; }
+.badge dt { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
 .badge dd { margin: 0; }
 .right { position: relative; min-height: 440px; }
-.arch { display: grid; grid-template-columns: 230px 34px 250px 34px 1fr; align-items: center; }
-.col { display: flex; flex-direction: column; gap: 10px; }
-.col .hd { font: 600 12px var(--mono); letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
-.box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); }
-.box b { display: block; font-size: 19px; font-weight: 600; }
+.arch { display: grid; grid-template-columns: 240px 34px 240px 34px 1fr; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.col .hd { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.box { padding: 11px 14px; border: 1px solid var(--line); background: var(--card); }
+.box b { display: block; font-size: 18px; font-weight: 600; }
 .box span { font: 400 13px var(--mono); color: var(--muted); }
-.box.agent { border: 2px solid var(--amber); background: rgba(242,180,65,.08); text-align: center; padding: 26px 14px; }
-.box.agent b { font: 800 30px var(--display); text-transform: uppercase; color: var(--amber); letter-spacing: .03em; }
-.arrow { height: 2px; background: var(--amber); position: relative; opacity: .8; }
-.arrow::after { content: ""; position: absolute; right: -1px; top: -5px; border: 6px solid transparent; border-left-color: var(--amber); border-right: 0; }
-.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.box.agent { border-color: var(--ink); background: var(--ink); color: #fff; text-align: center; padding: 30px 14px; }
+.box.agent b { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px; }
+.box.agent span { color: #b9b7b0; }
+.arrow { height: 1.5px; background: var(--ink); position: relative; }
+.arrow::after { content: ""; position: absolute; right: -1px; top: -4.5px; border: 5px solid transparent; border-left: 7px solid var(--ink); border-right: 0; }
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tools .box { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.tools .box span { font-size: 15px; color: var(--amber); }
-.flow { display: flex; gap: 5px; align-items: center; margin-top: 26px; white-space: nowrap; }
-.flow .st { font: 700 17.5px var(--display); letter-spacing: .06em; text-transform: uppercase; padding: 8px 9px 6px; border-radius: 4px; background: var(--ink-3); border: 1px solid var(--line); }
-.flow .st.human { background: var(--amber); color: #1c1403; border-color: var(--amber); }
-.flow .sep { color: var(--muted); font: 600 13px var(--mono); }
-.note { margin-top: 14px; font: 500 15px var(--mono); color: var(--muted); }
-.note b { color: var(--amber); }
-.range { position: absolute; inset: 0; background: var(--ink); }
-.range h3 { font: 800 34px var(--display); text-transform: uppercase; margin: 0 0 6px; }
-.range p { font-size: 20px; color: var(--muted); margin: 0 0 24px; max-width: 760px; line-height: 1.4; }
-.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.tile { padding: 22px 16px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); }
-.tile b { display: block; font: 800 62px/1 var(--display); color: var(--amber); font-variant-numeric: tabular-nums; }
-.tile span { font-size: 16.5px; color: var(--muted); }
-.traps { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-.traps .chip { font-size: 15.5px; padding: 8px 12px; color: var(--text); }
+.tools .box span { font-size: 15px; }
+.flow { display: flex; gap: 6px; align-items: center; margin-top: 28px; white-space: nowrap; }
+.flow .st { font: 600 14.5px var(--sans); padding: 7px 10px; background: var(--card); border: 1px solid var(--line); }
+.flow .st.human { background: var(--mark); border-color: var(--ink); }
+.flow .sep { color: var(--muted); font: 500 13px var(--mono); }
+.note { margin-top: 16px; font-size: 16px; color: var(--muted); }
+.range { position: absolute; inset: 0; background: var(--paper); }
+.range h3 { font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
+.range p { font-size: 19px; color: var(--muted); margin: 0 0 24px; max-width: 760px; line-height: 1.45; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border: 1px solid var(--line); }
+.tile { padding: 20px 18px; border-left: 1px solid var(--line); }
+.tile:first-child { border-left: 0; }
+.tile b { display: block; font: 600 50px/1.05 var(--sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.tile span { font: 500 13px var(--mono); color: var(--muted); }
+.traps { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.traps .chip { font: 500 15px var(--sans); padding: 7px 12px; color: var(--ink); background: var(--card); }
 
-/* ---------- scene: demo ---------- */
-.demo-head { display: flex; justify-content: space-between; align-items: flex-end; }
-.demo-head h2 { font-size: 44px; }
-.clockbox { text-align: right; }
-.clockbox .lbl { font: 500 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
-.clockbox .num { font: 600 40px/1 var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
-.demo { display: grid; grid-template-columns: 218px 1fr; gap: 18px; margin-top: 14px; height: 446px; }
-.rail { display: flex; flex-direction: column; gap: 7px; }
-.step { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); color: var(--muted); font-size: 17px; font-weight: 500; transition: all .3s; }
-.step i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font: 600 12px var(--mono); font-style: normal; }
-.step.cur { border-color: var(--amber); color: var(--text); background: rgba(242,180,65,.1); }
-.step.cur i { border-color: var(--amber); color: var(--amber); }
-.step.done { color: var(--text); }
-.step.done i { background: var(--green); border-color: var(--green); color: #05241a; }
-.step.done i::before { content: "\2713"; }
-.step.done i span { display: none; }
-.rail .tagline { margin-top: auto; font: 500 11px/1.5 var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
-.console { position: relative; border: 1px solid var(--line); border-radius: 6px; background: #0a1020; overflow: hidden; display: flex; flex-direction: column; }
-.console .titlebar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--ink-3); border-bottom: 1px solid var(--line); font: 500 13px var(--mono); color: var(--muted); height: 36px; flex: none; }
-.console .titlebar b { color: var(--amber); font-weight: 600; }
-.console .titlebar span { white-space: nowrap; }
-.console .titlebar .call { margin-left: auto; color: var(--green); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.panels { position: relative; flex: 1; }
-.panel { position: absolute; inset: 0; padding: 16px 18px; opacity: 0; visibility: hidden; transition: opacity .4s, visibility 0s .4s; }
-.panel.on { opacity: 1; visibility: visible; transition: opacity .4s; }
-.app { font: 600 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
-.app::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--c, var(--blue)); }
-/* logs */
-.hist { display: flex; align-items: flex-end; gap: 3px; height: 62px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
-.hist span { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
-.hist u { display: block; background: var(--red); }
-.hist s { display: block; background: #3a4a70; }
-.loglines { font: 400 14.5px/26px var(--mono); white-space: nowrap; overflow: hidden; height: 260px; }
-.loglines div { display: grid; grid-template-columns: 104px 62px 46px 1fr; gap: 10px; overflow: hidden; }
-.loglines .ts { color: #6f7fa0; } .loglines .ERROR { color: var(--red); font-weight: 600; } .loglines .INFO { color: var(--blue); }
-.loglines .tla { color: var(--amber); } .loglines .lm { overflow: hidden; text-overflow: ellipsis; color: #cfd8ea; }
-.loglines .e .lm { color: #ffd0cf; }
-.logwrap { display: grid; grid-template-columns: minmax(0, 1fr) 318px; gap: 16px; }
-.banners { display: flex; flex-direction: column; gap: 8px; }
-.banner { padding: 9px 12px; border-radius: 5px; background: #2a0f14; border: 1px solid var(--red); font-size: 15px; line-height: 1.35; }
-.banner b { display: block; font: 600 12px var(--mono); letter-spacing: .12em; color: var(--red); margin-bottom: 2px; }
-.banner.agent { background: #241a05; border-color: var(--amber); }
-.banner.agent b { color: var(--amber); }
-/* graph */
-.graph { width: 100%; height: 100%; }
-.graph .n rect { fill: #2a0f14; stroke: var(--red); stroke-width: 1.5; }
-.graph .n text { fill: var(--text); font: 600 17px var(--mono); text-anchor: middle; }
-.graph .n text.s { fill: var(--muted); font: 400 10.5px var(--body); }
-.graph .n { opacity: 0; transition: opacity .3s; } .graph .n.on { opacity: 1; }
-.graph .edge { stroke: var(--amber); stroke-width: 1.6; fill: none; stroke-dasharray: 420; stroke-dashoffset: 420; transition: stroke-dashoffset .9s ease; opacity: .85; }
-.graph .edge.on { stroke-dashoffset: 0; }
-.graph .cif rect { fill: #0c2a22; stroke: var(--green); stroke-width: 2; }
-.graph .cif text { fill: var(--text); font: 600 20px var(--mono); text-anchor: middle; }
-.graph .cif text.s { fill: var(--green); font: 500 13px var(--mono); }
-.graph .ring { fill: none; stroke: var(--amber); stroke-width: 3; stroke-dasharray: 8 6; opacity: 0; transition: opacity .4s; }
-.graph .ring.on { opacity: 1; animation: march 1.2s linear infinite; }
-.graph .lbl { fill: var(--amber); font: 600 15px var(--mono); letter-spacing: .12em; opacity: 0; transition: opacity .4s; }
-.graph .lbl.on { opacity: 1; }
-.graph .cap { fill: var(--muted); font: 500 13px var(--mono); }
-/* merge request */
-.mr { display: grid; grid-template-columns: 1fr 268px; gap: 18px; height: calc(100% - 26px); }
-.card { border: 1px solid var(--line); border-radius: 5px; background: var(--ink-2); padding: 14px 16px; }
-.card h4 { margin: 4px 0 8px; font-size: 22px; font-weight: 600; line-height: 1.25; }
-.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font: 400 13px var(--mono); color: var(--muted); }
-.diff { margin-top: 12px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; font: 400 14.5px/1.7 var(--mono); }
-.diff .f { background: var(--ink-3); padding: 3px 12px; color: var(--muted); font-size: 12.5px; }
-.diff .d { padding: 0 12px; background: rgba(239,83,80,.14); color: #ffc9c7; white-space: nowrap; }
-.diff .a { padding: 0 12px; background: rgba(61,214,163,.13); color: #b8f4e0; white-space: nowrap; }
-.effect { margin-top: 12px; font: 400 14.5px/1.6 var(--mono); color: var(--muted); }
-.effect b { color: var(--red); font-weight: 600; } .effect i { color: var(--green); font-style: normal; }
-.decoys h5 { margin: 0 0 8px; font: 600 12px var(--mono); letter-spacing: .16em; color: var(--muted); text-transform: uppercase; }
-.decoy { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 5px; margin-bottom: 9px; font-size: 15px; color: var(--muted); line-height: 1.35; }
-.decoy b { display: block; font: 600 12px var(--mono); color: var(--muted); margin-bottom: 2px; }
-.decoy s { text-decoration-color: var(--red); text-decoration-thickness: 2px; }
-.panel .stamp { font-size: 28px; padding: 9px 16px 2px; border-width: 4px; }
-/* servicenow */
-.inc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; margin-top: 12px; font-size: 15.5px; }
-.inc div { display: grid; grid-template-columns: 138px 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(43,58,92,.6); }
-.inc span { color: var(--muted); }
-.kids { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
-.kid { display: grid; grid-template-columns: 112px 62px 1fr; gap: 10px; align-items: center; padding: 7px 12px; border-radius: 4px; background: var(--ink-3); font-size: 15px; border-left: 3px solid var(--amber); }
-.kid code { font: 500 13.5px var(--mono); color: var(--amber); }
-/* teams */
-.teams { display: grid; grid-template-columns: 322px 1fr; gap: 16px; height: calc(100% - 26px); align-items: start; }
-.members { display: flex; flex-direction: column; gap: 7px; }
-.member { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 5px; background: var(--ink-2); border: 1px solid var(--line); }
-.member i { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--ink-3); color: var(--amber); font: 600 13px var(--mono); font-style: normal; }
-.member b { display: block; font-size: 16px; font-weight: 600; line-height: 1.2; }
-.member span { font-size: 12.5px; color: var(--amber); line-height: 1.25; display: block; }
-.msgs { display: flex; flex-direction: column; gap: 10px; }
-.msg { padding: 11px 14px; border-radius: 5px; background: var(--ink-2); border: 1px solid var(--line); font-size: 15.5px; line-height: 1.45; }
-.msg .who { font: 600 12.5px var(--mono); color: var(--amber); margin-bottom: 3px; }
-.msg.sys { background: transparent; border-style: dashed; color: var(--muted); font-size: 14px; }
-.msg code { font: 500 13.5px var(--mono); color: var(--green); }
-/* fix */
-.fix { display: grid; grid-template-columns: 1fr 300px; gap: 18px; height: calc(100% - 26px); position: relative; }
-.mergebtn { display: inline-block; margin-top: 12px; padding: 9px 20px; border-radius: 5px; background: #2f6fed; color: #fff; font-weight: 600; font-size: 16px; transition: background .2s, transform .1s; }
-.mergebtn .b { display: none; } .mergebtn.on { background: var(--green); color: #05241a; } .mergebtn.on .a { display: none; } .mergebtn.on .b { display: inline; }
-.cursor { position: absolute; left: 0; top: 0; width: 22px; height: 30px; transform: translate(470px, 330px); transition: transform .9s cubic-bezier(.3,.7,.2,1), opacity .3s; opacity: 0; z-index: 3; }
-.cursor.on { transform: translate(100px, 178px); opacity: 1; }
-.recov .lbl { font: 600 12px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
-.recov .num { font: 600 46px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
-.spark { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 10px 0 14px; border-bottom: 1px solid var(--line); }
-.spark span { flex: 1; background: var(--red); min-height: 2px; }
-.fix .stamp { right: 14px; bottom: 26px; }
-.result { position: absolute; inset: 0; z-index: 7; background: rgba(8,13,26,.97); display: grid; place-items: center; text-align: center; }
-.result .big { font: 800 150px/1 var(--display); color: var(--amber); font-variant-numeric: tabular-nums; }
-.result p { font-size: 24px; margin: 6px 0 14px; }
-.result .vs { font: 500 17px var(--mono); color: var(--muted); }
-.result .vs b { color: var(--red); }
+/* ---------- scene: demo (a recording of the real guided demo, cut to the narration) ---------- */
+[data-scene="demo"] { padding: 0; }
+.live { position: absolute; left: 0; top: 44px; width: 1280px; height: 576px; overflow: hidden; background: #fafafa; }
+.live video, .live img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.live-tag { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: grid; place-items: center; font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); z-index: 6; pointer-events: none; }
+[data-scene="demo"] .result { inset: 44px 0 100px; }
+.result { position: absolute; inset: 0; z-index: 4; background: var(--paper); display: grid; place-items: center; text-align: center; }
+.result .big { display: inline-block; font: 600 150px/1 var(--sans); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.result p { font-size: 24px; margin: 10px 0 18px; }
+.result .vs { font: 500 16px var(--mono); color: var(--muted); }
 
 /* ---------- scene: prod ---------- */
-.pipe { display: grid; grid-template-columns: 1fr 26px 1fr 26px 1fr 26px 1.15fr 26px 1fr 26px 1fr; align-items: stretch; margin-top: 24px; }
+.pipe { display: grid; align-items: stretch; margin-top: 24px; }
 .pipe .arrow { align-self: center; }
-.gbox { padding: 14px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink-2); min-height: 112px; }
-.gbox small { display: block; font: 600 11px var(--mono); letter-spacing: .14em; color: var(--blue); text-transform: uppercase; margin-bottom: 6px; }
-.gbox b { display: block; font-size: 18.5px; font-weight: 600; line-height: 1.2; }
+.gbox { padding: 14px 12px; border: 1px solid var(--line); background: var(--card); min-height: 116px; }
+.gbox small { display: block; font: 500 11px var(--mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.gbox b { display: block; font-size: 18px; font-weight: 600; line-height: 1.2; }
 .gbox span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 6px; line-height: 1.3; }
-.gbox.key { border: 2px solid var(--amber); background: rgba(242,180,65,.08); }
-.gbox.key small { color: var(--amber); }
-.guards { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
-.guards .chip { font: 500 15px var(--body); color: var(--text); padding: 7px 12px; }
-.guards .chip b { color: var(--blue); font-weight: 600; }
-.phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
-.phase { padding: 14px 18px; border-radius: 6px; background: var(--ink-2); border: 1px solid var(--line); border-top: 4px solid var(--amber); }
-.phase small { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--amber); }
-.phase b { display: block; font: 800 32px/1.1 var(--display); text-transform: uppercase; }
+.gbox.key { border-color: var(--ink); background: var(--ink); color: #fff; }
+.gbox.key small, .gbox.key span { color: #b9b7b0; }
+.guards { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.guards .chip { font: 400 15px var(--sans); color: var(--muted); background: var(--card); padding: 7px 12px; }
+.guards .chip b { color: var(--ink); font-weight: 600; }
+.phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
+.phase { padding: 14px 18px 16px; background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--ink); }
+.phase small { font: 500 11px var(--mono); letter-spacing: .14em; color: var(--muted); }
+.phase b { display: block; font-size: 27px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; }
 .phase span { font-size: 16px; color: var(--muted); }
 
 /* ---------- scene: next ---------- */
-.missions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 34px; }
-.mission { position: relative; background: var(--paper); color: var(--paper-ink); padding: 22px 20px 20px; border-radius: 0 6px 4px 4px; min-height: 212px; box-shadow: 0 16px 34px rgba(0,0,0,.5); }
-.mission::before { content: attr(data-tab); position: absolute; left: 0; top: -24px; height: 24px; padding: 5px 14px 0; background: var(--paper); border-radius: 6px 6px 0 0; font: 400 13px var(--type); letter-spacing: .1em; }
-.mission b { display: block; font: 800 34px/1 var(--display); text-transform: uppercase; margin-bottom: 12px; }
-.mission span { font-size: 17.5px; line-height: 1.4; }
-.also { margin-top: 26px; font: 500 16px var(--mono); color: var(--muted); }
-.also b { color: var(--amber); }
+.missions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
+.mission { background: var(--card); border: 1px solid var(--line); padding: 0 20px 22px; min-height: 250px; }
+.mission::before { content: attr(data-tab); display: block; margin: 0 -20px 18px; padding: 10px 20px 9px; border-bottom: 1px solid var(--line); font: 500 11px var(--mono); letter-spacing: .14em; color: var(--muted); }
+.mission b { display: block; font-size: 25px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin-bottom: 12px; }
+.mission span { font-size: 16.5px; line-height: 1.45; color: var(--muted); }
+.also { margin-top: 22px; font-size: 15px; line-height: 1.9; color: var(--muted); }
 
 /* ---------- scene: end ---------- */
 .end { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; }
-.end h1 { font-size: 118px; font-weight: 800; margin: 12px 0 26px; }
-.end h1 span { color: var(--amber); }
-.outcomes { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
-.outcomes span { font: 700 26px var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 9px 18px 7px; border: 2px solid var(--amber); color: var(--amber); border-radius: 4px; }
-.end p { font-size: 23px; color: var(--muted); margin: 24px 0 0; }
-.end .stamp { right: 110px; bottom: -4px; }
+.end h1 { font-size: 108px; font-weight: 300; line-height: 1; letter-spacing: -.045em; margin: 14px 0 34px; }
+.end h1 span { font-weight: 700; }
+.outcomes { display: flex; justify-content: center; }
+.outcomes span { font: 600 24px var(--sans); padding: 5px 26px; border-right: 1px solid var(--line); }
+.outcomes span:last-child { border-right: 0; }
+.end p { font-size: 22px; color: var(--muted); margin: 26px 0 0; }
+.end .stamp { right: 110px; bottom: 40px; }
 
 /* ---------- poster + transport ---------- */
-.poster { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 2.5%; background: linear-gradient(transparent 55%, rgba(4,7,14,.85)); z-index: 8; border: 0; width: 100%; cursor: pointer; }
-.poster span { display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px; border-radius: 99px; background: var(--amber); color: #1c1403; font: 600 clamp(14px, 1.8vw, 19px) var(--body); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
-.poster span::before { content: ""; border: 9px solid transparent; border-left: 14px solid #1c1403; border-right: 0; }
-.bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #0d1528; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 6px 6px; }
-.bar button { background: none; border: 1px solid transparent; border-radius: 4px; padding: 6px 9px; cursor: pointer; font: 600 13px var(--mono); color: var(--text); min-width: 38px; }
-.bar button:hover { border-color: var(--line); background: var(--ink-3); }
+.poster { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 2.5%; background: none; z-index: 8; border: 0; width: 100%; cursor: pointer; }
+.poster span { display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--ink); color: #fff; font: 600 clamp(14px, 1.8vw, 18px) var(--sans); }
+.poster span::before { content: ""; border: 8px solid transparent; border-left: 12px solid #fff; border-right: 0; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card); border: 1px solid var(--line); border-top: 0; }
+.bar button { background: none; border: 1px solid transparent; padding: 6px 9px; cursor: pointer; font: 600 12px var(--mono); letter-spacing: .06em; color: var(--ink); min-width: 38px; }
+.bar button:hover { border-color: var(--line); background: var(--paper); }
 .bar button[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
 .bar .time { font: 500 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .seek { position: relative; flex: 1; min-width: 60px; height: 24px; display: flex; align-items: center; }
 .seek input { width: 100%; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; height: 24px; cursor: pointer; }
-.seek input::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--amber) var(--p, 0%), #2b3a5c var(--p, 0%)); }
-.seek input::-moz-range-track { height: 5px; border-radius: 3px; background: #2b3a5c; }
-.seek input::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--amber); }
-.seek input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--amber); margin-top: -4.5px; border: 0; }
-.seek input::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); border: 0; }
-.seek .tick { position: absolute; top: 5px; width: 2px; height: 14px; background: var(--room); pointer-events: none; }
+.seek input::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(90deg, var(--ink) var(--p, 0%), var(--line) var(--p, 0%)); }
+.seek input::-moz-range-track { height: 4px; background: var(--line); }
+.seek input::-moz-range-progress { height: 4px; background: var(--ink); }
+.seek input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); margin-top: -4px; border: 0; }
+.seek input::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 0; }
+.seek .tick { position: absolute; top: 6px; width: 2px; height: 12px; background: var(--card); pointer-events: none; }
 .chapters { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); margin: 12px auto 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.chapters button { background: #0d1528; border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; cursor: pointer; font: 500 13px var(--body); color: var(--muted); }
-.chapters button b { font: 500 12px var(--mono); color: var(--amber); margin-right: 6px; font-variant-numeric: tabular-nums; }
-.chapters button.cur { color: var(--text); border-color: var(--amber); }
+.chapters button { background: var(--card); border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; font: 500 13px var(--sans); color: var(--muted); }
+.chapters button b { font: 500 12px var(--mono); color: var(--ink); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.chapters button.cur { color: var(--ink); border-color: var(--ink); }
 .keys { max-width: min(1280px, calc((100vh - 170px) * 16 / 9)); margin: 10px auto 0; font: 400 12px var(--mono); color: var(--muted); }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes blink { 50% { opacity: .25; } }
-@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(239,83,80,.7); } 100% { box-shadow: 0 0 0 18px rgba(239,83,80,0); } }
-@keyframes march { to { stroke-dashoffset: -28; } }
 @media (prefers-reduced-motion: reduce) {
-  .radar::before, .blip, .hud .rec::before, .graph .ring.on { animation: none; }
-  .cue, .stamp, .scene, .panel, .cursor, .graph .edge { transition-duration: .01s; }
+  .cue, .cue.rd::after, .stamp, .scene { transition-duration: .01s; }
 }
-.msg i { font: 500 13.5px var(--mono); color: var(--green); font-style: normal; }
 </style>
 
 <div class="player" id="player">
   <div class="screen" id="screen">
     <div class="stage" id="stage">
-      <div class="hud"><span class="rec" id="hudL"></span><span id="hudR"></span></div>
-      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div class="hud"><span id="hudL"></span><span id="hudR"></span></div>
       <div id="scenes"></div>
-      <div class="caption" id="cap"></div>
+      <div class="capband"><div class="caption" id="cap"></div></div>
     </div>
     <button class="poster" id="poster" aria-label="Start the briefing"><span id="posterLbl"></span></button>
   </div>
@@ -392,8 +277,8 @@ h2 { font-size: 54px; font-weight: 800; margin-top: 8px; }
 
 <script>
 // Both blocks are written by build.py from content.yaml. Edit that file, not these.
-const TL = /*TIMELINE*/{"duration":294.65,"voice":"bm_george","scenes":[{"id":"open","title":"Briefing","s":0.0,"e":16.69},{"id":"prob","title":"The problem","s":16.69,"e":40.86},{"id":"now","title":"Today: manual","s":40.86,"e":80.59},{"id":"cost","title":"The cost","s":80.59,"e":100.92},{"id":"impl","title":"The agent","s":100.92,"e":159.82},{"id":"demo","title":"Live case","s":159.82,"e":229.41},{"id":"prod","title":"Path to production","s":229.41,"e":265.6},{"id":"next","title":"What's next","s":265.6,"e":284.94},{"id":"end","title":"Close","s":284.94,"e":294.65}],"beats":{"o1":{"s":0.9,"e":4.27,"text":"Good evening. This is your briefing on Operation NightWatch."},"o2":{"s":4.59,"e":15.94,"text":"The target: production incidents. The asset: an AI agent that spots the trouble, files the report, and assembles the right team, before anyone picks up a phone."},"p1":{"s":17.59,"e":24.58,"text":"Seven minutes past two in the morning. A routine change ships at a bank that runs four hundred applications."},"p2":{"s":24.9,"e":29.21,"text":"Within a minute, online banking, mobile, and payments begin to fail."},"p3":{"s":29.53,"e":37.33,"text":"Alerts fire from every direction. But the service that caused it looks perfectly healthy. It is still answering every request."},"p4":{"s":37.65,"e":40.11,"text":"Nobody knows where to look, and the clock is running."},"n1":{"s":41.76,"e":46.53,"text":"Here is how a critical incident runs today. Almost every step is manual."},"n2":{"s":46.85,"e":56.33,"text":"Incident Management hears about it from a page, the network operations center, a monitor, a Teams chat, an email, or the incident phone line."},"n3":{"s":56.65,"e":65.04,"text":"They gather teams to judge impact and urgency, set the priority, then build a Teams chat, publish what is known, and start a recorded call."},"n4":{"s":65.36,"e":71.71,"text":"Corporate incident response is engaged, communications go out, and only then does the hunt for the cause really begin."},"n5":{"s":72.03,"e":79.84,"text":"Once service is restored, the paperwork starts: the ServiceNow record, a problem record, and the post-incident summary."},"c1":{"s":81.49,"e":82.82,"text":"The numbers tell the story."},"c2":{"s":83.14,"e":90.43,"text":"Over the last three months, a priority one incident took an average of one hour and forty-eight minutes to resolve for the applications it hit."},"c3":{"s":90.75,"e":100.17,"text":"Priority two took close to three hours, and well over three for the application that caused it. Every one of those minutes costs the bank revenue and customers."},"i1":{"s":101.82,"e":103.08,"text":"Enter NightWatch."},"i2":{"s":103.4,"e":109.14,"text":"It watches the live log stream, the alert feeds, and new ServiceNow incidents around the clock."},"i3":{"s":109.46,"e":120.09,"text":"When something breaks, it starts the critical incident process on its own, with forty-nine tools across four systems: logs, ServiceNow, GitLab, and Teams."},"i4":{"s":120.41,"e":127.6,"text":"It scopes the damage, traces the dependency graph to a common cause, and finds the exact change that broke production."},"i5":{"s":127.92,"e":140.26,"text":"Then it opens the parent incident, attaches the related incidents as children, stands up the Teams chat with the right support people, and proposes a fix. A human always makes the final call."},"i6":{"s":140.58,"e":148.35,"text":"It keeps ServiceNow current, raises the change request, and once service is back, completes the resolution steps the process requires."},"i7":{"s":148.67,"e":159.07,"text":"To train it safely, we built an entire simulated bank: four hundred applications, twelve hundred people, and realistic failures with decoys planted along the way."},"d1":{"s":160.72,"e":161.75,"text":"Let's watch it work."},"d2":{"s":162.07,"e":167.66,"text":"A change has just shipped. Errors start in online banking, then mobile, then payments."},"d3":{"s":167.98,"e":173.4,"text":"Fifty-five seconds in, the first critical alert fires. NightWatch is already on the case."},"d4":{"s":173.72,"e":185.49,"text":"Nine applications are failing. The agent walks the dependency graph and finds the one thing they share: the customer information file. A service that still looks green."},"d5":{"s":185.81,"e":196.34,"text":"In GitLab, it finds the suspect: a merge request that renamed every field in the customer profile. The pipeline passed. Every consumer broke."},"d6":{"s":196.66,"e":205.37,"text":"It opens a priority one incident, assigns the team that owns the service, and attaches three calls from branch staff reporting the same outage."},"d7":{"s":205.69,"e":214.79,"text":"Then it stands up a Teams channel and brings in the on-call engineers, the incident commander, and the author of the change. Each of them is told exactly why they are there."},"d8":{"s":215.11,"e":223.53,"text":"Finally, it drafts the fix. A human reviews it and clicks merge. The errors drain away, and the case is closed."},"d9":{"s":223.85,"e":228.66,"text":"From first error to a briefed team with a root cause: under three minutes."},"g1":{"s":230.31,"e":233.56,"text":"The path to production runs on tools the bank already has."},"g2":{"s":233.88,"e":240.78,"text":"Google Gemini does the reasoning. It reads production through the GCP and Kibana MCP servers."},"g3":{"s":241.1,"e":247.3,"text":"The GitLab MCP server and the KeyBank Codebase Analyst give it the code and its change history."},"g4":{"s":247.62,"e":253.66,"text":"Microsoft Studio connects it to Teams and ServiceNow, so it works where the incident team already works."},"g5":{"s":253.98,"e":264.85,"text":"We roll out in three phases. Shadow mode, where it only observes. Co-pilot, where a human approves each action. Then autonomy, for the patterns it has proven."},"x1":{"s":266.5,"e":268.01,"text":"And this is only the first mission."},"x2":{"s":268.33,"e":284.19,"text":"Next: automatic phone calls to on-call support during off hours. The same playbook for non-production environments. Risk scoring on changes before they merge. And a memory of every past case, so NightWatch gets sharper each time."},"e1":{"s":285.84,"e":292.83,"text":"NightWatch. Faster detection, the right people, a clear root cause. And critical services back sooner."},"e2":{"s":293.15,"e":293.9,"text":"End of briefing."}}}/*END*/;
-const C = /*CONTENT*/{"hud":"Operation *NightWatch*","player":{"start":"Start briefing","replay":"Replay briefing"},"scenes":{"open":{"kicker":"Mission briefing · Hackathon 2026","title":["Operation","NightWatch"],"lede":{"at":"o2@0.28","text":"An AI agent that spots the incident, files the report and assembles the right team."},"verbs":[{"at":"o2@0.42","text":"Detect"},{"at":"o2@0.56","text":"Report"},{"at":"o2@0.68","text":"Assemble"}],"stamp":{"at":"o1@0.55","text":"Classified"}},"prob":{"kicker":"File 01 // The problem","clock":{"start":"02:07:00","speed":"4"},"sub":"A routine change ships to production.","alerts":[{"at":"p3","level":"CRITICAL","text":"Online Banking: 5xx error rate 38.4%"},{"at":"p3@0.12","level":"CRITICAL","text":"Mobile Banking: 5xx error rate 27.9%"},{"at":"p3@0.24","level":"MAJOR","text":"Payments: failed payment rate 21.6%"}],"question":{"at":"p4","text":"Where do you look?"},"estate":{"total":"400","failing":"36","labelled":[{"at":"p2@0.3","text":"Online Banking"},{"at":"p2@0.52","text":"Mobile"},{"at":"p2@0.68","text":"Payments"}],"spread":["p2@0.8","p3@0.5"],"culprit":{"at":"p3@0.4","text":"200 OK · looks healthy"},"legend":{"total":"applications","failing":"failing","cause":"*1* cause, still green"}}},"now":{"kicker":"File 02 // Current state","headline":"Today it is a manual relay","steps":[{"at":"n2","time":"00:10","text":"Incident Management is made aware","tool":"Page · NOC · monitor · phone"},{"at":"n3@0.05","time":"00:22","text":"Gather teams, set impact, urgency and priority","tool":"CIC"},{"at":"n3@0.5","time":"00:32","text":"Create the Teams chat, publish the issue, start a recorded call","tool":"Teams"},{"at":"n4","time":"00:40","text":"Engage CIR, send the Critical Incident Communication","tool":"ServiceNow + email"},{"at":"n4@0.6","time":"01:05","text":"Find the cause, record Cause Identified","tool":"Logs + GitLab"},{"at":"n5@0.08","time":"01:48","text":"Restore the service, then the record, problem record and summary","tool":"ServiceNow"}],"elapsed":{"at":"n1@0.5","label":"Elapsed","unit":"hours : minutes","note":{"at":"n4.e","text":"The service is still down."}},"stamp":{"at":"n5@0.6","text":"All manual"}},"cost":{"kicker":"File 03 // What it costs","subject":"P1 and P2 incidents, August to October","exhibit":"Exhibit A · average time to resolve","stats":[{"at":"c2@0.45","value":"1h 48m","label":"P1 · impacted CIs"},{"at":"c2@0.9","value":"1h 18m","label":"P1 · causing CIs"},{"at":"c3","value":"2h 52m","label":"P2 · impacted CIs"},{"at":"c3@0.3","value":"3h 23m","label":"P2 · causing CIs"}],"line":{"at":"c3@0.55","text":"Every minute a CI is down costs the bank revenue and customers."},"stamp":{"at":"c3.e-0.3","text":"Too slow"}},"impl":{"kicker":"File 04 // The asset","headline":"NightWatch","badge":{"at":"i1","role":"Field agent","number":"No. 0001","name":"NightWatch","fields":[["Alias","svc_incident_auto"],["Shift","24 / 7"],["Clearance","Read, write. Never merge, never delete."]]},"signals":{"at":"i2","heading":"Signals","items":[{"title":"Live log stream","sub":"every entry, in order"},{"title":"Alert feeds","sub":"Moogsoft alerts"},{"title":"ServiceNow incidents","sub":"new calls, emails and chats"}]},"agent":{"at":"i1@0.4","title":"The agent","sub":"detection rules + LLM reasoning"},"tools":{"at":"i3@0.5","heading":"49 tools over MCP","items":[{"at":"i3@0.74","name":"Logs","count":"9"},{"at":"i3@0.80","name":"ServiceNow","count":"17"},{"at":"i3@0.88","name":"GitLab","count":"14"},{"at":"i3@0.95","name":"Teams","count":"9"}]},"flow":[{"at":"i4@0.02","text":"Scope"},{"at":"i4@0.25","text":"Trace"},{"at":"i4@0.62","text":"Find the change"},{"at":"i5@0.05","text":"Parent incident"},{"at":"i5@0.4","text":"Teams chat"},{"at":"i5@0.66","text":"Propose fix"},{"at":"i5@0.8","text":"Human approves","style":"human"}],"note":{"at":"i5@0.82","text":"The agent has *no merge tool and no delete tool*. People stay in command."},"range":{"at":"i7","title":"The training ground: a simulated bank","text":"Mock Cloud Logging, ServiceNow, GitLab and Teams with seeded data. The agent sees only what an engineer on shift would see.","tiles":[{"at":"i7@0.36","value":"400","label":"applications"},{"at":"i7@0.50","value":"1,199","label":"people"},{"at":"i7@0.56","value":"51","label":"support groups"},{"at":"i7@0.62","value":"776","label":"code repositories"},{"at":"i7@0.68","value":"5","label":"incident scenarios"}],"chips":{"at":"i7@0.8","items":["Decoy merges in every case","The culprit stays green","Background noise never stops"]}}},"demo":{"kicker":"File 05 // Live case","headline":"The customer profile outage","tagline":["Re-enactment on the simulated bank","scenario: cif-snake-case-cascade"],"clock_label":"Mission clock","clock_prefix":"T+","clock":[["d2","0:00"],["d3","0:52"],["d3@0.3","0:55"],["d4","1:10"],["d5","1:35"],["d6","2:05"],["d7","2:30"],["d7.e","2:48"],["d8@0.3","2:48"],["d8@0.5","6:50"],["d8.e","7:50"]],"steps":[{"name":"Detect","beats":["d2","d3"],"status":"watching the log stream","calls":"logs.tail_logs()  logs.list_alerts()  logs.summarize_errors()"},{"name":"Scope and trace","beats":["d4","d4"],"status":"tracing dependencies","calls":"servicenow.get_app_dependencies()  servicenow.get_app(\"CIF\")"},{"name":"Find the change","beats":["d5","d5"],"status":"reviewing recent changes","calls":"gitlab.list_merge_requests()  gitlab.get_merge_request()"},{"name":"Open incident","beats":["d6","d6"],"status":"filing the incident","calls":"servicenow.create_incident()  servicenow.link_child_incidents()"},{"name":"Assemble team","beats":["d7","d7"],"status":"assembling the team","calls":"servicenow.get_support_group()  teams.create_channel()  teams.post_message()"},{"name":"Fix and verify","beats":["d8","d8"],"status":"fix and verify","calls":"gitlab.create_merge_request()  logs.tail_logs()  servicenow.update_incident()"}],"idle":{"before":"standing by","after":"case closed"},"logs":{"app":"Cloud Logging · Logs Explorer · production","start_time":"02:07:30","banners":[{"at":"d3@0.36","head":"MOOGSOFT · CRITICAL · OLB","text":"HTTP 5xx error rate 38.4% (threshold 5%)"},{"at":"d3@0.5","head":"MOOGSOFT · CRITICAL · MBL","text":"HTTP 5xx error rate 27.9% (threshold 5%)"},{"at":"d3@0.66","head":"NIGHTWATCH · ENGAGED","text":"Grouping errors by app: 9 apps failing since 02:07:30","style":"agent"}],"errors":[{"after":"1.0","tla":"OLB","messages":["CIF profile response failed schema validation","profile unavailable: upstream contract violation (502)"]},{"after":"2.6","tla":"MBL","messages":["customer-profile-api: customerId missing from profile response (502)"]},{"after":"3.8","tla":"PAY","messages":["Payment rejected: payer verification unavailable (502)","Unrecognized field \"customer_id\" (class CustomerProfile)"]},{"after":"5.4","tla":"FRD","messages":["customer feature extraction failed: KeyError 'customerId'"]},{"after":"6.2","tla":"NTF","messages":["notification dropped: recipient resolution failed"]},{"after":"7.0","tla":"CRD","messages":["NullPointerException: CustomerProfile.customerId() is null (500)"]},{"after":"7.8","tla":"TLR","messages":["IllegalStateException: CIF returned profile for null (500)"]}],"background":[{"tla":"CIF","message":"GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=olb-bff"},{"tla":"DEP","message":"GET /v1/accounts/{id}/balances 200 {ms}ms"},{"tla":"ATH","message":"token issued grant=refresh_token"},{"tla":"CIF","message":"GET /v1/customers/C-{id}/profile 200 {ms}ms client_id=pay-api"}]},"graph":{"app":"ServiceNow · application dependency graph","failing":[["OLB","Online Banking"],["MBL","Mobile Banking"],["PAY","Payments Hub"],["FRD","Fraud Scoring"],["NTF","Notifications"],["CRD","Card Management"],["TLR","Teller Platform"],["DEP","Deposit Accounts"],["BPY","Bill Pay"]],"upstream":{"tla":"CIF","name":"Customer Information File"},"common":{"at":"d4@0.5","text":"COMMON UPSTREAM"},"green":{"at":"d4@0.84","text":"200 OK · LOOKS GREEN"},"notes":["9 failing apps","187 callers of CIF"],"footer":"get_app_dependencies(direction: \"up\") for each failing app"},"suspect":{"app":"GitLab · keybank/CIF00/customer-profile-api","state":"Merged","when":"30 s before the first error","pipeline":{"at":"d5@0.62","text":"Pipeline passed"},"title":"Adopt enterprise API naming standard (snake_case)","diff":{"at":"d5@0.3","file":"src/main/resources/application.yml","removed":"property-naming-strategy: LOWER_CAMEL_CASE","added":"property-naming-strategy: SNAKE_CASE"},"effect":{"at":"d5@0.48","lines":["Consumers expect [[\"customerId\"]]","CIF now returns *\"customer_id\"* with 200 OK"]},"decoys":{"at":"d5@0.7","heading":"Ruled out","items":[{"tla":"OLB","title":"Update profile error copy (DCR-482)","why":"Copy only, no logic."},{"tla":"ATH","title":"Bump jose 5.9.3 to 5.9.6","why":"Patch release, unrelated."}]},"stamp":{"at":"d5@0.8","text":"Suspect"}},"incident":{"app":"ServiceNow · incident","number":"INC0010204","priority":"P1 Critical","state":"In progress","opened_by":"opened by Incident Automation","title":"Customer profile failures across OLB, MBL, PAY after CIF change","fields":[{"label":"Application","value":"CIF · Customer Information File"},{"label":"Assignment group","value":"CIF Application Support","at":"d6@0.3"},{"label":"Contact type","value":"Monitoring"},{"label":"On call","value":"Kristin Streich","at":"d6@0.3"}],"children":[{"at":"d6@0.56","number":"INC0010205","via":"phone","text":"Denver Tech Center: Teller Workstation cannot look up customers"},{"at":"d6@0.66","number":"INC0010206","via":"phone","text":"Seattle Capitol Hill: online and mobile banking won't load profiles"},{"at":"d6@0.76","number":"INC0010207","via":"chat","text":"Buffalo Elmwood: unable to verify customers at the teller line"}]},"channel":{"app":"Teams · Incident Response · #inc0010204-customer-profile-errors","members":[{"at":"d7@0.22","name":"Kristin Streich","why":"On-call primary, CIF Application Support"},{"at":"d7@0.3","name":"Dominic Green","why":"On-call secondary, CIF Application Support"},{"at":"d7@0.4","name":"Dana Whitfield","why":"NOC shift lead, incident commander"},{"at":"d7@0.46","name":"Tom Okafor","why":"Major incident manager"},{"at":"d7@0.54","name":"Harley Donnelly","why":"CIF developer, author of the change"}],"messages":[{"at":"d7@0.12","from":"Incident Automation","text":"*P1 INC0010204.* Nine apps cannot read customer profiles. Root cause: a CIF merge switched its JSON to snake_case, so [[customerId]] is now [[customer_id]]. CIF itself returns 200. Fix MR is ready for review."},{"at":"d7@0.72","style":"system","text":"Notification to Kristin Streich: “You've been added to #inc0010204-customer-profile-errors as on-call support for CIF. Here's who else is in the channel…”"},{"at":"d7@0.9","style":"person","from":"Kristin Streich","text":"On it. Reviewing the fix now."}]},"fix":{"app":"GitLab · fix merge request · opened by the agent","states":["Open","Merged"],"label":"incident","link":"links INC0010204","title":"Revert CIF JSON naming to camelCase","diff":{"file":"src/main/resources/application.yml","removed":"property-naming-strategy: SNAKE_CASE","added":"property-naming-strategy: LOWER_CAMEL_CASE"},"button":["Merge","Merged by a human ✓"],"cursor_at":"d8@0.34","merge_at":"d8@0.5","metric":{"label":"Errors per minute","value":"1240"},"incident":"INC0010204","incident_states":["In progress","Resolved"],"closed_at":"d8@0.86","stamp":"Case closed"},"result":{"at":"d9","big":"02:48","text":"from first error to a briefed team with a root cause","versus":"Today's P1 average: *1 h 48 min* to resolve"}},"prod":{"kicker":"File 06 // Path to production","headline":"Built on the bank's own stack","pipeline":[{"at":"g2@0.5","tag":"Signals","title":"GCP + Kibana","sub":"GCP MCP, Kibana MCP"},{"at":"g2","tag":"Agent","title":"Google Gemini","sub":"NightWatch's reasoning","style":"key"},{"at":"g3","tag":"Code","title":"GitLab","sub":"GitLab MCP"},{"at":"g3@0.4","tag":"Code knowledge","title":"KeyBank Codebase Analyst","sub":"What the code does, who changed it"},{"at":"g4","tag":"People","title":"Microsoft Studio","sub":"Teams chat and calls"},{"at":"g4@0.4","tag":"Record","title":"ServiceNow","sub":"Incidents, changes, problems"}],"guards":[{"at":"g4@0.6","name":"Human","text":"makes the final call"},{"at":"g4@0.75","name":"No merge, no delete","text":"by design"},{"at":"g4@0.9","name":"Every action","text":"written to the incident record"}],"phases":[{"at":"g5@0.2","tag":"PHASE 1","title":"Shadow","text":"Observes and drafts. Changes nothing."},{"at":"g5@0.45","tag":"PHASE 2","title":"Co-pilot","text":"Acts once a human approves."},{"at":"g5@0.74","tag":"PHASE 3","title":"Autonomy","text":"Runs the patterns it has proven."}]},"next":{"kicker":"File 07 // Next missions","headline":"Only the first mission","missions":[{"at":"x2@0.04","tab":"MISSION A","title":"Off-hours phone calls","text":"Call the on-call support person automatically when nobody is watching chat."},{"at":"x2@0.3","tab":"MISSION B","title":"Non-production","text":"The same playbook, minus the ServiceNow steps, for lower environments."},{"at":"x2@0.52","tab":"MISSION C","title":"Change risk scoring","text":"Flag a risky merge before it ships, using the dependency graph."},{"at":"x2@0.72","tab":"MISSION D","title":"Case memory","text":"Every solved incident makes the next diagnosis faster."}],"also":{"at":"x2@0.92","text":"*Also on the board:* recorded, transcribed incident call · drafted Critical Incident Communication emails · problem records and post-incident summaries"}},"end":{"kicker":"Operation NightWatch","title":["Agent","NightWatch"],"outcomes":[{"at":"e1@0.2","text":"Faster detection"},{"at":"e1@0.36","text":"The right people"},{"at":"e1@0.5","text":"A clear root cause"}],"line":{"at":"e1@0.7","text":"And critical services back sooner."},"stamp":{"at":"e2@0.3","text":"End of briefing"}}}}/*END*/;
+const TL = /*TIMELINE*/{"duration":299.88,"voice":"bm_george","scenes":[{"id":"open","title":"Briefing","s":0.0,"e":16.78},{"id":"prob","title":"The problem","s":16.78,"e":40.14},{"id":"now","title":"Today: manual","s":40.14,"e":77.1},{"id":"cost","title":"The cost","s":77.1,"e":97.02},{"id":"impl","title":"The agent","s":97.02,"e":155.06},{"id":"demo","title":"Live case","s":155.06,"e":235.84},{"id":"prod","title":"Path to production","s":235.84,"e":271.37},{"id":"next","title":"What's next","s":271.37,"e":290.29},{"id":"end","title":"Close","s":290.29,"e":299.88}],"beats":{"o1":{"s":0.8,"e":4.62,"text":"Good evening. This is your briefing on Operation NightWatch."},"o2":{"s":4.92,"e":16.08,"text":"The target: production incidents. The asset: an AI agent that spots the trouble, files the report, and assembles the right team, before anyone picks up a phone."},"p1":{"s":17.58,"e":24.28,"text":"Seven minutes past two in the morning. A routine change ships at a bank that runs four hundred applications."},"p2":{"s":24.58,"e":28.87,"text":"Within a minute, online banking, mobile, and payments begin to fail."},"p3":{"s":29.17,"e":36.85,"text":"Alerts fire from every direction. But the service that caused it looks perfectly healthy. It is still answering every request."},"p4":{"s":37.15,"e":39.44,"text":"Nobody knows where to look, and the clock is running."},"n1":{"s":40.94,"e":45.69,"text":"Here is how a critical incident runs today. Almost every step is manual."},"n2":{"s":45.99,"e":53.22,"text":"Incident Management hears about it from a page, a monitor, a Teams chat, an email, or the incident phone line."},"n3":{"s":53.52,"e":61.82,"text":"They gather teams to judge impact and urgency, set the priority, then build a Teams chat, publish what is known, and start a recorded call."},"n4":{"s":62.12,"e":68.4,"text":"Corporate incident response is engaged, communications go out, and only then does the hunt for the cause really begin."},"n5":{"s":68.7,"e":76.4,"text":"Once service is restored, the paperwork starts: the ServiceNow record, a problem record, and the post-incident summary."},"c1":{"s":77.9,"e":79.28,"text":"The numbers tell the story."},"c2":{"s":79.58,"e":86.75,"text":"Over the last three months, a priority one incident took an average of one hour and forty-eight minutes to resolve for the applications it hit."},"c3":{"s":87.05,"e":96.32,"text":"Priority two took close to three hours, and well over three for the application that caused it. Every one of those minutes costs the bank revenue and customers."},"i1":{"s":97.82,"e":99.14,"text":"Enter NightWatch."},"i2":{"s":99.44,"e":105.33,"text":"It watches the live log stream, the alert feeds, and new ServiceNow incidents around the clock."},"i3":{"s":105.63,"e":116.08,"text":"When something breaks, it starts the critical incident process on its own, with forty-nine tools across four systems: logs, ServiceNow, GitLab, and Teams."},"i4":{"s":116.38,"e":123.47,"text":"It scopes the damage, traces the dependency graph to a common cause, and finds the exact change that broke production."},"i5":{"s":123.77,"e":135.89,"text":"Then it opens the parent incident, attaches the related incidents as children, stands up the Teams chat with the right support people, and proposes a fix. A human always makes the final call."},"i6":{"s":136.19,"e":143.84,"text":"It keeps ServiceNow current, raises the change request, and once service is back, completes the resolution steps the process requires."},"i7":{"s":144.14,"e":154.36,"text":"To train it safely, we built an entire simulated bank: four hundred applications, twelve hundred people, and realistic failures with decoys planted along the way."},"d1":{"s":155.86,"e":160.59,"text":"Let's watch it work. This is a real run, recorded on the simulated bank."},"d2":{"s":160.89,"e":167.05,"text":"A change has just shipped. Errors start in online banking, then mobile, then payments."},"d3":{"s":167.35,"e":173.39,"text":"Three seconds after the first error, NightWatch has noticed. The alerts that would page a person come later."},"d4":{"s":173.69,"e":183.04,"text":"Seven applications are failing, and dozens more feel it. NightWatch works out it is one problem, keeps one case, and sizes up the damage."},"d6":{"s":183.34,"e":192.77,"text":"It opens a priority one incident, assigns the team that owns the customer information file, and groups the help desk tickets about the same outage underneath it."},"d7":{"s":193.07,"e":202.39,"text":"Then it stands up a Teams channel and brings in eight people, from the on-call engineers to the incident commander. Each is told why they are there, and they get one briefing."},"d5":{"s":202.69,"e":214.13,"text":"Under a minute in, it names the cause in GitLab: a change that renamed every field in the customer profile. It passed review, and the service never returned an error itself."},"d8":{"s":214.43,"e":227.8,"text":"It writes the fix as a merge request. The one decision that matters stays with a person, who clicks merge. NightWatch raises the emergency change, the release goes out, and the errors drain away."},"d9":{"s":228.1,"e":235.14,"text":"In this run: root cause in fifty-six seconds, and recovery confirmed two minutes and twenty-one seconds after the first error."},"g1":{"s":236.64,"e":239.88,"text":"The path to production runs on tools the bank already has."},"g2":{"s":240.18,"e":247.0,"text":"Google Gemini does the reasoning. It reads production through the GCP and Kibana MCP servers."},"g3":{"s":247.3,"e":253.42,"text":"The GitLab MCP server and the KeyBank Codebase Analyst give it the code and its change history."},"g4":{"s":253.72,"e":259.69,"text":"Microsoft Studio connects it to Teams and ServiceNow, so it works where the incident team already works."},"g5":{"s":259.99,"e":270.67,"text":"We roll out in three phases. Shadow mode, where it only observes. Co-pilot, where a human approves each action. Then autonomy, for the patterns it has proven."},"x1":{"s":272.17,"e":273.73,"text":"And this is only the first mission."},"x2":{"s":274.03,"e":289.59,"text":"Next: automatic phone calls to on-call support during off hours. The same playbook for non-production environments. Risk scoring on changes before they merge. And a memory of every past case, so NightWatch gets sharper each time."},"e1":{"s":291.09,"e":297.99,"text":"NightWatch. Faster detection, the right people, a clear root cause. And critical services back sooner."},"e2":{"s":298.29,"e":299.18,"text":"End of briefing."}}}/*END*/;
+const C = /*CONTENT*/{"hud":"Operation *NightWatch*","player":{"start":"Start briefing","replay":"Replay briefing"},"scenes":{"open":{"kicker":"Mission briefing · Hackathon 2026","title":["Operation","NightWatch"],"lede":{"at":"o2@0.28","text":"An AI agent that spots the incident, files the report and assembles the right team."},"verbs":[{"at":"o2@0.42","text":"Detect"},{"at":"o2@0.56","text":"Report"},{"at":"o2@0.68","text":"Assemble"}],"stamp":{"at":"o1@0.55","text":"Classified"}},"prob":{"kicker":"File 01 // The problem","clock":{"start":"02:07:00","speed":"4"},"sub":"A routine change ships to production.","alerts":[{"at":"p3","level":"CRITICAL","text":"Online Banking: 5xx error rate 38.4%"},{"at":"p3@0.12","level":"CRITICAL","text":"Mobile Banking: 5xx error rate 27.9%"},{"at":"p3@0.24","level":"MAJOR","text":"Payments: failed payment rate 21.6%"}],"question":{"at":"p4","text":"Where do you look?"},"estate":{"total":"400","failing":"36","labelled":[{"at":"p2@0.3","text":"Online Banking"},{"at":"p2@0.52","text":"Mobile"},{"at":"p2@0.68","text":"Payments"}],"spread":["p2@0.8","p3@0.5"],"culprit":{"at":"p3@0.4","text":"200 OK · looks healthy"},"legend":{"total":"applications","failing":"failing","cause":"*1* cause, still green"}}},"now":{"kicker":"File 02 // Current state","headline":"Today it is a manual relay","steps":[{"at":"n2","time":"00:10","text":"Incident Management is made aware","tool":"Page · NOC · monitor · phone"},{"at":"n3@0.05","time":"00:22","text":"Gather teams, set impact, urgency and priority","tool":"CIC"},{"at":"n3@0.5","time":"00:32","text":"Create the Teams chat, publish the issue, start a recorded call","tool":"Teams"},{"at":"n4","time":"00:40","text":"Engage CIR, send the Critical Incident Communication","tool":"ServiceNow + email"},{"at":"n4@0.6","time":"01:05","text":"Find the cause, record Cause Identified","tool":"Logs + GitLab"},{"at":"n5@0.08","time":"01:48","text":"Restore the service, then the record, problem record and summary","tool":"ServiceNow"}],"elapsed":{"at":"n1@0.5","label":"Elapsed","unit":"hours : minutes","note":{"at":"n4.e","text":"The service is still down."}},"stamp":{"at":"n5@0.6","text":"All manual"}},"cost":{"kicker":"File 03 // What it costs","subject":"P1 and P2 incidents, August to October","exhibit":"Exhibit A · average time to resolve","stats":[{"at":"c2@0.45","value":"1h 48m","label":"P1 · impacted CIs"},{"at":"c2@0.9","value":"1h 18m","label":"P1 · causing CIs"},{"at":"c3","value":"2h 52m","label":"P2 · impacted CIs"},{"at":"c3@0.3","value":"3h 23m","label":"P2 · causing CIs"}],"line":{"at":"c3@0.55","text":"Every minute a CI is down costs the bank revenue and customers."},"stamp":{"at":"c3.e-0.3","text":"Too slow"}},"impl":{"kicker":"File 04 // The asset","headline":"NightWatch","badge":{"at":"i1","role":"Field agent","number":"No. 0001","name":"NightWatch","fields":[["Alias","svc_incident_auto"],["Shift","24 / 7"],["Clearance","Read, write. Never merge, never delete."]]},"signals":{"at":"i2","heading":"Signals","items":[{"title":"Live log stream","sub":"every entry, in order"},{"title":"Alert feeds","sub":"Moogsoft alerts"},{"title":"ServiceNow incidents","sub":"new calls, emails and chats"}]},"agent":{"at":"i1@0.4","title":"The agent","sub":"detection rules + LLM reasoning"},"tools":{"at":"i3@0.5","heading":"49 tools over MCP","items":[{"at":"i3@0.74","name":"Logs","count":"9"},{"at":"i3@0.80","name":"ServiceNow","count":"17"},{"at":"i3@0.88","name":"GitLab","count":"14"},{"at":"i3@0.95","name":"Teams","count":"9"}]},"flow":[{"at":"i4@0.02","text":"Scope"},{"at":"i4@0.25","text":"Trace"},{"at":"i4@0.62","text":"Find the change"},{"at":"i5@0.05","text":"Parent incident"},{"at":"i5@0.4","text":"Teams chat"},{"at":"i5@0.66","text":"Propose fix"},{"at":"i5@0.8","text":"Human approves","style":"human"}],"note":{"at":"i5@0.82","text":"The agent has *no merge tool and no delete tool*. People stay in command."},"range":{"at":"i7","title":"The training ground: a simulated bank","text":"Mock Cloud Logging, ServiceNow, GitLab and Teams with seeded data. The agent sees only what an engineer on shift would see.","tiles":[{"at":"i7@0.36","value":"400","label":"applications"},{"at":"i7@0.50","value":"1,199","label":"people"},{"at":"i7@0.56","value":"51","label":"support groups"},{"at":"i7@0.62","value":"776","label":"code repositories"},{"at":"i7@0.68","value":"5","label":"incident scenarios"}],"chips":{"at":"i7@0.8","items":["Decoy merges in every case","The culprit stays green","Background noise never stops"]}}},"demo":{"live":{"recording":"live/run.mp4","video":"live.mp4","keep_top":"0.8","tag":"Recorded run · real UIs · scenario cif-snake-case-cascade at 4x","cuts":[{"show":"A routine change ships"},{"at":"d2","show":"Errors appear"},{"at":"d3","show":"Then the alerts start"},{"at":"d4","show":"One problem, not dozens","skip":"6"},{"at":"d4@0.6","show":"How bad is it?"},{"at":"d6","show":"It opens the incident"},{"at":"d6@0.55","show":"Tickets about the same problem are grouped under it"},{"at":"d7","show":"It brings in the right people"},{"at":"d7@0.6","show":"And briefs them"},{"at":"d5","show":"It finds the cause"},{"at":"d5@0.45","show":"This is the change"},{"at":"d8","show":"It writes the fix"},{"at":"d8@0.22","from_event":"merge_click","skip":"-4","take":"7.5"},{"at":"d8@0.52","show":"It ships the fix to production"},{"at":"d8@0.76","show":"Then checks it actually worked","skip":"14"},{"at":"d9","show":"First error to fixed"}]},"result":{"at":"d9@0.62","big":"02:21","text":"from first error to recovery confirmed, in this recorded run","versus":"Today's P1 average: *1 h 48 min* to resolve"}},"prod":{"kicker":"File 06 // Path to production","headline":"Built on the bank's own stack","pipeline":[{"at":"g2@0.5","tag":"Signals","title":"GCP + Kibana","sub":"GCP MCP, Kibana MCP"},{"at":"g2","tag":"Agent","title":"Google Gemini","sub":"NightWatch's reasoning","style":"key"},{"at":"g3","tag":"Code","title":"GitLab","sub":"GitLab MCP"},{"at":"g3@0.4","tag":"Code knowledge","title":"KeyBank Codebase Analyst","sub":"What the code does, who changed it"},{"at":"g4","tag":"People","title":"Microsoft Studio","sub":"Teams chat and calls"},{"at":"g4@0.4","tag":"Record","title":"ServiceNow","sub":"Incidents, changes, problems"}],"guards":[{"at":"g4@0.6","name":"Human","text":"makes the final call"},{"at":"g4@0.75","name":"No merge, no delete","text":"by design"},{"at":"g4@0.9","name":"Every action","text":"written to the incident record"}],"phases":[{"at":"g5@0.2","tag":"PHASE 1","title":"Shadow","text":"Observes and drafts. Changes nothing."},{"at":"g5@0.45","tag":"PHASE 2","title":"Co-pilot","text":"Acts once a human approves."},{"at":"g5@0.74","tag":"PHASE 3","title":"Autonomy","text":"Runs the patterns it has proven."}]},"next":{"kicker":"File 07 // Next missions","headline":"Only the first mission","missions":[{"at":"x2@0.04","tab":"MISSION A","title":"Off-hours phone calls","text":"Call the on-call support person automatically when nobody is watching chat."},{"at":"x2@0.3","tab":"MISSION B","title":"Non-production","text":"The same playbook, minus the ServiceNow steps, for lower environments."},{"at":"x2@0.52","tab":"MISSION C","title":"Change risk scoring","text":"Flag a risky merge before it ships, using the dependency graph."},{"at":"x2@0.72","tab":"MISSION D","title":"Case memory","text":"Every solved incident makes the next diagnosis faster."}],"also":{"at":"x2@0.92","text":"*Also on the board:* recorded, transcribed incident call · drafted Critical Incident Communication emails · problem records and post-incident summaries"}},"end":{"kicker":"Operation NightWatch","title":["Agent","NightWatch"],"outcomes":[{"at":"e1@0.2","text":"Faster detection"},{"at":"e1@0.36","text":"The right people"},{"at":"e1@0.5","text":"A clear root cause"}],"line":{"at":"e1@0.7","text":"And critical services back sooner."},"stamp":{"at":"e2@0.3","text":"End of briefing"}}}}/*END*/;
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -407,6 +292,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 // *highlight* and [[good]] marks from content.yaml
 const rich = (s) => esc(s).replace(/\*(.+?)\*/g, '<b>$1</b>').replace(/\[\[(.+?)\]\]/g, '<i>$1</i>');
 const on = (o) => (o && o.at ? ` data-on="${esc(o.at)}"` : '');
+// A connector (arrow) shows only once everything it joins is on screen, a moment later.
+const after = (...os) => ` data-on="${esc(os.filter((o) => o && o.at).map((o) => o.at).join('|'))}" data-lag="0.4"`;
 const secs = (s) => String(s).split(':').reduce((a, p) => a * 60 + (parseFloat(p) || 0), 0);
 
 // "p2" beat start · "p2.e" beat end · "p2@0.4" 40% through · any of them "+1.5" / "-0.3" seconds
@@ -422,7 +309,9 @@ function at(spec) {
 function rng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
 const heading = (s) => `<div class="kicker">${esc(s.kicker)}</div>${s.headline ? `<h2>${esc(s.headline)}</h2>` : ''}`;
 const stamp = (o, cls = '', style = '') => (o && o.text ? `<div class="stamp ${cls}"${style ? ` style="${style}"` : ''}${on(o)}>${esc(o.text)}</div>` : '');
-const diff = (d, extra = '') => `<div class="diff${extra}"${on(d)}><div class="f">${esc(d.file)}</div><div class="d">- ${esc(d.removed)}</div><div class="a">+ ${esc(d.added)}</div></div>`;
+// The NightWatch mark: a crescent moon.
+let marks = 0;
+const mark = () => { const id = `mk${marks++}`; return `<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><mask id="${id}"><rect width="100" height="100" fill="#fff"/><circle cx="65" cy="37" r="31" fill="#000"/></mask><circle cx="50" cy="50" r="36" fill="currentColor" mask="url(#${id})"/></svg>`; };
 
 /* ================= scene templates: content.yaml -> markup ================= */
 const COLS = 25;
@@ -432,9 +321,9 @@ const T = {
       <div class="kicker">${esc(s.kicker)}</div>
       <h1>${esc(s.title[0])}<br><span>${esc(s.title[1])}</span></h1>
       <p class="lede cue"${on(s.lede)}>${rich(s.lede.text)}</p>
-      <div class="verbs">${list(s.verbs).map((v) => `<span class="cue"${on(v)}>${esc(v.text)}</span>`).join('')}</div>
+      <div class="verbs">${list(s.verbs).map((v, i) => `<span class="cue rd"${on(v)}><i>${pad(i + 1)}</i>${esc(v.text)}</span>`).join('')}</div>
     </div>
-    <div class="radar"><i class="blip" style="left:62%;top:27%"></i><i class="blip" style="left:28%;top:58%;animation-delay:.8s"></i><i class="blip" style="left:70%;top:66%;animation-delay:1.4s"></i></div></div>
+    <div class="emblem">${mark()}</div></div>
     ${stamp(s.stamp)}`,
 
   prob: (s) => `
@@ -479,20 +368,20 @@ const T = {
     <div class="impl">
       <div class="badge cue"${on(s.badge)}>
         <div class="top"><span>${esc(s.badge.role)}</span><span>${esc(s.badge.number)}</span></div>
-        <div class="avatar"></div><h3>${esc(s.badge.name)}</h3>
+        <div class="avatar">${mark()}</div><h3>${esc(s.badge.name)}</h3>
         <dl>${list(s.badge.fields).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       </div>
       <div class="right">
         <div class="arch">
           <div class="col cue"${on(s.signals)}><div class="hd">${esc(s.signals.heading)}</div>${list(s.signals.items).map((x) => `<div class="box"><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}</div>
-          <div class="arrow cue fade"${on(s.signals)}></div>
+          <div class="arrow cue fade"${after(s.signals, s.agent)}></div>
           <div class="col cue"${on(s.agent)}><div class="hd">&nbsp;</div><div class="box agent"><b>${esc(s.agent.title)}</b><span>${esc(s.agent.sub)}</span></div></div>
-          <div class="arrow cue fade"${on(s.tools)}></div>
+          <div class="arrow cue fade"${after(s.agent, s.tools)}></div>
           <div class="col"><div class="hd cue fade"${on(s.tools)}>${esc(s.tools.heading)}</div>
             <div class="tools">${list(s.tools.items).map((x) => `<div class="box cue"${on(x)}><b>${esc(x.name)}</b><span>${esc(x.count)}</span></div>`).join('')}</div></div>
         </div>
         <div class="flow">${list(s.flow).map((x, i) => `${i ? `<span class="sep cue fade"${on(x)}>&rarr;</span>` : ''}<span class="st${x.style === 'human' ? ' human' : ''} cue"${on(x)}>${esc(x.text)}</span>`).join('')}</div>
-        <div class="note cue fade"${on(s.note)}>${rich(s.note.text)}</div>
+        <div class="note hl cue fade"${on(s.note)}>${rich(s.note.text)}</div>
         <div class="range cue fade"${on(s.range)}>
           <h3>${esc(s.range.title)}</h3><p>${esc(s.range.text)}</p>
           <div class="tiles" style="grid-template-columns:repeat(${list(s.range.tiles).length},1fr)">${list(s.range.tiles).map((x) => `<div class="tile cue"${on(x)}><b>${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div>
@@ -502,90 +391,17 @@ const T = {
     </div>`,
 
   demo: (s) => {
-    const st = list(s.steps), first = (i) => st[i] && st[i].beats[0];
-    const win = (i) => `${i ? ` data-on="${esc(first(i))}"` : ''}${i < st.length - 1 ? ` data-off="${esc(first(i + 1))}"` : ''}`;
-    const L = s.logs, G = s.graph, S = s.suspect, I = s.incident, CH = s.channel, F = s.fix, R = s.result;
-    const initials = (n) => String(n).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+    const R = s.result;
     return `
-    <div class="demo-head">
-      <div>${heading(s)}</div>
-      <div class="clockbox"><div class="lbl">${esc(s.clock_label)}</div><div class="num" id="mclock"></div></div>
-    </div>
-    <div class="demo">
-      <div class="rail" id="rail">
-        ${st.map((x, i) => `<div class="step"><i><span>${i + 1}</span></i>${esc(x.name)}</div>`).join('')}
-        <div class="tagline">${list(s.tagline).map(esc).join('<br>')}</div>
-      </div>
-      <div class="console">
-        <div class="titlebar"><b>${esc(String(C.hud || '').replace(/^.*\*(.+)\*.*$/, '$1').toUpperCase())}</b><span id="ctitle"></span><span class="call" id="ccall"></span></div>
-        <div class="panels">
-          <div class="panel"${win(0)}>
-            <div class="app" style="--c:var(--blue)">${esc(L.app)}</div>
-            <div class="hist" id="hist"></div>
-            <div class="logwrap"><div class="loglines" id="logs"></div>
-              <div class="banners">${list(L.banners).map((b) => `<div class="banner${b.style === 'agent' ? ' agent' : ''} cue"${on(b)}><b>${esc(b.head)}</b>${esc(b.text)}</div>`).join('')}</div></div>
-          </div>
-          <div class="panel"${win(1)}>
-            <div class="app" style="--c:var(--green)">${esc(G.app)}</div>
-            <svg class="graph" viewBox="0 0 900 370" id="graph"></svg>
-          </div>
-          <div class="panel"${win(2)}>
-            <div class="app" style="--c:#fc6d26">${esc(S.app)}</div>
-            <div class="mr">
-              <div class="card" style="position:relative">
-                <div class="meta"><span class="pill gray">${esc(S.state)}</span><span>${esc(S.when)}</span><span class="pill green cue fade"${on(S.pipeline)}>${esc(S.pipeline.text)}</span></div>
-                <h4>${esc(S.title)}</h4>
-                ${diff(S.diff, ' cue')}
-                <div class="effect cue"${on(S.effect)}>${list(S.effect.lines).map(rich).join('<br>')}</div>
-                ${stamp(S.stamp, '', 'right:16px;bottom:18px')}
-              </div>
-              <div class="decoys cue"${on(S.decoys)}><h5>${esc(S.decoys.heading)}</h5>${list(S.decoys.items).map((d) => `<div class="decoy"><b>${esc(d.tla)}</b><s>${esc(d.title)}</s><br>${esc(d.why)}</div>`).join('')}</div>
-            </div>
-          </div>
-          <div class="panel"${win(3)}>
-            <div class="app" style="--c:#62d84e">${esc(I.app)}</div>
-            <div class="card">
-              <div class="meta"><b style="font:600 20px var(--mono);color:var(--text)">${esc(I.number)}</b><span class="pill red">${esc(I.priority)}</span><span class="pill amber">${esc(I.state)}</span><span>${esc(I.opened_by)}</span></div>
-              <h4>${esc(I.title)}</h4>
-              <div class="inc">${list(I.fields).map((f) => `<div${f.at ? ` class="cue fade"${on(f)}` : ''}><span>${esc(f.label)}</span><b>${esc(f.value)}</b></div>`).join('')}</div>
-            </div>
-            <div class="kids">${list(I.children).map((k) => `<div class="kid cue"${on(k)}><code>${esc(k.number)}</code><span class="pill gray">${esc(k.via)}</span><span>${esc(k.text)}</span></div>`).join('')}</div>
-          </div>
-          <div class="panel"${win(4)}>
-            <div class="app" style="--c:#7b83eb">${esc(CH.app)}</div>
-            <div class="teams">
-              <div class="members">${list(CH.members).map((m) => `<div class="member cue"${on(m)}><i>${esc(initials(m.name))}</i><div><b>${esc(m.name)}</b><span>${esc(m.why)}</span></div></div>`).join('')}</div>
-              <div class="msgs">${list(CH.messages).map((m) => `<div class="msg${m.style === 'system' ? ' sys' : ''} cue"${on(m)}>${m.from ? `<div class="who"${m.style === 'person' ? ' style="color:var(--blue)"' : ''}>${esc(m.from)}</div>` : ''}${rich(m.text)}</div>`).join('')}</div>
-            </div>
-          </div>
-          <div class="panel"${win(5)}>
-            <div class="app" style="--c:#fc6d26">${esc(F.app)}</div>
-            <div class="fix">
-              <div class="card">
-                <div class="meta"><span class="pill amber" id="fixstate">${esc(F.states[0])}</span><span class="pill gray">${esc(F.label)}</span><span>${esc(F.link)}</span></div>
-                <h4>${esc(F.title)}</h4>
-                ${diff(F.diff)}
-                <span class="mergebtn" data-on="${esc(F.merge_at)}"><span class="a">${esc(F.button[0])}</span><span class="b">${esc(F.button[1])}</span></span>
-              </div>
-              <div class="card recov">
-                <div class="lbl">${esc(F.metric.label)}</div><div class="num" id="epm"></div>
-                <div class="spark" id="spark"></div>
-                <div class="meta"><b style="font:600 15px var(--mono);color:var(--text)">${esc(F.incident)}</b><span class="pill amber" id="incstate">${esc(F.incident_states[0])}</span></div>
-              </div>
-              <svg class="cursor" data-on="${esc(F.cursor_at)}" viewBox="0 0 22 30"><path d="M2 2v22l6-5 4 9 4-2-4-9h8z" fill="#fff" stroke="#000" stroke-width="1.5"/></svg>
-              <div class="stamp green" data-on="${esc(F.closed_at)}">${esc(F.stamp)}</div>
-            </div>
-            <div class="result cue fade"${on(R)}><div><div class="big">${esc(R.big)}</div><p>${esc(R.text)}</p><div class="vs">${rich(R.versus)}</div></div></div>
-          </div>
-        </div>
-      </div>
-    </div>`;
+    <div class="live"><video id="live" src="${esc(s.live.video)}" muted playsinline preload="auto"></video><img id="liveimg" alt="" hidden></div>
+    <div class="live-tag">${esc(s.live.tag)}</div>
+    <div class="result cue fade"${on(R)}><div><div class="big cue rd"${on(R)}>${esc(R.big)}</div><p>${esc(R.text)}</p><div class="vs hl">${rich(R.versus)}</div></div></div>`;
   },
 
   prod: (s) => `
     ${heading(s)}
     <div class="pipe" style="grid-template-columns:${list(s.pipeline).map((x) => (x.style === 'key' ? '1.15fr' : '1fr')).join(' 26px ')}">
-      ${list(s.pipeline).map((x, i) => `${i ? `<div class="arrow cue fade"${on(x)}></div>` : ''}<div class="gbox${x.style === 'key' ? ' key' : ''} cue"${on(x)}><small>${esc(x.tag)}</small><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}
+      ${list(s.pipeline).map((x, i, all) => `${i ? `<div class="arrow cue fade"${after(all[i - 1], x)}></div>` : ''}<div class="gbox${x.style === 'key' ? ' key' : ''} cue"${on(x)}><small>${esc(x.tag)}</small><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></div>`).join('')}
     </div>
     <div class="guards">${list(s.guards).map((g) => `<span class="chip cue"${on(g)}><b>${esc(g.name)}</b> ${esc(g.text)}</span>`).join('')}</div>
     <div class="phases" style="grid-template-columns:repeat(${list(s.phases).length},1fr)">${list(s.phases).map((p) => `<div class="phase cue"${on(p)}><small>${esc(p.tag)}</small><b>${esc(p.title)}</b><span>${esc(p.text)}</span></div>`).join('')}</div>`,
@@ -593,13 +409,13 @@ const T = {
   next: (s) => `
     ${heading(s)}
     <div class="missions" style="grid-template-columns:repeat(${list(s.missions).length},1fr)">${list(s.missions).map((m) => `<div class="mission cue" data-tab="${esc(m.tab)}"${on(m)}><b>${esc(m.title)}</b><span>${esc(m.text)}</span></div>`).join('')}</div>
-    <div class="also cue fade"${on(s.also)}>${rich(s.also.text)}</div>`,
+    <div class="also hl cue fade"${on(s.also)}>${rich(s.also.text)}</div>`,
 
   end: (s) => `
     <div class="end">
       <div class="kicker">${esc(s.kicker)}</div>
       <h1>${esc(s.title[0])} <span>${esc(s.title[1])}</span></h1>
-      <div class="outcomes">${list(s.outcomes).map((o) => `<span class="cue"${on(o)}>${esc(o.text)}</span>`).join('')}</div>
+      <div class="outcomes">${list(s.outcomes).map((o) => `<span class="cue rd"${on(o)}>${esc(o.text)}</span>`).join('')}</div>
       <p class="cue fade"${on(s.line)}>${esc(s.line.text)}</p>
       ${stamp(s.stamp)}
     </div>`,
@@ -635,49 +451,7 @@ const SETUP = {
   cost(s, st) {
     st.stats = list(s.stats).map((x, i) => ({ el: $(`[data-stat="${i}"]`), t: at(x.at), parts: String(x.value).split(/(\d[\d,]*(?:\.\d+)?)/).filter((p) => p !== '') }));
   },
-  demo(s, st) {
-    const steps = list(s.steps), b0 = steps[0].beats[0];
-    st.steps = steps.map((x, i) => ({ ...x, s: at(x.beats[0]), e: i < steps.length - 1 ? at(steps[i + 1].beats[0]) : at(x.beats[1] + '.e') + 0.2 }));
-    st.clock = list(s.clock).map(([spec, v]) => [at(spec), secs(v)]);
-    st.stepEls = $$('.step', $('#rail'));
-    // dependency graph
-    const G = s.graph, apps = list(G.failing), b1 = steps[1].beats[0];
-    const gap = apps.length > 1 ? 800 / (apps.length - 1) : 0, w = Math.min(88, Math.max(48, gap - 12));
-    let h = '';
-    apps.forEach(([tla, name], i) => {
-      const x = apps.length > 1 ? 50 + i * gap : 450;
-      h += `<path class="edge" data-on="${b1}@${(0.2 + i * 0.025).toFixed(3)}" d="M${x} 76 C ${x} 170, 450 150, 450 232"/>`;
-      h += `<g class="n" data-on="${b1}+${(i * 0.07).toFixed(2)}"><rect x="${x - w / 2}" y="16" width="${w}" height="60" rx="5"/><text x="${x}" y="43">${esc(tla)}</text><text class="s" x="${x}" y="62">${esc(name)}</text></g>`;
-    });
-    h += `<g class="cif"><rect x="330" y="234" width="240" height="74" rx="6"/><text x="450" y="266">${esc(G.upstream.tla)}</text><text class="s" x="450" y="290" text-anchor="middle">${esc(G.upstream.name)}</text></g>`;
-    h += `<rect class="ring"${on(G.common)} x="320" y="224" width="260" height="94" rx="10"/>`;
-    h += `<text class="lbl"${on(G.common)} x="596" y="262">${esc(G.common.text)}</text><text class="lbl"${on(G.green)} x="596" y="286" style="fill:var(--green)">${esc(G.green.text)}</text>`;
-    list(G.notes).forEach((n, i) => { h += `<text class="cap" x="20" y="${262 + i * 20}">${esc(n)}</text>`; });
-    h += `<text class="cap" x="450" y="346" text-anchor="middle">${esc(G.footer)}</text>`;
-    $('#graph').innerHTML = h;
-    // log lines, in the order the apps start failing
-    const L = s.logs, r = rng(7), pick = (a) => a[Math.floor(r() * a.length)], seen = new Set();
-    const errs = list(L.errors).map((e) => ({ ...e, after: +e.after || 0 })), bg = list(L.background), base = secs(L.start_time);
-    const fill = (m) => String(m).replace(/\{id\}/g, () => String(10000000 + Math.floor(r() * 89999999))).replace(/\{ms\}/g, () => String(6 + Math.floor(r() * 30)));
-    st.logs = []; st.logT0 = at(b0); st.lastLogN = -1;
-    for (let i = 0; i < 70; i++) {
-      const tau = -3.2 + i * 0.4, live = errs.filter((e) => tau >= e.after), fresh = live.find((e) => !seen.has(e.tla));
-      let row;
-      if (fresh || (live.length && r() < 0.74)) { const e = fresh || pick(live); seen.add(e.tla); row = ['ERROR', e.tla, pick(list(e.messages))]; }
-      else if (bg.length) { const b = pick(bg); row = ['INFO', b.tla, fill(b.message)]; }
-      else continue;
-      const sim = base + tau * 5, ms = pad(Math.floor(r() * 99)) + Math.floor(r() * 9);
-      st.logs.push({ tau, sev: row[0], tla: row[1], msg: row[2], ts: `${pad(sim / 3600)}:${pad((sim / 60) % 60)}:${pad(sim % 60)}.${ms}` });
-    }
-    const hist = $('#hist'), hr = rng(11);
-    for (let i = 0; i < 44; i++) hist.insertAdjacentHTML('beforeend', '<span><u></u><s></s></span>');
-    st.hist = $$('span', hist).map((el, i) => ({ el, base: 10 + hr() * 8, err: i < 14 ? 0 : Math.min(42, (i - 13) * 5 + hr() * 8) }));
-    const spark = $('#spark'), sr = rng(5);
-    for (let i = 0; i < 26; i++) spark.insertAdjacentHTML('beforeend', '<span></span>');
-    st.spark = $$('span', spark).map((el) => ({ el, h: 60 + sr() * 40 }));
-    const F = s.fix, last = steps[steps.length - 1];
-    Object.assign(st, { mergeAt: at(F.merge_at), closedAt: at(F.closed_at), drainEnd: at(last.beats[1] + '.e') - 0.6, peak: +String(F.metric.value).replace(/,/g, '') || 0 });
-  },
+  demo(s, st) { st.v = $('#live'); st.img = $('#liveimg'); },
 };
 
 const DRAW = {
@@ -709,39 +483,17 @@ const DRAW = {
     }
   },
   demo(t, sc, s, st) {
-    const c = st.clock;
-    let m = c.length ? c[c.length - 1][1] : 0;
-    if (c.length && t <= c[0][0]) m = c[0][1];
-    else for (let i = 1; i < c.length; i++) if (t <= c[i][0]) { const [a, va] = c[i - 1], [b, vb] = c[i]; m = va + (vb - va) * ((t - a) / (b - a || 1)); break; }
-    $('#mclock').textContent = `${s.clock_prefix || ''}${pad(m / 60)}:${pad(m % 60)}`;
-    let cur = -1;
-    st.steps.forEach((x, i) => {
-      const isCur = t >= x.s && t < x.e;
-      if (isCur) cur = i;
-      st.stepEls[i].classList.toggle('done', t >= x.e);
-      st.stepEls[i].classList.toggle('cur', isCur);
-    });
-    $('#ctitle').textContent = cur < 0 ? (t < st.steps[0].s ? s.idle.before : s.idle.after) : st.steps[cur].status;
-    $('#ccall').textContent = cur < 0 ? '' : st.steps[cur].calls;
-    const tau = t - st.logT0, n = st.logs.filter((l) => l.tau <= tau).length;
-    if (n !== st.lastLogN) {
-      st.lastLogN = n;
-      $('#logs').innerHTML = st.logs.slice(Math.max(0, n - 10), n).map((l) => `<div class="${l.sev === 'ERROR' ? 'e' : ''}"><span class="ts">${l.ts}</span><span class="${l.sev}">${l.sev}</span><span class="tla">${esc(l.tla)}</span><span class="lm">${esc(l.msg)}</span></div>`).join('');
-    }
-    const head = 14 + tau / 0.42;
-    st.hist.forEach((h, i) => { const vis = clamp(head - i); h.el.firstChild.style.height = h.err * vis + 'px'; h.el.lastChild.style.height = h.base * (i < 14 ? 1 : vis) + 'px'; });
-    const F = s.fix, f = 1 - ease((t - st.mergeAt - 0.15) / Math.max(0.5, st.drainEnd - st.mergeAt - 0.15)), clear = f < 0.08;
-    st.spark.forEach((b) => { b.el.style.height = Math.max(2, b.h * f) + '%'; b.el.style.background = clear ? 'var(--green)' : ''; });
-    $('#epm').textContent = Math.round(st.peak * f).toLocaleString('en-US');
-    $('#epm').style.color = clear ? 'var(--green)' : 'var(--red)';
-    const merged = t >= st.mergeAt, closed = t >= st.closedAt;
-    $('#fixstate').textContent = F.states[merged ? 1 : 0]; $('#fixstate').className = 'pill ' + (merged ? 'green' : 'amber');
-    $('#incstate').textContent = F.incident_states[closed ? 1 : 0]; $('#incstate').className = 'pill ' + (closed ? 'green' : 'amber');
+    // The clip starts with the scene and is exactly as long as it.
+    const v = st.v, target = Math.max(0, t - sc.s);
+    if (window.__liveFrame) { v.hidden = true; st.img.hidden = false; window.__liveFrame(st.img, target); return; }   // render.py
+    if (Math.abs(v.currentTime - target) > 0.35) { try { v.currentTime = target; } catch (e) {} }
+    if (playing && v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+    else if (!playing && !v.paused) v.pause();
   },
 };
 
 /* ================= build the stage ================= */
-$('#hudL').innerHTML = rich(C.hud);
+$('#hudL').innerHTML = mark() + rich(C.hud);
 const scenes = TL.scenes.filter((s) => T[s.id] && C.scenes[s.id]).map((s) => {
   const el = document.createElement('section');
   el.className = 'scene' + (s.id === 'now' ? ' now-wrap' : '');
@@ -752,7 +504,7 @@ const scenes = TL.scenes.filter((s) => T[s.id] && C.scenes[s.id]).map((s) => {
 });
 scenes.forEach((sc) => SETUP[sc.id] && SETUP[sc.id](sc.content, sc.state));
 
-const cues = $$('[data-on],[data-off]').map((el) => ({ el, on: el.dataset.on ? at(el.dataset.on) : -1, off: el.dataset.off ? at(el.dataset.off) : 1e9, st: null }));
+const cues = $$('[data-on],[data-off]').map((el) => ({ el, on: el.dataset.on ? Math.max(...el.dataset.on.split('|').map(at)) + (parseFloat(el.dataset.lag) || 0) : -1, off: el.dataset.off ? at(el.dataset.off) : 1e9, st: null }));
 const beatList = Object.values(B).sort((a, b) => a.s - b.s);
 const cap = $('#cap'), stage = $('#stage'), hudR = $('#hudR');
 let lastScene = null, lastCap = null;
@@ -763,13 +515,14 @@ function render(t) {
   if (sc && sc !== lastScene) {
     scenes.forEach((s) => s.el.classList.toggle('active', s === sc));
     lastScene = sc;
-    hudR.textContent = sc.title;
+    hudR.textContent = `${pad(scenes.indexOf(sc) + 1)} / ${pad(scenes.length)}  ·  ${sc.title}`;
     $$('#chapters button').forEach((b, i) => b.classList.toggle('cur', scenes[i] === sc));
   }
   for (const c of cues) { const live = t >= c.on && t < c.off; if (live !== c.st) { c.st = live; c.el.classList.toggle('on', live); } }
   const beat = beatList.find((b) => t >= b.s - 0.12 && t < b.e + 0.3);
   if (beat !== lastCap) { lastCap = beat; cap.classList.toggle('on', !!beat); if (beat) cap.textContent = beat.text; }
   if (sc && DRAW[sc.id]) DRAW[sc.id](t, sc, sc.content, sc.state);
+  if (sc && sc.id !== 'demo') { const v = $('#live'); if (v && !v.paused) v.pause(); }
   seekEl.value = t; seekEl.style.setProperty('--p', (t / D) * 100 + '%');
   timeEl.textContent = `${mmss(t)} / ${mmss(D)}`;
 }
