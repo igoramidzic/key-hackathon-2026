@@ -11,6 +11,8 @@ export interface AgentFeed {
 }
 
 const KEY = 'demo.agent';
+/** How long a stream connection may stay pending before the page starts it again. */
+const OPEN_TIMEOUT_MS = 20_000;
 
 /** True when the page is served by the hosted Worker, which runs the agent itself at /agent. */
 export const agentHosted = (): boolean => isSingleOrigin();
@@ -42,9 +44,18 @@ export function useAgent(base: string): AgentFeed {
     let es: EventSource;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
     const connect = () => {
       es = new EventSource(`${base}/api/stream`);
       listen(es);
+      // A connection made while the hosted agent's container is first provisioned can hang
+      // without opening or failing; start over if it has not opened in time.
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        if (stopped || es.readyState === EventSource.OPEN) return;
+        es.close();
+        connect();
+      }, OPEN_TIMEOUT_MS);
     };
     // EventSource retries network errors itself but gives up on an HTTP error (the hosted agent
     // answers 503 while its container starts), so reconnect by hand once it has closed.
@@ -64,6 +75,7 @@ export function useAgent(base: string): AgentFeed {
         }
       };
       es.addEventListener('open', () => {
+        clearTimeout(watchdog);
         setStatus('live');
         fetch(`${base}/api/info`)
           .then((r) => (r.ok ? r.json() : null))
@@ -93,6 +105,7 @@ export function useAgent(base: string): AgentFeed {
     return () => {
       stopped = true;
       clearTimeout(retry);
+      clearTimeout(watchdog);
       es.close();
     };
   }, [base]);
